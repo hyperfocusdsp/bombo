@@ -1,7 +1,11 @@
 #include "FaceplatePanel.h"
 
+#include "BalanceFader.h"
+#include "BpmDisplay.h"
 #include "Colours.h"
+#include "DiceButton.h"
 #include "Fonts.h"
+#include "SampleSlotWidget.h"
 #include "WaveBuffer.h"
 #include "../Parameters.h"
 
@@ -29,16 +33,16 @@ constexpr int kTailH            = 160;
 constexpr int kHeaderH      = 50;
 constexpr int kScopeH       = 100;
 constexpr int kMacroH       = 90;
-constexpr int kRackPadX     = 6;        // padding between chassis edge and column 0/N-1
+constexpr int kRackPadX     = 2;        // padding between chassis edge and column 0/N-1
 constexpr int kRackTopGap   = 4;
 constexpr int kRackBotGap   = 4;
 
 // FX columns.
-constexpr int kColGap       = 12;
+constexpr int kColGap       = 8;
 constexpr int kColTitleH    = 20;
 constexpr int kColAccentH   = 3;
 constexpr int kModuleIdH    = 14;
-constexpr int kInnerPadX    = 5;
+constexpr int kInnerPadX    = 3;
 constexpr int kRowH         = 72;
 constexpr int kKnobLabelH   = 13;
 constexpr int kNCols        = 7;
@@ -50,17 +54,24 @@ constexpr int kMacroKnobSize = 46;
 //  Construction
 // ────────────────────────────────────────────────────────────────────
 
+FaceplatePanel::~FaceplatePanel() = default;
+
 FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
-                               const WaveBuffer* waveBuffer)
-    : apvts_(apvts)
+                               const WaveBuffer* waveBuffer,
+                               SampleSlotCallbacks sampleSlotCb,
+                               HostBpmFn hostBpmFn,
+                               RandomizeFn randomizeCb)
+    : apvts_(apvts),
+      sampleSlotCb_(std::move(sampleSlotCb))
 {
+    setOpaque(false);
     addAndMakeVisible(scope_);
     scope_.setWaveBuffer(waveBuffer);
 
     // ── 7 FX columns — order matches the pre-port reference ─────────
     {
         Section s;
-        s.name = "VOICE A"; s.moduleId = "AMP-1";
+        s.name = "VOICE A"; s.moduleId = "AMP-1"; s.mutePid = pid::voiceAMute;
         s.accent = col::voice; s.labelOnBg = col::bone;
         addChoice(s, pid::waveform,   "WAVE",  s.labelOnBg);
         addKnob  (s, pid::pitchStart, "PITCH", s.labelOnBg);
@@ -71,14 +82,14 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     }
     {
         Section s;
-        s.name = "VOICE B"; s.moduleId = "OSS-1";
+        s.name = "VOICE B"; s.moduleId = "OSS-1"; s.mutePid = pid::voiceBMute;
         s.accent = col::voice; s.labelOnBg = col::bone;
-        addKnob(s, pid::ampAttack,   "ATK",   s.labelOnBg);
-        addKnob(s, pid::ampDecay,    "DEC",   s.labelOnBg);
-        addKnob(s, pid::clickAmount, "CLICK", s.labelOnBg);
-        addKnob(s, pid::noiseAmount, "BODY",  s.labelOnBg);
-        addKnob(s, pid::noiseColor,  "COLOR", s.labelOnBg);
-        addKnob(s, pid::driftAmount, "DRIFT", s.labelOnBg);
+        addKnob      (s, pid::ampAttack,   "ATK",    s.labelOnBg);
+        addKnob      (s, pid::ampDecay,    "DEC",    s.labelOnBg);
+        addKnob      (s, pid::clickAmount, "CLICK",  s.labelOnBg);
+        addKnob      (s, pid::noiseAmount, "BODY",   s.labelOnBg);
+        addKnob      (s, pid::noiseColor,  "COLOR",  s.labelOnBg);
+        addSampleSlot(s,                   "SAMPLE", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
     {
@@ -131,6 +142,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.name = "DUCK"; s.moduleId = "SC-CMP"; s.mutePid = pid::duckMute;
         s.accent = col::duck; s.labelOnBg = col::ink;
         addKnob(s, pid::duckAtk,   "ATK",   s.labelOnBg);
+        addKnob(s, pid::duckHold,  "HOLD",  s.labelOnBg);
         addKnob(s, pid::duckRel,   "REL",   s.labelOnBg);
         addKnob(s, pid::duckDepth, "DEPTH", s.labelOnBg);
         sections_.push_back(std::move(s));
@@ -160,6 +172,29 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     limAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts_, pid::limiterOn, *limPill_);
     addAndMakeVisible(*limPill_);
+
+    // ── Loop toggle (small "↻" pill) ────────────────────────────────
+    loopBtn_ = std::make_unique<juce::ToggleButton>("LOOP");
+    loopBtn_->setColour(juce::ToggleButton::textColourId, col::bone);
+    loopBtn_->setWantsKeyboardFocus(false);
+    loopBtn_->setMouseClickGrabsKeyboardFocus(false);
+    loopAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        apvts_, pid::loopOn, *loopBtn_);
+    addAndMakeVisible(*loopBtn_);
+
+    // ── BPM display (replaces the old MNT pill slot) ───────────────
+    bpmDisplay_ = std::make_unique<BpmDisplay>(
+        apvts_, pid::bpm, std::move(hostBpmFn));
+    addAndMakeVisible(*bpmDisplay_);
+
+    // ── Voice A ↔ Voice B balance fader (between columns 0 and 1) ──
+    balanceFader_ = std::make_unique<BalanceFader>(apvts_, pid::voiceBalance);
+    addAndMakeVisible(*balanceFader_);
+
+    // ── DICE button (full randomize) ───────────────────────────────
+    diceButton_ = std::make_unique<DiceButton>();
+    diceButton_->onClick = std::move(randomizeCb);
+    addAndMakeVisible(*diceButton_);
 }
 
 FaceplatePanel::Control*
@@ -194,23 +229,74 @@ FaceplatePanel::Control*
 FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
                           const juce::String& displayName, juce::Colour labelColour)
 {
+    // Choice parameters render as discrete-stepped rotary knobs (integer
+    // setRange + numChoices/choiceNames hints picked up by BomboLookAndFeel).
+    // The SliderAttachment round-trips fine with AudioParameterChoice — the
+    // parameter is already a stepped float internally.
     auto c = std::make_unique<Control>();
-    c->kind = CtlKind::Choice;
-    c->combo = std::make_unique<juce::ComboBox>();
+    c->kind = CtlKind::Knob;
+    c->slider = std::make_unique<juce::Slider>();
+    c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
+                                   juce::MathConstants<float>::pi * 2.75f, true);
+    c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
+    c->slider->setWantsKeyboardFocus(false);
+    c->slider->setMouseClickGrabsKeyboardFocus(false);
+
     if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts_.getParameter(paramId)))
-        c->combo->addItemList(p->choices, 1);
-    c->combo->setColour(juce::ComboBox::textColourId,       col::bone);
-    c->combo->setColour(juce::ComboBox::backgroundColourId, col::ink.withAlpha(0.75f));
-    c->combo->setWantsKeyboardFocus(false);
-    c->combo->setMouseClickGrabsKeyboardFocus(false);
+    {
+        const int n = p->choices.size();
+        if (n > 0)
+        {
+            c->slider->setRange(0.0, static_cast<double>(n - 1), 1.0);
+            juce::Array<juce::var> arr;
+            for (const auto& choice : p->choices) arr.add(choice);
+            c->slider->getProperties().set("numChoices", n);
+            c->slider->getProperties().set("choiceNames", arr);
+        }
+    }
+
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
     c->label->setFont(fonts::label(10.0f));
     c->label->setColour(juce::Label::textColourId, labelColour);
-    c->cAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        apvts_, paramId, *c->combo);
-    addAndMakeVisible(*c->combo);
+    c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts_, paramId, *c->slider);
+    addAndMakeVisible(*c->slider);
+    addAndMakeVisible(*c->label);
+    Control* raw = c.get();
+    s.controls.push_back(std::move(c));
+    return raw;
+}
+
+FaceplatePanel::Control*
+FaceplatePanel::addSampleSlot(Section& s, const juce::String& displayName,
+                              juce::Colour labelColour)
+{
+    auto c = std::make_unique<Control>();
+    c->kind = CtlKind::SampleSlot;
+    c->sampleSlot = std::make_unique<SampleSlotWidget>();
+
+    // Forward callbacks straight from the slot widget to whatever the
+    // editor wired in. Owner is responsible for keeping the processor side
+    // safe across editor open/close.
+    c->sampleSlot->onBrowsePick  = sampleSlotCb_.onBrowsePick;
+    c->sampleSlot->onIndexChange = sampleSlotCb_.onIndexChange;
+    c->sampleSlot->onClear       = sampleSlotCb_.onClear;
+    c->sampleSlot->getNames      = sampleSlotCb_.getNames;
+    c->sampleSlot->getCurrentIndex = sampleSlotCb_.getCurrentIdx;
+    // Initial population — restore any state the processor already holds
+    // (DAW session restore may have populated it before the editor opened).
+    c->sampleSlot->refresh();
+
+    c->label = std::make_unique<juce::Label>();
+    c->label->setText(displayName, juce::dontSendNotification);
+    c->label->setJustificationType(juce::Justification::centred);
+    c->label->setFont(fonts::label(10.0f));
+    c->label->setColour(juce::Label::textColourId, labelColour);
+    addAndMakeVisible(*c->sampleSlot);
     addAndMakeVisible(*c->label);
     Control* raw = c.get();
     s.controls.push_back(std::move(c));
@@ -283,11 +369,12 @@ void FaceplatePanel::paint(juce::Graphics& g)
 
 void FaceplatePanel::paintBackground(juce::Graphics& g)
 {
-    // Backdrop matches the chassis interior colour. Any "outside chassis"
-    // pixels (bottom-left / bottom-right wedges of the V tail, or sub-
-    // pixel rounding on the side edges under non-integer scale) blend in
-    // seamlessly — no visible border band on the right side of the window.
-    g.fillAll(col::graphite);
+    // Clear to transparent. paintChassis() fills the bomb-shaped chassisPath_
+    // with the graphite gradient, covering everything inside the V. The two
+    // corner wedges outside the path stay alpha=0 so the OS compositor shows
+    // through them — giving the window a genuine bomb silhouette in standalone.
+    // In plugin mode the host container background shows instead (usually dark).
+    g.fillAll(juce::Colours::transparentBlack);
 }
 
 void FaceplatePanel::paintChassis(juce::Graphics& g)
@@ -363,17 +450,7 @@ void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
     g.setColour(col::ink.withAlpha(0.7f));
     g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
 
-    // MNT pill.
-    {
-        const auto r = mntPillBounds_.toFloat();
-        g.setColour(col::graphite);
-        g.fillRoundedRectangle(r, r.getHeight() * 0.5f);
-        g.setColour(col::boneDim.withAlpha(0.65f));
-        g.drawRoundedRectangle(r.reduced(0.5f), r.getHeight() * 0.5f, 1.0f);
-        g.setColour(col::boneDim);
-        g.setFont(fonts::label(9.0f));
-        g.drawText("MNT 100%", mntPillBounds_, juce::Justification::centred);
-    }
+    // BPM display + Loop toggle are real components; they paint themselves.
 
     // SYNTH / INSERT FX tab.
     {
@@ -546,6 +623,25 @@ void FaceplatePanel::resized()
         layoutSection(s);
     }
 
+    // ── Voice A ↔ Voice B balance knob. Sits floating on the border
+    //    between columns 0 and 1, vertically centered in the knob-rows
+    //    area (below the title strip, above the module-id strip). Small
+    //    diameter (~ rowH × 0.5) so it doesn't overlap adjacent knob caps.
+    if (balanceFader_ && sections_.size() >= 2)
+    {
+        const auto& a = sections_[0].rectBounds;
+        const auto& b = sections_[1].rectBounds;
+        const int borderX = (a.getRight() + b.getX()) / 2;
+        const int rowsTop = a.getY() + kColTitleH;
+        const int rowsBot = a.getBottom() - kModuleIdH;
+        const int rowsMid = (rowsTop + rowsBot) / 2;
+        const int diameter = juce::jmin(kRowH / 2 + 6, 38);
+        balanceFader_->setBounds(borderX - diameter / 2,
+                                 rowsMid - diameter / 2,
+                                 diameter,
+                                 diameter);
+    }
+
     layoutHeader(headerBounds_);
 }
 
@@ -558,32 +654,39 @@ void FaceplatePanel::layoutSection(Section& s)
                               .withTrimmedBottom(kModuleIdH);
     if (inner.isEmpty()) return;
 
+    // Uniform row height across all sections — every knob the same size.
+    // The max-controls-per-section budget is enforced by the column
+    // contents in the constructor; the rack rectH is sized for 6 rows.
+    const int rowH = kRowH;
+
     int y = inner.getY();
     for (auto& cp : s.controls)
     {
         auto& c = *cp;
         const auto cell = juce::Rectangle<int>(inner.getX(), y,
-                                               inner.getWidth(), kRowH);
+                                               inner.getWidth(), rowH);
 
         if (c.kind == CtlKind::Knob)
         {
-            const int knobH = cell.getHeight() - kKnobLabelH - 2;
+            const int labelH = juce::jmin(kKnobLabelH, rowH / 4);
+            const int knobH = cell.getHeight() - labelH - 2;
             const int knobW = juce::jmin(cell.getWidth(), knobH);
             const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
             c.slider->setBounds(knobX, cell.getY(), knobW, knobH);
             c.label->setBounds(cell.getX(), cell.getY() + knobH,
-                               cell.getWidth(), kKnobLabelH);
+                               cell.getWidth(), labelH);
         }
-        else if (c.kind == CtlKind::Choice)
+        else if (c.kind == CtlKind::SampleSlot)
         {
-            const int comboH = 24;
-            const int comboW = juce::jmin(cell.getWidth() - 6, 100);
-            const int comboX = cell.getX() + (cell.getWidth() - comboW) / 2;
-            const int comboY = cell.getY()
-                             + (cell.getHeight() - comboH - kKnobLabelH - 2) / 2;
-            c.combo->setBounds(comboX, comboY, comboW, comboH);
-            c.label->setBounds(cell.getX(), comboY + comboH + 2,
-                               cell.getWidth(), kKnobLabelH);
+            // The slot is a knob now (see SampleSlotWidget). Lay it out
+            // identically to a knob cell: square widget + label below.
+            const int labelH = juce::jmin(kKnobLabelH, rowH / 4);
+            const int knobH = cell.getHeight() - labelH - 2;
+            const int knobW = juce::jmin(cell.getWidth(), knobH);
+            const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
+            c.sampleSlot->setBounds(knobX, cell.getY(), knobW, knobH);
+            c.label->setBounds(cell.getX(), cell.getY() + knobH,
+                               cell.getWidth(), labelH);
         }
         else
         {
@@ -592,29 +695,36 @@ void FaceplatePanel::layoutSection(Section& s)
                                 cell.getY() + (cell.getHeight() - btnH) / 2,
                                 cell.getWidth(), btnH);
         }
-        y += kRowH;
+        y += rowH;
     }
 }
 
 void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
 {
-    constexpr int kPillH = 22;
-    constexpr int kLimW  = 50;
-    constexpr int kMntW  = 78;
-    constexpr int kTabW  = 64;
-    constexpr int kPad   = 8;
+    constexpr int kPillH  = 22;
+    constexpr int kLimW   = 50;
+    constexpr int kLoopW  = 60;
+    constexpr int kBpmW   = 78;
+    constexpr int kDiceW  = 22; // square
+    constexpr int kTabW   = 64;
+    constexpr int kPad    = 8;
+    constexpr int kPadSmall = 4;
 
     const int y = (area.getHeight() - kPillH) / 2 + area.getY();
     int xCursor = area.getRight() - 14;
 
+    // Right-to-left: tabs, BPM, loop, LIM, DICE.
     insertFxTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
     xCursor -= kTabW + 1;
     synthTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
     xCursor -= kTabW + kPad;
-    mntPillBounds_ = { xCursor - kMntW, y, kMntW, kPillH };
-    xCursor -= kMntW + kPad;
-    if (limPill_)
-        limPill_->setBounds(xCursor - kLimW, y, kLimW, kPillH);
+    if (bpmDisplay_) bpmDisplay_->setBounds(xCursor - kBpmW, y, kBpmW, kPillH);
+    xCursor -= kBpmW + kPad;
+    if (loopBtn_)    loopBtn_   ->setBounds(xCursor - kLoopW, y, kLoopW, kPillH);
+    xCursor -= kLoopW + kPad;
+    if (limPill_)    limPill_   ->setBounds(xCursor - kLimW,  y, kLimW,  kPillH);
+    xCursor -= kLimW + kPadSmall;
+    if (diceButton_) diceButton_->setBounds(xCursor - kDiceW, y, kDiceW, kPillH);
 }
 
 // ────────────────────────────────────────────────────────────────────

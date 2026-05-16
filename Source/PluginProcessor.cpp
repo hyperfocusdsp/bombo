@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "DSP/SampleSlot.h"
 
 BomboProcessor::BomboProcessor()
     : juce::AudioProcessor(BusesProperties()
@@ -30,7 +31,7 @@ void BomboProcessor::cacheParameterPointers()
     pNoiseColor    = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(noiseColor));
     pDriveAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(driveAmount));
     pDriveMode     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(driveMode));
-    pDriftAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(driftAmount));
+    pVoiceBalance  = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(voiceBalance));
 
     pFxDriveAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(fxDriveAmount));
     pFxDriveMode     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(fxDriveMode));
@@ -52,10 +53,15 @@ void BomboProcessor::cacheParameterPointers()
     pReverbPredelay  = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbPredelay));
     pReverbMix       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbMix));
     pDuckAtk         = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckAtk));
+    pDuckHold        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckHold));
     pDuckRel         = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckRel));
     pDuckDepth       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckDepth));
     pLimiterOn       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(limiterOn));
     pLimiterAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(limiterAmount));
+    pLoopOn          = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(loopOn));
+    pBpm             = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(bpm));
+    pVoiceAMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceAMute));
+    pVoiceBMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceBMute));
     pDriveMute       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(driveMute));
     pDelayMute       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(delayMute));
     pReverbMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(reverbMute));
@@ -90,6 +96,7 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.reverbPredelayMs = pReverbPredelay->get();
     p.reverbMix       = pReverbMix->get();
     p.duckAttackMs    = pDuckAtk->get();
+    p.duckHoldMs      = pDuckHold->get();
     p.duckReleaseMs   = pDuckRel->get();
     p.duckDepth       = pDuckDepth->get();
     p.limiterOn       = pLimiterOn->get();
@@ -122,7 +129,17 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     t.noiseColor      = pNoiseColor->get();
     t.driveAmount     = pDriveAmount->get();
     t.driveMode       = pDriveMode->getIndex();
-    t.driftAmount     = pDriftAmount->get();
+    t.voiceAMute      = pVoiceAMute->get();
+    t.voiceBMute      = pVoiceBMute->get();
+    t.driveMute       = pDriveMute->get();
+    t.voiceBalance    = pVoiceBalance->get();
+    // Copy the current sample shared_ptr under spin-lock. shared_ptr copy is
+    // an atomic refcount bump — allocator-free on libstdc++. try_enter so
+    // the audio thread never blocks if the UI is mid-swap.
+    {
+        juce::SpinLock::ScopedTryLockType lock(voiceBSampleLock_);
+        if (lock.isLocked()) t.sampleBuf = voiceBSample_;
+    }
     return t;
 }
 
@@ -132,6 +149,27 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     for (auto& v : voices_) v.setSampleRate(currentSampleRate_);
     for (auto& slot : pending_) { slot.live = false; slot.samplesUntil = 0; }
     activeVoice_ = 0;
+    samplesUntilLoopFire_ = 0;
+
+    // Replay any sample-restore that was stashed by setStateInformation
+    // before the SR was known. Loading off the audio thread via callAsync.
+    juce::String pendingPath;
+    bool pendingIsFolder = false;
+    {
+        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+        pendingPath = pendingRestorePath_;
+        pendingIsFolder = pendingRestoreIsFolder_;
+        pendingRestorePath_.clear();
+    }
+    if (pendingPath.isNotEmpty())
+    {
+        juce::MessageManager::callAsync(
+            [this, pendingPath, pendingIsFolder]()
+            {
+                if (pendingIsFolder) this->setVoiceBSampleFolder(juce::File(pendingPath));
+                else                 this->loadVoiceBSample      (juce::File(pendingPath));
+            });
+    }
 
     chain_.setSampleRate(currentSampleRate_);
     chain_.reset();
@@ -233,6 +271,118 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         }
     }
 
+    // ── Transport: pull host BPM + play state, expose to UI ─────────
+    float effectiveBpm = pBpm->get();
+    bool  hostPlaying = false;
+    double hostPpqAtBlockStart = 0.0;
+    if (auto* ph = getPlayHead())
+    {
+        if (auto pos = ph->getPosition())
+        {
+            if (pos->getBpm().hasValue() && *pos->getBpm() > 0.0)
+                effectiveBpm = static_cast<float>(*pos->getBpm());
+            hostPlaying = pos->getIsPlaying();
+            if (pos->getPpqPosition().hasValue())
+                hostPpqAtBlockStart = *pos->getPpqPosition();
+        }
+    }
+    // 0 when host doesn't report BPM (standalone), used by UI for the
+    // "host-driven, read-only" display state.
+    {
+        const float hostReported = (effectiveBpm == pBpm->get()) ? 0.0f : effectiveBpm;
+        hostBpmAtomic_.store(hostReported, std::memory_order_relaxed);
+    }
+
+    // ── Loop scheduler ──────────────────────────────────────────────
+    // Loop on: schedule extra triggers at the BPM rate. When the host is
+    // playing, triggers snap to the integer PPQ grid (so they ride the
+    // host's beat phase); otherwise we free-run from samplesUntilLoopFire_.
+    const bool loopNow = pLoopOn->get();
+    lastLoopOn_ = loopNow;
+
+    // Universal deferred tail kill — fires one beat after the LAST trigger
+    // from ANY source (keyboard, MIDI from BeatStep, MIDI from DAW, the
+    // loop scheduler). Triggers re-arm it to a full beat from now; the
+    // last one in a stream lets the counter tick down and fires the kill,
+    // silencing the tail at the next-would-have-been-beat.
+    //
+    // This subsumes the old loop-off and T-only kill paths — both
+    // categories went through `scheduled++` so they're handled here.
+    oneShotTriggers_.exchange(0, std::memory_order_relaxed); // legacy drain
+    if (scheduled > 0 && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
+    {
+        const double samplesPerBeat =
+            (60.0 / static_cast<double>(effectiveBpm))
+            * static_cast<double>(currentSampleRate_);
+        pendingTailKillSamples_ = static_cast<int>(std::round(samplesPerBeat));
+    }
+
+    // Tick deferred tail kill. Coarse to per-block, which is fine — the
+    // imprecision is bounded by one buffer (~ a few ms) and inaudible.
+    if (pendingTailKillSamples_ >= 0)
+    {
+        pendingTailKillSamples_ -= numSamples;
+        if (pendingTailKillSamples_ <= 0)
+        {
+            chain_.killTail();
+            pendingTailKillSamples_ = -1;
+        }
+    }
+
+    if (loopNow && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
+    {
+        const double samplesPerBeat =
+            (60.0 / static_cast<double>(effectiveBpm))
+            * static_cast<double>(currentSampleRate_);
+
+        if (hostPlaying && samplesPerBeat > 1.0)
+        {
+            // Fire on every integer ppq inside this buffer.
+            const double ppqStart = hostPpqAtBlockStart;
+            const double ppqEnd   = ppqStart + static_cast<double>(numSamples) / samplesPerBeat;
+            const int firstBeat = static_cast<int>(std::ceil(ppqStart - 1.0e-6));
+            const int lastBeat  = static_cast<int>(std::floor(ppqEnd - 1.0e-6));
+            for (int b = firstBeat; b <= lastBeat; ++b)
+            {
+                if (scheduled >= kNumVoices) break;
+                const double sampleOfBeat = (static_cast<double>(b) - ppqStart) * samplesPerBeat;
+                int offset = static_cast<int>(std::round(sampleOfBeat));
+                if (offset < 0) offset = 0;
+                if (offset > bufSamples) offset = bufSamples;
+                pushPending(offset);
+                ++scheduled;
+            }
+            // Free-running counter resets so a transport-stop transitions
+            // cleanly to the standalone rate.
+            samplesUntilLoopFire_ = 0;
+        }
+        else
+        {
+            // Free-running. Decrement the counter, fire when it hits zero,
+            // then reset to the beat length.
+            int cursor = 0;
+            while (cursor < numSamples && scheduled < kNumVoices)
+            {
+                if (samplesUntilLoopFire_ <= 0)
+                {
+                    pushPending(cursor);
+                    ++scheduled;
+                    samplesUntilLoopFire_ = static_cast<int>(std::round(samplesPerBeat));
+                }
+                const int step = std::min(samplesUntilLoopFire_,
+                                          numSamples - cursor);
+                samplesUntilLoopFire_ -= step;
+                cursor += step;
+            }
+        }
+    }
+    else
+    {
+        // Loop off: reset the free-running counter so it fires immediately
+        // when the user re-enables (no skipped first beat).
+        samplesUntilLoopFire_ = 0;
+    }
+
     // Snapshot params for any triggers this buffer fires. (Per-trigger
     // snapshot — the BombVoice locks these in for its lifetime.)
     const bombo::VoiceTrigger trig = buildTriggerFromParams();
@@ -277,8 +427,219 @@ juce::AudioProcessorEditor* BomboProcessor::createEditor()
     return new BomboEditor(*this);
 }
 
+void BomboProcessor::loadVoiceBSample(const juce::File& file)
+{
+    auto buf = bombo::SampleSlot::loadFromFile(
+        file, static_cast<double>(currentSampleRate_));
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    voiceBSample_       = std::move(buf);
+    voiceBSamplePath_   = (voiceBSample_ ? file.getFullPathName() : juce::String());
+    // Single-file load clears any folder browse state.
+    voiceBFolderPath_.clear();
+    voiceBFolderSamples_.clear();
+    voiceBFolderIndex_  = -1;
+}
+
+void BomboProcessor::setVoiceBSampleFolder(const juce::File& filePicked)
+{
+    // Scan the parent folder for samples we can load. Cap at 256 entries
+    // so a user accidentally pointing at a giant library doesn't lag the UI.
+    constexpr int kMaxFolderSamples = 256;
+    auto folder = filePicked.getParentDirectory();
+    if (! folder.isDirectory()) return;
+
+    juce::Array<juce::File> found;
+    folder.findChildFiles(found, juce::File::findFiles, false,
+                          "*.wav;*.aif;*.aiff;*.flac");
+    // Stable sort by filename (case-insensitive) so the index ordering is
+    // predictable across sessions and machines.
+    std::sort(found.begin(), found.end(),
+              [](const juce::File& a, const juce::File& b)
+              {
+                  return a.getFileName().compareIgnoreCase(b.getFileName()) < 0;
+              });
+    if (found.size() > kMaxFolderSamples) found.removeRange(kMaxFolderSamples,
+                                                            found.size() - kMaxFolderSamples);
+
+    int idx = -1;
+    for (int i = 0; i < found.size(); ++i)
+        if (found.getReference(i) == filePicked) { idx = i; break; }
+    if (idx < 0 && ! found.isEmpty()) idx = 0;
+    if (idx < 0) return; // empty folder
+
+    auto buf = bombo::SampleSlot::loadFromFile(
+        found.getReference(idx), static_cast<double>(currentSampleRate_));
+
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    voiceBFolderPath_ = folder.getFullPathName();
+    voiceBFolderSamples_.assign(found.begin(), found.end());
+    voiceBFolderIndex_ = idx;
+    voiceBSample_      = std::move(buf);
+    voiceBSamplePath_  = (voiceBSample_
+                          ? found.getReference(idx).getFullPathName()
+                          : juce::String());
+}
+
+void BomboProcessor::loadVoiceBSampleByIndex(int idx)
+{
+    juce::File file;
+    {
+        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+        if (idx < 0 || idx >= static_cast<int>(voiceBFolderSamples_.size()))
+            return;
+        file = voiceBFolderSamples_[static_cast<size_t>(idx)];
+    }
+    auto buf = bombo::SampleSlot::loadFromFile(
+        file, static_cast<double>(currentSampleRate_));
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    voiceBFolderIndex_ = idx;
+    voiceBSample_      = std::move(buf);
+    voiceBSamplePath_  = (voiceBSample_ ? file.getFullPathName() : juce::String());
+}
+
+void BomboProcessor::clearVoiceBSample()
+{
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    voiceBSample_.reset();
+    voiceBSamplePath_.clear();
+    voiceBFolderPath_.clear();
+    voiceBFolderSamples_.clear();
+    voiceBFolderIndex_ = -1;
+}
+
+juce::String BomboProcessor::voiceBSamplePath() const
+{
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    return voiceBSamplePath_;
+}
+
+void BomboProcessor::randomizeBombo()
+{
+    using namespace bombo::pid;
+    juce::Random r;
+
+    // Set helpers. `setPlain` takes a plain (un-normalized) value and lets
+    // the param convert via its range; `setNorm` writes a normalized 0..1
+    // value directly. Both wrap begin/endChangeGesture so the host sees
+    // user-initiated changes.
+    auto setPlain = [&](const char* id, float plain)
+    {
+        if (auto* p = apvts.getParameter(id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost(p->convertTo0to1(plain));
+            p->endChangeGesture();
+        }
+    };
+    auto setNorm = [&](const char* id, float n)
+    {
+        if (auto* p = apvts.getParameter(id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, n));
+            p->endChangeGesture();
+        }
+    };
+    auto setChoice = [&](const char* id, int numChoices)
+    {
+        if (auto* p = apvts.getParameter(id))
+        {
+            const int idx = r.nextInt(numChoices);
+            const float n = (numChoices > 1)
+                ? static_cast<float>(idx) / static_cast<float>(numChoices - 1)
+                : 0.0f;
+            p->beginChangeGesture();
+            p->setValueNotifyingHost(n);
+            p->endChangeGesture();
+        }
+    };
+    auto rng = [&](float lo, float hi) { return lo + r.nextFloat() * (hi - lo); };
+
+    // ── VOICE A (sub) ────────────────────────────────────────────────
+    setChoice(waveform, 4);
+    setPlain (pitchStart,    rng( 80.0f, 220.0f));
+    setPlain (pitchEnd,      rng( 30.0f,  75.0f));
+    setPlain (pitchDecay,    rng( 40.0f, 250.0f));
+    setPlain (pitchCurve,    rng(  1.5f,   4.5f));
+
+    // ── VOICE B (body) ───────────────────────────────────────────────
+    setPlain (ampAttack,     rng(  0.2f,   3.0f));
+    setPlain (ampDecay,      rng(200.0f,1200.0f));
+    setNorm  (clickAmount,   rng(  0.0f,   0.6f));
+    setNorm  (noiseAmount,   rng(  0.0f,   0.50f));
+    setNorm  (noiseColor,    rng(  0.10f,  0.7f));
+
+    // ── DRIVE ───────────────────────────────────────────────────────
+    setNorm  (driveAmount,   rng(  0.0f,   0.6f));
+    setChoice(driveMode, 4);
+    setNorm  (fxDriveAmount, rng(  0.0f,   0.5f));
+    setChoice(fxDriveMode, 4);
+    setNorm  (fxDriveMix,    rng(  0.5f,   1.0f));
+
+    // ── DELAY ───────────────────────────────────────────────────────
+    setPlain (delayTime,     rng( 50.0f, 500.0f));
+    setNorm  (delayFeedback, rng(  0.2f,   0.65f));
+    setNorm  (delayDrift,    rng(  0.0f,   0.55f));
+    setNorm  (delayMorph,    rng(  0.15f,  0.85f));
+    setNorm  (delayMix,      rng(  0.0f,   0.35f));
+
+    // ── REVERB ──────────────────────────────────────────────────────
+    setNorm  (reverbSize,      rng(0.3f, 0.8f));
+    setNorm  (reverbDecay,     rng(0.3f, 0.7f));
+    setNorm  (reverbDamp,      rng(0.3f, 0.7f));
+    setNorm  (reverbDiffusion, rng(0.4f, 0.7f));
+    setPlain (reverbPredelay,  rng(0.0f, 80.0f));
+    setNorm  (reverbMix,       rng(0.0f, 0.4f));
+
+    // ── FILTER ──────────────────────────────────────────────────────
+    setPlain (filterHp,    rng(  20.0f,   80.0f));
+    setPlain (filterHpQ,   rng(   0.7f,    1.3f));
+    setPlain (filterLp,    rng(1500.0f,12000.0f));
+    setPlain (filterLpQ,   rng(   0.7f,    1.3f));
+    setNorm  (filterColor, rng(   0.0f,    0.5f));
+
+    // ── DUCK ────────────────────────────────────────────────────────
+    setPlain (duckAtk,    rng(  0.5f,  10.0f));
+    setPlain (duckHold,   rng(  0.0f,  80.0f));
+    setPlain (duckRel,    rng( 80.0f, 350.0f));
+    setNorm  (duckDepth,  rng(  0.0f,   0.8f));
+
+    // Section mutes — clear all so the user hears the full result. (No
+    // point getting a randomized kick that's silent because DRIVE muted.)
+    for (const auto* id : { driveMute, delayMute, reverbMute, filterMute,
+                            duckMute, voiceAMute, voiceBMute })
+        setNorm(id, 0.0f);
+}
+
+juce::StringArray BomboProcessor::voiceBSampleNames() const
+{
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    juce::StringArray out;
+    out.ensureStorageAllocated(static_cast<int>(voiceBFolderSamples_.size()));
+    for (const auto& f : voiceBFolderSamples_)
+        out.add(f.getFileNameWithoutExtension());
+    return out;
+}
+
+int BomboProcessor::voiceBSampleIndex() const
+{
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    return voiceBFolderIndex_;
+}
+
 void BomboProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
+    // Stamp the sample path AND folder context onto the APVTS tree as a
+    // child node so it round-trips through XML serialization. `folder`
+    // (when present) tells the restore path to use setVoiceBSampleFolder
+    // (which repopulates the cached list); `path` alone is treated as a
+    // single-file load.
+    {
+        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+        auto child = apvts.state.getOrCreateChildWithName("VoiceBSample", nullptr);
+        child.setProperty("path",   voiceBSamplePath_, nullptr);
+        child.setProperty("folder", voiceBFolderPath_, nullptr);
+    }
     if (auto xml = apvts.state.createXml())
         copyXmlToBinary(*xml, destData);
 }
@@ -288,7 +649,36 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
     if (auto xml = getXmlFromBinary(data, sizeInBytes))
     {
         auto tree = juce::ValueTree::fromXml(*xml);
-        if (tree.isValid()) apvts.replaceState(tree);
+        if (! tree.isValid()) return;
+        apvts.replaceState(tree);
+
+        // Re-load the VOICE B sample asynchronously — file I/O off the
+        // audio thread, and SR must be settled (prepareToPlay may not
+        // have run yet on first project load).
+        auto child = apvts.state.getChildWithName("VoiceBSample");
+        const juce::String path   = child.isValid()
+            ? child.getProperty("path", juce::String()).toString() : juce::String();
+        const juce::String folder = child.isValid()
+            ? child.getProperty("folder", juce::String()).toString() : juce::String();
+        if (path.isNotEmpty())
+        {
+            // Stash for prepareToPlay if SR isn't known yet (host hasn't
+            // called prepare). Either way fire an async load — if SR is
+            // ready it'll succeed, otherwise prepareToPlay will replay it.
+            {
+                juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+                pendingRestorePath_     = path;
+                pendingRestoreIsFolder_ = folder.isNotEmpty();
+            }
+            juce::MessageManager::callAsync(
+                [this, path, folder]()
+                {
+                    if (folder.isNotEmpty())
+                        this->setVoiceBSampleFolder(juce::File(path));
+                    else
+                        this->loadVoiceBSample(juce::File(path));
+                });
+        }
     }
 }
 

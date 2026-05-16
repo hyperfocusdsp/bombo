@@ -123,25 +123,76 @@ public:
         g.setColour(indicatorColour);
         g.fillPath(stem);
 
-        // 7. Tick dots — 11 uniform markers on the rubber outer edge.
-        const float dotR = juce::jmax(0.9f, radius * 0.045f);
-        const float dotRingR = radius + 2.5f;
-        for (int i = 0; i <= 10; ++i)
+        // 7. Tick markers. Discrete-choice knobs (addChoice in FaceplatePanel)
+        //    stash a "numChoices" int in slider.properties so we draw exactly
+        //    N bright ticks aligned to each snap position — gives the dial a
+        //    "click-through" feel as the user rotates. Continuous knobs keep
+        //    the original 11 dim dots.
+        const int numChoices = static_cast<int>(
+            slider.getProperties().getWithDefault("numChoices", -1));
+        if (numChoices > 1)
         {
-            const float t = static_cast<float>(i) / 10.0f;
-            const float ta = juce::jmap(t, rotaryStartAngle, rotaryEndAngle)
-                           - juce::MathConstants<float>::halfPi;
-            const float dx = cx + std::cos(ta) * dotRingR;
-            const float dy = cy + std::sin(ta) * dotRingR;
-            g.setColour(col::bone.withAlpha(0.60f));
-            g.fillEllipse(dx - dotR, dy - dotR, dotR * 2.0f, dotR * 2.0f);
+            const float tickInR  = radius + 1.5f;
+            const float tickOutR = tickInR + juce::jmax(3.0f, radius * 0.18f);
+            const int activeIdx  = juce::roundToInt(sliderPos * (numChoices - 1));
+            for (int i = 0; i < numChoices; ++i)
+            {
+                const float t = static_cast<float>(i)
+                              / static_cast<float>(numChoices - 1);
+                const float ta = juce::jmap(t, rotaryStartAngle, rotaryEndAngle)
+                               - juce::MathConstants<float>::halfPi;
+                const float cc = std::cos(ta);
+                const float ss = std::sin(ta);
+                g.setColour(i == activeIdx ? col::bone
+                                            : col::bone.withAlpha(0.45f));
+                g.drawLine(cx + cc * tickInR,  cy + ss * tickInR,
+                           cx + cc * tickOutR, cy + ss * tickOutR,
+                           i == activeIdx ? 2.0f : 1.4f);
+            }
+        }
+        else
+        {
+            const float dotR = juce::jmax(0.9f, radius * 0.045f);
+            const float dotRingR = radius + 2.5f;
+            for (int i = 0; i <= 10; ++i)
+            {
+                const float t = static_cast<float>(i) / 10.0f;
+                const float ta = juce::jmap(t, rotaryStartAngle, rotaryEndAngle)
+                               - juce::MathConstants<float>::halfPi;
+                const float dx = cx + std::cos(ta) * dotRingR;
+                const float dy = cy + std::sin(ta) * dotRingR;
+                g.setColour(col::bone.withAlpha(0.60f));
+                g.fillEllipse(dx - dotR, dy - dotR, dotR * 2.0f, dotR * 2.0f);
+            }
         }
 
-        // 8. Value text inside the cap. Two-line layout when the formatter
-        //    returns "<number> <unit>"; single-line otherwise.
-        const auto text = slider.getTextFromValue(slider.getValue());
+        // 8. Value / choice text inside the cap. For discrete-choice knobs we
+        //    look up the choice name from the "choiceNames" var-array stamped
+        //    by addChoice; for continuous knobs we use the param's formatter.
+        //    Two-line layout (number above, unit below) kicks in only when the
+        //    formatter returns "<number> <unit>" — choice names ignore it.
+        juce::String text;
+        bool isChoiceText = false;
+        if (numChoices > 1)
+        {
+            if (const auto* choicesVar = slider.getProperties()
+                                              .getVarPointer("choiceNames"))
+            {
+                if (auto* arr = choicesVar->getArray())
+                {
+                    const int idx = juce::jlimit(0, arr->size() - 1,
+                                                  juce::roundToInt(slider.getValue()));
+                    text = (*arr)[idx].toString();
+                    isChoiceText = true;
+                }
+            }
+        }
+        if (! isChoiceText)
+            text = slider.getTextFromValue(slider.getValue());
         const float capInner = coreR * 0.95f;
-        const int spaceIdx = text.indexOfChar(' ');
+        // Choice text renders single-line regardless of internal spaces; only
+        // continuous "<number> <unit>" formatters get the two-line treatment.
+        const int spaceIdx = isChoiceText ? -1 : text.indexOfChar(' ');
         const float valueFontSize = juce::jlimit(8.0f, 13.0f, capInner * 0.62f);
         g.setColour(valueColour.withAlpha(0.92f));
         if (spaceIdx > 0)

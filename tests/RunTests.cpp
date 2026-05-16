@@ -17,6 +17,7 @@
 #include "DSP/BiquadFilter.h"
 #include "DSP/Oscillators.h"
 #include "DSP/BombVoice.h"
+#include "DSP/Delay.h"
 #include "DSP/FdnReverb.h"
 
 #include <cmath>
@@ -349,11 +350,12 @@ public:
             expect(!v.isActive());
         }
 
-        beginTest("deterministic when drift=0");
+        beginTest("two voices with identical triggers produce identical output");
         {
+            // Drift jitter was removed when DRIFT → sample slot landed.
+            // The voice path is now fully deterministic for a given trigger.
             const float sr = 48000.0f;
             bombo::VoiceTrigger t;
-            t.driftAmount = 0.0f;
             bombo::BombVoice v1(sr), v2(sr);
             v1.trigger(t);
             v2.trigger(t);
@@ -405,7 +407,7 @@ public:
             r.setParams(0.6f, 0.3f);
             r.setSize(0.5f);
             r.setDiffusion(0.5f);
-            r.killTail();
+            r.hardReset();
             r.process(1.0f);
             for (int i = 0; i < 200; ++i) r.process(0.0f);
             float early = 0.0f, late = 0.0f;
@@ -428,7 +430,7 @@ public:
             r.setParams(0.9f, 0.0f);
             r.setSize(0.5f);
             r.setDiffusion(0.5f);
-            r.killTail();
+            r.hardReset();
             r.process(1.0f);
             for (int i = 0; i < static_cast<int>(0.1f * sr); ++i) r.process(0.0f);
             r.fullReset();
@@ -436,6 +438,115 @@ public:
             for (int i = 0; i < static_cast<int>(0.05f * sr); ++i)
                 e += std::abs(r.process(0.0f));
             expect(e < 1e-3f);
+        }
+
+        beginTest("killTail fades smoothly to silence (no click)");
+        {
+            const float sr = 48000.0f;
+            bombo::FdnReverb r(sr);
+            r.setParams(0.85f, 0.3f);
+            r.setSize(0.5f);
+            r.setDiffusion(0.5f);
+            r.hardReset();
+            // Develop a tail with an impulse + run to populate state.
+            r.process(1.0f);
+            for (int i = 0; i < static_cast<int>(0.05f * sr); ++i) r.process(0.0f);
+
+            // Sample wet just before kill (should be audible).
+            float preKillPeak = 0.0f;
+            for (int i = 0; i < 64; ++i)
+                preKillPeak = std::max(preKillPeak, std::abs(r.process(0.0f)));
+            expect(preKillPeak > 1e-3f);
+
+            // Trigger fade — wet should slope down rather than jump to 0.
+            r.killTail();
+            float prev = std::abs(r.process(0.0f));
+            float maxJump = 0.0f;
+            for (int i = 0; i < static_cast<int>(0.010f * sr); ++i)
+            {
+                const float cur = std::abs(r.process(0.0f));
+                maxJump = std::max(maxJump, std::abs(cur - prev));
+                prev = cur;
+            }
+            // Sample-to-sample jump bounded — the ramp shouldn't produce
+            // anything close to the pre-kill peak in a single step.
+            expect(maxJump < preKillPeak * 0.5f);
+
+            // 30 ms after killTail: silent.
+            for (int i = 0; i < static_cast<int>(0.020f * sr); ++i) r.process(0.0f);
+            float postPeak = 0.0f;
+            for (int i = 0; i < static_cast<int>(0.010f * sr); ++i)
+                postPeak = std::max(postPeak, std::abs(r.process(0.0f)));
+            expect(postPeak < 1e-4f);
+        }
+    }
+};
+
+class DelayTests : public juce::UnitTest
+{
+public:
+    DelayTests() : juce::UnitTest("Delay") {}
+
+    void runTest() override
+    {
+        beginTest("killTail flushes buffer — wet silent after kill+delay");
+        {
+            const float sr = 48000.0f;
+            bombo::Delay d(sr);
+            const float delayMs = 50.0f;
+            d.setTimeMs(delayMs);
+            d.setFeedback(0.85f);
+            d.setFilterMorph(0.0f);
+
+            // Populate the delay buffer with sustained input so feedback
+            // echoes are circulating at audible levels everywhere in the
+            // buffer (not just one transient blip).
+            const int populateSamples = static_cast<int>(0.5f * sr);
+            for (int i = 0; i < populateSamples; ++i) d.process(0.4f);
+
+            // Confirm the tail IS audible right before kill across a
+            // window wider than one delay cycle.
+            float preKillPeak = 0.0f;
+            const int preWindow = static_cast<int>(delayMs * 0.001f * sr * 2.0f);
+            for (int i = 0; i < preWindow; ++i)
+                preKillPeak = std::max(preKillPeak, std::abs(d.process(0.0f)));
+            expect(preKillPeak > 1e-2f);
+
+            // Kill, then run > delayMs + killFadeMs so the entire buffer
+            // has been read once with new (zero) input flowing through.
+            d.killTail();
+            const int waitSamples = static_cast<int>((delayMs + 20.0f) * 0.001f * sr);
+            for (int i = 0; i < waitSamples; ++i) d.process(0.0f);
+
+            // Now the wet should be silent across a wide window.
+            float postPeak = 0.0f;
+            const int postWindow = static_cast<int>(delayMs * 0.001f * sr * 2.0f);
+            for (int i = 0; i < postWindow; ++i)
+                postPeak = std::max(postPeak, std::abs(d.process(0.0f)));
+            expect(postPeak < 1e-3f);
+        }
+
+        beginTest("killTail handles rapid successive kills without state leak");
+        {
+            const float sr = 48000.0f;
+            bombo::Delay d(sr);
+            d.setTimeMs(50.0f);
+            d.setFeedback(0.9f);
+
+            for (int hit = 0; hit < 4; ++hit)
+            {
+                d.process(1.0f);
+                for (int i = 0; i < static_cast<int>(0.05f * sr); ++i) d.process(0.0f);
+                d.killTail();
+            }
+            // After 4 quick hits, run silence for delay+killfade window;
+            // wet must be silent — confirms each kill flushed cleanly.
+            const int waitSamples = static_cast<int>(0.080f * sr);
+            for (int i = 0; i < waitSamples; ++i) d.process(0.0f);
+            float peak = 0.0f;
+            for (int i = 0; i < static_cast<int>(0.005f * sr); ++i)
+                peak = std::max(peak, std::abs(d.process(0.0f)));
+            expect(peak < 1e-3f);
         }
     }
 };
@@ -447,6 +558,7 @@ static AmpEnvelopeTests ampEnvelopeTests;
 static BiquadFilterTests biquadFilterTests;
 static OscillatorTests  oscillatorTests;
 static BombVoiceTests   bombVoiceTests;
+static DelayTests       delayTests;
 static FdnReverbTests   fdnReverbTests;
 
 int main()

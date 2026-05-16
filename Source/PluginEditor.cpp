@@ -8,11 +8,40 @@
 // must be transitively available before the header is parsed.
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 
+#if JUCE_LINUX
+ // X11 headers define `KeyPress`, `Status`, etc. as macros that clash with
+ // juce::KeyPress and other JUCE types — so the implementation lives in
+ // its own translation unit. Declare the entry point here.
+ namespace bombo { bool claimCompositorSelectionOnce(); }
+#endif
+
+static bombo::FaceplatePanel::SampleSlotCallbacks makeSampleSlotCallbacks(BomboProcessor& p)
+{
+    bombo::FaceplatePanel::SampleSlotCallbacks cb;
+    cb.onBrowsePick   = [&p](const juce::File& f) { p.setVoiceBSampleFolder(f); };
+    cb.onIndexChange  = [&p](int idx)             { p.loadVoiceBSampleByIndex(idx); };
+    cb.onClear        = [&p]()                    { p.clearVoiceBSample(); };
+    cb.getNames       = [&p]()                    { return p.voiceBSampleNames(); };
+    cb.getCurrentIdx  = [&p]()                    { return p.voiceBSampleIndex(); };
+    return cb;
+}
+
 BomboEditor::BomboEditor(BomboProcessor& p)
     : juce::AudioProcessorEditor(&p),
       processorRef(p),
-      faceplate(p.apvts, &p.waveBuffer())
+      faceplate(p.apvts, &p.waveBuffer(), makeSampleSlotCallbacks(p),
+                [&p]() { return p.hostBpm(); },
+                [&p]() { p.randomizeBombo(); })
 {
+   #if JUCE_LINUX
+    // Run exactly once per process. Inside a DAW host, the host's own X
+    // window may not benefit, but the claim itself is harmless (idempotent
+    // and only fires when no other owner exists).
+    static const bool compositorClaimed = bombo::claimCompositorSelectionOnce();
+    (void) compositorClaimed;
+   #endif
+
+    setOpaque(false);
     setLookAndFeel(&lnf);
     addAndMakeVisible(faceplate);
 
@@ -47,25 +76,62 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         [=, safe = juce::Component::SafePointer<BomboEditor>(this)]() mutable
         {
             if (safe == nullptr) return;
-            const auto& displays = juce::Desktop::getInstance().getDisplays().displays;
-            const juce::Displays::Display* biggest = nullptr;
-            for (const auto& d : displays)
+
+            int w = -1;
+           #if JucePlugin_Build_Standalone
+            // First preference: a width remembered from a previous launch.
+            // JUCE's StandalonePluginHolder owns a PropertiesFile; we store
+            // editor width there in BomboEditor::resized().
+            if (auto* holder = juce::StandalonePluginHolder::getInstance())
             {
-                if (biggest == nullptr
-                    || (d.userArea.getWidth() * d.userArea.getHeight())
-                       > (biggest->userArea.getWidth() * biggest->userArea.getHeight()))
-                    biggest = &d;
+                if (auto* props = holder->settings.get())
+                {
+                    const int saved = props->getIntValue("bombo-editor-width", -1);
+                    if (saved >= kMinWidth && saved <= kMaxWidth) w = saved;
+                }
             }
-            if (biggest == nullptr) return;
-            const auto area = biggest->userArea;
-            constexpr int kChromePad = 60;
-            const double padW = juce::jmax(1, area.getWidth()  - kChromePad);
-            const double padH = juce::jmax(1, area.getHeight() - kChromePad);
-            const double scale = std::min(padW / kDesignW, padH / kDesignH);
-            int w = static_cast<int>(std::round(kDesignW * scale));
-            w = juce::jlimit(kMinWidth, kMaxWidth, w);
+           #endif
+
+            if (w <= 0)
+            {
+                // Fall back to fit-to-display on first launch.
+                const auto& displays = juce::Desktop::getInstance().getDisplays().displays;
+                const juce::Displays::Display* biggest = nullptr;
+                for (const auto& d : displays)
+                {
+                    if (biggest == nullptr
+                        || (d.userArea.getWidth() * d.userArea.getHeight())
+                           > (biggest->userArea.getWidth() * biggest->userArea.getHeight()))
+                        biggest = &d;
+                }
+                if (biggest == nullptr) return;
+                const auto area = biggest->userArea;
+                constexpr int kChromePad = 60;
+                const double padW = juce::jmax(1, area.getWidth()  - kChromePad);
+                const double padH = juce::jmax(1, area.getHeight() - kChromePad);
+                const double scale = std::min(padW / kDesignW, padH / kDesignH);
+                w = static_cast<int>(std::round(kDesignW * scale));
+                w = juce::jlimit(kMinWidth, kMaxWidth, w);
+            }
             const int h = static_cast<int>(std::round(w / kAspect));
             safe->setSize(w, h);
+            safe->initialSizeApplied_ = true;
+
+           #if JucePlugin_Build_Standalone
+            // Make the DocumentWindow non-opaque exactly once, after the
+            // editor is parented and the initial size has settled. JUCE
+            // recreates the native peer with an ARGB visual so Hyprland
+            // can composite through the transparent corner wedges.
+            if (auto* top = safe->getTopLevelComponent(); top != nullptr && top != safe.getComponent())
+            {
+                top->setOpaque(false);
+                // ResizableWindow::paint fills with backgroundColourId — opaque
+                // grey by default, which would mask the transparent corners.
+                // Set it transparent so only chassisPath_ pixels are drawn.
+                if (auto* rw = dynamic_cast<juce::ResizableWindow*>(top))
+                    rw->setBackgroundColour(juce::Colours::transparentBlack);
+            }
+           #endif
         });
 
     // ── Standalone-only: enable every available MIDI input on first
@@ -91,9 +157,9 @@ BomboEditor::~BomboEditor()
 
 void BomboEditor::paint(juce::Graphics& g)
 {
-    // Same colour as the faceplate's outside-chassis backdrop so any
-    // letterbox strip is invisible at the editor edge.
-    g.fillAll(bombo::col::graphite);
+    // Transparent — the faceplate's chassisPath_ fill covers everything
+    // inside the bomb shape; corner wedges stay alpha=0.
+    g.fillAll(juce::Colours::transparentBlack);
 }
 
 void BomboEditor::resized()
@@ -115,6 +181,19 @@ void BomboEditor::resized()
     const int boundsW = static_cast<int>(std::ceil(static_cast<float>(getWidth())  / scale));
     const int boundsH = static_cast<int>(std::ceil(static_cast<float>(getHeight()) / scale));
     faceplate.setBounds(0, 0, boundsW, boundsH);
+
+   #if JucePlugin_Build_Standalone
+    // Persist the editor width so the next launch reopens at this scale.
+    // Skip until initialSizeApplied_ — the ctor's design-default setSize
+    // fires resized() before the deferred lambda has a chance to read the
+    // persisted value, and we'd otherwise clobber it. Resize fires often
+    // during interactive drags; setValue is a cheap in-memory write — the
+    // PropertiesFile flushes lazily.
+    if (initialSizeApplied_)
+        if (auto* holder = juce::StandalonePluginHolder::getInstance())
+            if (auto* props = holder->settings.get())
+                props->setValue("bombo-editor-width", getWidth());
+   #endif
 }
 
 void BomboEditor::visibilityChanged()
@@ -124,15 +203,21 @@ void BomboEditor::visibilityChanged()
 
 bool BomboEditor::keyPressed(const juce::KeyPress& key)
 {
-    // Space, T, or Return → fire a kick. Matches the Rust archive's
-    // editor bridge: editor pushes count, audio thread drains at the
-    // top of process().
-    const auto ch = juce::CharacterFunctions::toLowerCase(key.getTextCharacter());
-    if (key.getKeyCode() == juce::KeyPress::spaceKey
-        || key.getKeyCode() == juce::KeyPress::returnKey
-        || ch == 't')
+    // Transport-style keybinds:
+    //   Space / Return → toggle LOOP (start = first kick + auto-fire at BPM,
+    //                                  stop = deferred tail kill at next beat).
+    //   T              → one-shot: fire a kick + schedule tail kill one beat
+    //                    later. Independent of loop state.
+    const auto kc = key.getKeyCode();
+    if (kc == juce::KeyPress::spaceKey || kc == juce::KeyPress::returnKey)
     {
-        processorRef.triggerFromKeyboard();
+        processorRef.toggleLoop();
+        return true;
+    }
+    const auto ch = juce::CharacterFunctions::toLowerCase(key.getTextCharacter());
+    if (ch == 't')
+    {
+        processorRef.triggerOneShot();
         return true;
     }
     return false;

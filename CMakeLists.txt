@@ -50,13 +50,18 @@ target_sources(Bombo
         Source/PluginProcessor.h
         Source/PluginEditor.cpp
         Source/PluginEditor.h
+        Source/X11CompositorClaim.cpp
         Source/Parameters.h
         Source/GUI/Colours.h
         Source/GUI/Fonts.h
         Source/GUI/Fonts.cpp
+        Source/GUI/BalanceFader.h
         Source/GUI/BomboLookAndFeel.h
+        Source/GUI/BpmDisplay.h
+        Source/GUI/DiceButton.h
         Source/GUI/FaceplatePanel.h
         Source/GUI/FaceplatePanel.cpp
+        Source/GUI/SampleSlotWidget.h
         Source/GUI/WaveBuffer.h
         Source/GUI/ScopeComponent.h
         Source/GUI/ScopeComponent.cpp
@@ -64,7 +69,7 @@ target_sources(Bombo
         Source/DSP/Envelopes.h
         Source/DSP/ClickGen.h
         Source/DSP/NoiseGen.h
-        Source/DSP/Drift.h
+        Source/DSP/SampleSlot.h
         Source/DSP/VoiceClip.h
         Source/DSP/BombVoice.h
         Source/DSP/BiquadFilter.h
@@ -79,7 +84,11 @@ target_compile_definitions(Bombo
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
-        JUCE_VST3_CAN_REPLACE_VST2=0)
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        # Linux X11: enable XRender so JUCE selects an ARGB visual when
+        # setOpaque(false) is set on the top-level window. Required for
+        # the bomb-tail corner wedges to be truly transparent.
+        JUCE_USE_XRENDER=1)
 
 # LTO is a big build-time RAM hog (lto1 can take >4GB on the
 # Standalone link with -flto). Default ON for release builds; flip
@@ -92,6 +101,7 @@ target_link_libraries(Bombo
         juce::juce_audio_processors
         juce::juce_audio_utils
         juce::juce_audio_devices
+        juce::juce_audio_formats
         juce::juce_dsp
         juce::juce_gui_basics
         juce::juce_graphics
@@ -102,6 +112,14 @@ target_link_libraries(Bombo
         juce::juce_recommended_config_flags)
 if(BOMBO_LTO)
     target_link_libraries(Bombo PUBLIC juce::juce_recommended_lto_flags)
+endif()
+
+# X11 is needed for the compositor-selection claim that bridges JUCE's
+# transparency check on Hyprland/XWayland (see Source/X11CompositorClaim.cpp).
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+    target_link_libraries(Bombo PRIVATE ${X11_LIBRARIES})
+    target_include_directories(Bombo PRIVATE ${X11_INCLUDE_DIR})
 endif()
 
 # ── DSP unit tests ────────────────────────────────────────────────

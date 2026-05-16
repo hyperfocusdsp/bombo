@@ -4,6 +4,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -13,6 +14,10 @@ namespace bombo
 {
 
 class WaveBuffer;
+class SampleSlotWidget;
+class BpmDisplay;
+class BalanceFader;
+class DiceButton;
 
 // Bombo faceplate. Four bands stacked top-to-bottom:
 //   1. Header  — BOMBO logo, subtitle, LIM/MNT pills, SYNTH/FX tab
@@ -25,9 +30,31 @@ class WaveBuffer;
 class FaceplatePanel : public juce::Component
 {
 public:
+    // Folder-browse sample-slot callbacks. The widget itself is decoupled
+    // from BomboProcessor; the editor wires these through.
+    struct SampleSlotCallbacks
+    {
+        std::function<void(const juce::File&)> onBrowsePick;   // setVoiceBSampleFolder
+        std::function<void(int)>               onIndexChange;  // loadVoiceBSampleByIndex
+        std::function<void()>                  onClear;        // clearVoiceBSample
+        std::function<juce::StringArray()>     getNames;       // voiceBSampleNames
+        std::function<int()>                   getCurrentIdx;  // voiceBSampleIndex
+    };
+
+    // Host BPM accessor for the header's BPM display. Returns 0 in
+    // standalone (so the display reverts to drag-editable param mode).
+    using HostBpmFn = std::function<float()>;
+    // Dice button click — wired by editor to BomboProcessor::randomizeBombo.
+    using RandomizeFn = std::function<void()>;
+
     FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
-                   const WaveBuffer* waveBuffer);
-    ~FaceplatePanel() override = default;
+                   const WaveBuffer* waveBuffer,
+                   SampleSlotCallbacks sampleSlotCb = {},
+                   HostBpmFn hostBpmFn = {},
+                   RandomizeFn randomizeCb = {});
+    // Defined out-of-line in .cpp so the forward-declared SampleSlotWidget
+    // is complete by the time unique_ptr destructors instantiate.
+    ~FaceplatePanel() override;
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -35,7 +62,7 @@ public:
     void mouseMove(const juce::MouseEvent&) override;
 
 private:
-    enum class CtlKind { Knob, Choice, Toggle };
+    enum class CtlKind { Knob, Choice, Toggle, SampleSlot };
 
     struct Control
     {
@@ -44,6 +71,7 @@ private:
         std::unique_ptr<juce::ComboBox>         combo;
         std::unique_ptr<juce::ToggleButton>     button;
         std::unique_ptr<juce::Label>            label;
+        std::unique_ptr<SampleSlotWidget>       sampleSlot;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>   sAtt;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> cAtt;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>   bAtt;
@@ -62,10 +90,12 @@ private:
         std::vector<std::unique_ptr<Control>> controls;
     };
 
-    Control* addKnob   (Section& s, const juce::String& paramId, const juce::String& displayName,
-                        juce::Colour labelColour);
-    Control* addChoice (Section& s, const juce::String& paramId, const juce::String& displayName,
-                        juce::Colour labelColour);
+    Control* addKnob       (Section& s, const juce::String& paramId, const juce::String& displayName,
+                            juce::Colour labelColour);
+    Control* addChoice     (Section& s, const juce::String& paramId, const juce::String& displayName,
+                            juce::Colour labelColour);
+    Control* addSampleSlot (Section& s, const juce::String& displayName,
+                            juce::Colour labelColour);
 
     // Standalone control creators (not bound to a Section).
     std::unique_ptr<Control> makeBoundKnob(const juce::String& paramId,
@@ -101,6 +131,11 @@ private:
 
     juce::AudioProcessorValueTreeState& apvts_;
 
+    // Sample-slot bridge callbacks. Set by the editor at construction so
+    // the panel can ask the processor to load/clear/query the VOICE B
+    // sample without depending on the BomboProcessor header.
+    SampleSlotCallbacks sampleSlotCb_;
+
     // FX rack — 7 columns left to right.
     std::vector<Section> sections_;
 
@@ -116,7 +151,11 @@ private:
     // Header pills.
     std::unique_ptr<juce::ToggleButton> limPill_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> limAtt_;
-    juce::Rectangle<int> mntPillBounds_;       // painted, not a real component
+    std::unique_ptr<juce::ToggleButton> loopBtn_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> loopAtt_;
+    std::unique_ptr<BpmDisplay>         bpmDisplay_;
+    std::unique_ptr<BalanceFader>       balanceFader_;
+    std::unique_ptr<DiceButton>         diceButton_;
     juce::Rectangle<int> synthTabBounds_;
     juce::Rectangle<int> insertFxTabBounds_;
     juce::Rectangle<int> headerBounds_;
