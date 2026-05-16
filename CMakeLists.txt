@@ -40,6 +40,10 @@ juce_add_plugin(Bombo
     AU_MAIN_TYPE "kAudioUnitType_MusicDevice"
     DESCRIPTION "Half kick instrument, half 1992 BBS. One plugin.")
 
+juce_add_binary_data(BomboResources
+    SOURCES
+        Resources/Fonts/AllertaStencil-Regular.ttf)
+
 target_sources(Bombo
     PRIVATE
         Source/PluginProcessor.cpp
@@ -47,6 +51,12 @@ target_sources(Bombo
         Source/PluginEditor.cpp
         Source/PluginEditor.h
         Source/Parameters.h
+        Source/GUI/Colours.h
+        Source/GUI/Fonts.h
+        Source/GUI/Fonts.cpp
+        Source/GUI/BomboLookAndFeel.h
+        Source/GUI/FaceplatePanel.h
+        Source/GUI/FaceplatePanel.cpp
         Source/DSP/Oscillators.h
         Source/DSP/Envelopes.h
         Source/DSP/ClickGen.h
@@ -70,6 +80,7 @@ target_compile_definitions(Bombo
 
 target_link_libraries(Bombo
     PRIVATE
+        BomboResources
         juce::juce_audio_processors
         juce::juce_audio_utils
         juce::juce_dsp
