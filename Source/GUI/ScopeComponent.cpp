@@ -30,20 +30,20 @@ void ScopeComponent::paint(juce::Graphics& g)
     const auto bounds = getLocalBounds().toFloat();
 
     // Recessed ink panel — matches the dark scope well in the pre-port UI.
-    g.setColour(col::ink);
+    g.setColour(col::ink());
     g.fillRoundedRectangle(bounds, 3.0f);
-    g.setColour(col::graphiteHi);
+    g.setColour(col::graphiteHi());
     g.drawRoundedRectangle(bounds.reduced(0.5f), 3.0f, 1.0f);
 
     // Label
-    g.setColour(col::boneDim);
+    g.setColour(col::boneDim());
     g.setFont(fonts::label(9.0f));
     g.drawText("SCOPE  \xE2\x80\xA2  POST",
                bounds.reduced(10.0f, 6.0f).removeFromTop(14.0f),
                juce::Justification::topLeft);
 
     // Centerline hairline so an empty scope still reads as "an oscilloscope".
-    g.setColour(col::bone.withAlpha(0.06f));
+    g.setColour(col::bone().withAlpha(0.06f));
     g.drawHorizontalLine(static_cast<int>(bounds.getCentreY()),
                          bounds.getX() + 8.0f, bounds.getRight() - 8.0f);
 
@@ -68,7 +68,7 @@ void ScopeComponent::paint(juce::Graphics& g)
         else          { path.lineTo(x, y); }
     }
 
-    g.setColour(col::bone.withAlpha(0.88f));
+    g.setColour(col::bone().withAlpha(0.88f));
     g.strokePath(path,
                  juce::PathStrokeType(1.3f,
                                       juce::PathStrokeType::curved,

@@ -73,7 +73,7 @@ public:
         // Match BomboLookAndFeel knob body — dark plastic cap, no gradient
         // ring fuss; this widget intentionally renders a simpler look so it
         // reads as "browse target" rather than "parameter knob."
-        const auto cap     = col::knobCap;
+        const auto cap     = col::knobCap();
         const auto capTop  = cap.brighter(0.10f);
         const auto capBot  = cap.darker (0.18f);
 
@@ -86,7 +86,7 @@ public:
                       (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
 
         // Rubber grip
-        g.setColour(col::knobRubber);
+        g.setColour(col::knobRubber());
         g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
 
         // Cap core gradient
@@ -96,7 +96,7 @@ public:
         g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
 
         const bool hot = isMouseOver(true) || hasKeyboardFocus(false);
-        g.setColour(hot ? col::accentAmber.withAlpha(0.85f)
+        g.setColour(hot ? col::accentAmber().withAlpha(0.85f)
                         : juce::Colour::fromRGBA(0, 0, 0, 0x55));
         g.drawEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f, 1.0f);
 
@@ -116,8 +116,8 @@ public:
                                - juce::MathConstants<float>::halfPi;
                 const float cc = std::cos(ta);
                 const float ss = std::sin(ta);
-                g.setColour(i == currentIdx_ ? col::bone
-                                              : col::bone.withAlpha(0.45f));
+                g.setColour(i == currentIdx_ ? col::bone()
+                                              : col::bone().withAlpha(0.45f));
                 g.drawLine(cx + cc * tickInR,  cy + ss * tickInR,
                            cx + cc * tickOutR, cy + ss * tickOutR,
                            i == currentIdx_ ? 2.0f : 1.4f);
@@ -145,13 +145,13 @@ public:
             stem.lineTo(cx + ic * stemInR  - perpC * stemW * 0.5f,
                         cy + is * stemInR  - perpS * stemW * 0.5f);
             stem.closeSubPath();
-            g.setColour(col::bone);
+            g.setColour(col::bone());
             g.fillPath(stem);
         }
 
         // Cap text — "LOAD" when empty, otherwise filename + (i/N).
         const float capInner = coreR * 0.92f;
-        g.setColour(col::bone.withAlpha(0.92f));
+        g.setColour(col::bone().withAlpha(0.92f));
         if (isLoaded())
         {
             g.setFont(fonts::value(juce::jlimit(8.0f, 11.5f, capInner * 0.55f)));
@@ -161,7 +161,7 @@ public:
                                                     capInner * 2.0f,
                                                     capInner * 1.25f).toNearestInt(),
                              juce::Justification::centredBottom, 2, 0.85f);
-            g.setColour(col::boneDim);
+            g.setColour(col::boneDim());
             g.setFont(fonts::value(juce::jmax(6.5f, capInner * 0.38f)));
             g.drawFittedText(juce::String(currentIdx_ + 1) + "/" + juce::String(names_.size()),
                              juce::Rectangle<float>(cx - capInner,
