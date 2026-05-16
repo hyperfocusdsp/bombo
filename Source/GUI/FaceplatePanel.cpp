@@ -1,420 +1,420 @@
 #include "FaceplatePanel.h"
 
+#include "Colours.h"
 #include "Fonts.h"
 #include "../Parameters.h"
 
 namespace bombo
 {
-
 namespace
 {
-constexpr int kChassisW = 1320;
-constexpr int kChassisH = 880;
-constexpr int kHeaderH = 64;
-constexpr int kFinBandH = 70;
-constexpr int kSectionGap = 10;
-constexpr int kSectionPadTop = 26;
-constexpr int kSectionPadBottom = 10;
-constexpr int kSectionPadSide = 10;
-constexpr int kKnobW = 78;
-constexpr int kKnobH = 82;
-constexpr int kKnobLabelH = 13;
+constexpr int kHeaderH        = 56;
+constexpr int kFinBandH       = 64;
+constexpr int kRackGap        = 4;     // gap between FX columns
+constexpr int kRackOuterPad   = 10;
+constexpr int kColInnerPadX   = 6;
+constexpr int kColInnerPadTop = 26;    // room for the section title
+constexpr int kColInnerPadBot = 8;
+constexpr int kKnobSlotW      = 78;
+constexpr int kKnobSlotH      = 86;    // knob disc + label below
+constexpr int kKnobLabelH     = 13;
+constexpr int kHeaderKnobSize = 44;
 }
+
+// ────────────────────────────────────────────────────────────────────
+//  Construction
+// ────────────────────────────────────────────────────────────────────
 
 FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts)
     : apvts_(apvts)
 {
-    // Section order is the visual rack order. Voice A + Voice B + MID
-    // share the bone-tone "voice" colour. DRIVE/FILTER/DELAY/REVERB/DUCK
-    // form the FX rack.
-    sections_.reserve(7);
-
-    // VOICE A
+    // ── 7 columns, left to right ────────────────────────────────────
+    // VOICE A: 5 controls — WAVE + 4 voice knobs.
     {
         Section s; s.name = "VOICE A"; s.accent = col::voice;
-        addChoice(s, apvts, pid::waveform,    "WAVE");
-        addKnob  (s, apvts, pid::pitchStart,  "PITCH");
-        addKnob  (s, apvts, pid::pitchEnd,    "END");
-        addKnob  (s, apvts, pid::pitchDecay,  "P.DEC");
-        addKnob  (s, apvts, pid::pitchCurve,  "CURVE");
+        addChoice(s, pid::waveform,   "WAVE");
+        addKnob  (s, pid::pitchStart, "PITCH");
+        addKnob  (s, pid::pitchEnd,   "END");
+        addKnob  (s, pid::pitchDecay, "P.DEC");
+        addKnob  (s, pid::pitchCurve, "CURVE");
         sections_.push_back(std::move(s));
     }
-    // VOICE B
+    // VOICE B: 6 knobs — voice-B set + the MID layer's 2 most useful knobs
+    // folded in so MID doesn't need its own column.
     {
         Section s; s.name = "VOICE B"; s.accent = col::voice;
-        addKnob(s, apvts, pid::ampAttack,   "ATK");
-        addKnob(s, apvts, pid::ampDecay,    "DEC");
-        addKnob(s, apvts, pid::clickAmount, "CLICK");
-        addKnob(s, apvts, pid::clickCenter, "CLK.F");
-        addKnob(s, apvts, pid::noiseAmount, "BODY");
-        addKnob(s, apvts, pid::noiseColor,  "COLOR");
+        addKnob(s, pid::ampAttack,    "ATK");
+        addKnob(s, pid::ampDecay,     "DEC");
+        addKnob(s, pid::clickAmount,  "CLICK");
+        addKnob(s, pid::noiseAmount,  "BODY");
+        addKnob(s, pid::noiseColor,   "COLOR");
+        addKnob(s, pid::driftAmount,  "DRIFT");
         sections_.push_back(std::move(s));
     }
-    // MID (smaller — overlapping VOICE territory but with its own panel)
-    {
-        Section s; s.name = "MID"; s.accent = col::voice;
-        addKnob(s, apvts, pid::midPitchStart, "PITCH");
-        addKnob(s, apvts, pid::midPitchEnd,   "END");
-        addKnob(s, apvts, pid::midDecay,      "DEC");
-        addKnob(s, apvts, pid::midLevel,      "LVL");
-        addKnob(s, apvts, pid::driftAmount,   "DRIFT");
-        sections_.push_back(std::move(s));
-    }
-    // DRIVE (voice + bus on the same panel — voice drive on the left,
-    // bus drive on the right).
+    // DRIVE: V.AMT + V.MODE + B.AMT + B.MODE + MIX = 5 controls.
     {
         Section s; s.name = "DRIVE"; s.accent = col::drive;
-        addKnob  (s, apvts, pid::driveAmount,   "V.AMT");
-        addChoice(s, apvts, pid::driveMode,     "V.MODE");
-        addKnob  (s, apvts, pid::fxDriveAmount, "B.AMT");
-        addChoice(s, apvts, pid::fxDriveMode,   "B.MODE");
-        addKnob  (s, apvts, pid::fxDriveMix,    "MIX");
+        addKnob  (s, pid::driveAmount,   "V.AMT");
+        addChoice(s, pid::driveMode,     "V.MODE");
+        addKnob  (s, pid::fxDriveAmount, "B.AMT");
+        addChoice(s, pid::fxDriveMode,   "B.MODE");
+        addKnob  (s, pid::fxDriveMix,    "MIX");
         sections_.push_back(std::move(s));
     }
-    // FILTER
+    // FILTER: HP + HP Q + LP + LP Q + COLOR.
     {
         Section s; s.name = "FILTER"; s.accent = col::filterC;
-        addKnob(s, apvts, pid::filterHp,    "HP");
-        addKnob(s, apvts, pid::filterHpQ,   "HP Q");
-        addKnob(s, apvts, pid::filterLp,    "LP");
-        addKnob(s, apvts, pid::filterLpQ,   "LP Q");
-        addKnob(s, apvts, pid::filterColor, "COLOR");
+        addKnob(s, pid::filterHp,    "HP");
+        addKnob(s, pid::filterHpQ,   "HP Q");
+        addKnob(s, pid::filterLp,    "LP");
+        addKnob(s, pid::filterLpQ,   "LP Q");
+        addKnob(s, pid::filterColor, "COLOR");
         sections_.push_back(std::move(s));
     }
-    // DELAY
+    // DELAY.
     {
         Section s; s.name = "DELAY"; s.accent = col::delayC;
-        addKnob(s, apvts, pid::delayTime,     "TIME");
-        addKnob(s, apvts, pid::delayFeedback, "FBK");
-        addKnob(s, apvts, pid::delayDrift,    "DRIFT");
-        addKnob(s, apvts, pid::delayMorph,    "TONE");
-        addKnob(s, apvts, pid::delayMix,      "MIX");
+        addKnob(s, pid::delayTime,     "TIME");
+        addKnob(s, pid::delayFeedback, "FBK");
+        addKnob(s, pid::delayDrift,    "DRIFT");
+        addKnob(s, pid::delayMorph,    "TONE");
+        addKnob(s, pid::delayMix,      "MIX");
         sections_.push_back(std::move(s));
     }
-    // REVERB
+    // REVERB.
     {
         Section s; s.name = "REVERB"; s.accent = col::reverb;
-        addKnob(s, apvts, pid::reverbSize,      "SIZE");
-        addKnob(s, apvts, pid::reverbDecay,     "DECAY");
-        addKnob(s, apvts, pid::reverbDamp,      "DAMP");
-        addKnob(s, apvts, pid::reverbDiffusion, "DIFF");
-        addKnob(s, apvts, pid::reverbPredelay,  "PRE");
-        addKnob(s, apvts, pid::reverbMix,       "MIX");
+        addKnob(s, pid::reverbSize,      "SIZE");
+        addKnob(s, pid::reverbDecay,     "DECAY");
+        addKnob(s, pid::reverbDamp,      "DAMP");
+        addKnob(s, pid::reverbDiffusion, "DIFF");
+        addKnob(s, pid::reverbPredelay,  "PRE");
+        addKnob(s, pid::reverbMix,       "MIX");
         sections_.push_back(std::move(s));
     }
-    // DUCK
+    // DUCK.
     {
         Section s; s.name = "DUCK"; s.accent = col::duck;
-        addKnob(s, apvts, pid::duckAtk,   "ATK");
-        addKnob(s, apvts, pid::duckRel,   "REL");
-        addKnob(s, apvts, pid::duckDepth, "DEPTH");
+        addKnob(s, pid::duckAtk,   "ATK");
+        addKnob(s, pid::duckRel,   "REL");
+        addKnob(s, pid::duckDepth, "DEPTH");
         sections_.push_back(std::move(s));
     }
 
-    // Header: master volume + limiter on/amount. Stored at top so they
-    // hover above the rack.
-    masterOutKnob_ = addKnob(sections_[0], apvts, pid::masterOut, "OUT"); // placeholder slot
-    // The masterOut knob will be repositioned manually in resized(). Move
-    // it out of VOICE A's child list so it doesn't get gridded.
-    auto& voiceA = sections_[0];
-    std::unique_ptr<Knob> hero = std::move(voiceA.knobs.back());
-    voiceA.knobs.pop_back();
-    headerKnobs_.push_back(std::move(hero));
-    masterOutKnob_ = headerKnobs_.back().get();
-
+    // ── Header band — master OUT + LIM toggle + LIM AMT ─────────────
+    // master OUT
     {
-        auto toggle = std::make_unique<ToggleCtl>();
-        toggle->button.setButtonText("LIM");
-        toggle->button.setColour(juce::ToggleButton::textColourId, col::boneDim);
-        toggle->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-            apvts, pid::limiterOn, toggle->button);
-        addAndMakeVisible(toggle->button);
-        headerToggles_.push_back(std::move(toggle));
+        auto c = std::make_unique<Control>();
+        c->kind = CtlKind::Knob;
+        c->slider = std::make_unique<juce::Slider>();
+        c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+        c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
+                                       juce::MathConstants<float>::pi * 2.75f, true);
+        c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+        c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::voice);
+        c->label = std::make_unique<juce::Label>();
+        c->label->setText("OUT", juce::dontSendNotification);
+        c->label->setJustificationType(juce::Justification::centred);
+        c->label->setFont(fonts::label(9.5f));
+        c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+            apvts_, pid::masterOut, *c->slider);
+        addAndMakeVisible(*c->slider);
+        addAndMakeVisible(*c->label);
+        header_.push_back(std::move(c));
     }
+    // LIM toggle
     {
-        auto knob = std::make_unique<Knob>();
-        knob->slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        knob->slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 60, 12);
-        knob->slider.setColour(juce::Slider::rotarySliderOutlineColourId, col::accentAmber);
-        knob->label.setText("LIM AMT", juce::dontSendNotification);
-        knob->label.setJustificationType(juce::Justification::centred);
-        knob->label.setFont(fonts::label(9.5f));
-        knob->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-            apvts, pid::limiterAmount, knob->slider);
-        addAndMakeVisible(knob->slider);
-        addAndMakeVisible(knob->label);
-        headerKnobs_.push_back(std::move(knob));
+        auto c = std::make_unique<Control>();
+        c->kind = CtlKind::Toggle;
+        c->button = std::make_unique<juce::ToggleButton>("LIM");
+        c->button->setColour(juce::ToggleButton::textColourId, col::boneDim);
+        c->bAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+            apvts_, pid::limiterOn, *c->button);
+        addAndMakeVisible(*c->button);
+        header_.push_back(std::move(c));
     }
-
-    setSize(kChassisW, kChassisH);
+    // LIM AMT
+    {
+        auto c = std::make_unique<Control>();
+        c->kind = CtlKind::Knob;
+        c->slider = std::make_unique<juce::Slider>();
+        c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+        c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
+                                       juce::MathConstants<float>::pi * 2.75f, true);
+        c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+        c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::accentAmber);
+        c->label = std::make_unique<juce::Label>();
+        c->label->setText("LIM", juce::dontSendNotification);
+        c->label->setJustificationType(juce::Justification::centred);
+        c->label->setFont(fonts::label(9.5f));
+        c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+            apvts_, pid::limiterAmount, *c->slider);
+        addAndMakeVisible(*c->slider);
+        addAndMakeVisible(*c->label);
+        header_.push_back(std::move(c));
+    }
 }
 
-FaceplatePanel::Knob* FaceplatePanel::addKnob(Section& s,
-                                              juce::AudioProcessorValueTreeState& apvts,
-                                              const juce::String& paramId,
-                                              const juce::String& displayName)
+FaceplatePanel::Control*
+FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
+                        const juce::String& displayName)
 {
-    auto knob = std::make_unique<Knob>();
-    knob->slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    knob->slider.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
-                                     juce::MathConstants<float>::pi * 2.75f,
-                                     true);
-    knob->slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 70, 13);
-    knob->slider.setColour(juce::Slider::rotarySliderOutlineColourId, s.accent);
-    // Trim the readout: the param's own value-to-string is still used for
-    // formatted units; this caps fallback decimals when none is set.
-    knob->slider.setNumDecimalPlacesToDisplay(2);
-    knob->label.setText(displayName, juce::dontSendNotification);
-    knob->label.setJustificationType(juce::Justification::centred);
-    knob->label.setFont(fonts::label(9.5f));
-    knob->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, paramId, knob->slider);
-    addAndMakeVisible(knob->slider);
-    addAndMakeVisible(knob->label);
-    auto* ptr = knob.get();
-    s.knobs.push_back(std::move(knob));
-    return ptr;
+    auto c = std::make_unique<Control>();
+    c->kind = CtlKind::Knob;
+    c->slider = std::make_unique<juce::Slider>();
+    c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
+                                   juce::MathConstants<float>::pi * 2.75f, true);
+    c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, s.accent);
+    c->label = std::make_unique<juce::Label>();
+    c->label->setText(displayName, juce::dontSendNotification);
+    c->label->setJustificationType(juce::Justification::centred);
+    c->label->setFont(fonts::label(9.5f));
+    c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts_, paramId, *c->slider);
+    addAndMakeVisible(*c->slider);
+    addAndMakeVisible(*c->label);
+    Control* raw = c.get();
+    s.controls.push_back(std::move(c));
+    return raw;
 }
 
-FaceplatePanel::ChoiceCtl* FaceplatePanel::addChoice(Section& s,
-                                                    juce::AudioProcessorValueTreeState& apvts,
-                                                    const juce::String& paramId,
-                                                    const juce::String& displayName)
+FaceplatePanel::Control*
+FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
+                          const juce::String& displayName)
 {
-    auto choice = std::make_unique<ChoiceCtl>();
-    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(paramId)))
-        choice->combo.addItemList(p->choices, 1);
-    choice->combo.setColour(juce::ComboBox::textColourId, col::bone);
-    choice->label.setText(displayName, juce::dontSendNotification);
-    choice->label.setJustificationType(juce::Justification::centred);
-    choice->label.setFont(fonts::label(9.5f));
-    choice->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        apvts, paramId, choice->combo);
-    addAndMakeVisible(choice->combo);
-    addAndMakeVisible(choice->label);
-    auto* ptr = choice.get();
-    s.choices.push_back(std::move(choice));
-    return ptr;
+    auto c = std::make_unique<Control>();
+    c->kind = CtlKind::Choice;
+    c->combo = std::make_unique<juce::ComboBox>();
+    if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts_.getParameter(paramId)))
+        c->combo->addItemList(p->choices, 1);
+    c->combo->setColour(juce::ComboBox::textColourId, col::bone);
+    c->label = std::make_unique<juce::Label>();
+    c->label->setText(displayName, juce::dontSendNotification);
+    c->label->setJustificationType(juce::Justification::centred);
+    c->label->setFont(fonts::label(9.5f));
+    c->cAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        apvts_, paramId, *c->combo);
+    addAndMakeVisible(*c->combo);
+    addAndMakeVisible(*c->label);
+    Control* raw = c.get();
+    s.controls.push_back(std::move(c));
+    return raw;
 }
 
-FaceplatePanel::ToggleCtl* FaceplatePanel::addToggle(Section& s,
-                                                    juce::AudioProcessorValueTreeState& apvts,
-                                                    const juce::String& paramId,
-                                                    const juce::String& displayName)
+FaceplatePanel::Control*
+FaceplatePanel::addToggle(Section& s, const juce::String& paramId,
+                          const juce::String& displayName)
 {
-    auto toggle = std::make_unique<ToggleCtl>();
-    toggle->button.setButtonText(displayName);
-    toggle->attachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        apvts, paramId, toggle->button);
-    addAndMakeVisible(toggle->button);
-    auto* ptr = toggle.get();
-    s.toggles.push_back(std::move(toggle));
-    return ptr;
+    auto c = std::make_unique<Control>();
+    c->kind = CtlKind::Toggle;
+    c->button = std::make_unique<juce::ToggleButton>(displayName);
+    c->bAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        apvts_, paramId, *c->button);
+    addAndMakeVisible(*c->button);
+    Control* raw = c.get();
+    s.controls.push_back(std::move(c));
+    return raw;
 }
+
+// ────────────────────────────────────────────────────────────────────
+//  Paint
+// ────────────────────────────────────────────────────────────────────
 
 void FaceplatePanel::paint(juce::Graphics& g)
 {
     g.fillAll(col::graphite);
 
-    // Header band.
-    auto headerArea = juce::Rectangle<int>(0, 0, getWidth(), kHeaderH);
-    g.setColour(col::graphiteHi);
-    g.fillRect(headerArea);
+    const auto bounds = getLocalBounds();
+    paintHeader(g, bounds.withHeight(kHeaderH));
+    for (const auto& s : sections_) paintSectionFrame(g, s);
+    paintFinBand(g, bounds.withTrimmedTop(getHeight() - kFinBandH));
+}
 
-    // Title.
+void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    g.setColour(col::graphiteHi);
+    g.fillRect(area);
     g.setColour(col::bone);
-    g.setFont(fonts::title(28.0f));
+    g.setFont(fonts::title(26.0f));
     g.drawText("BOMBO",
-               headerArea.reduced(20, 0),
+               area.reduced(18, 0).removeFromLeft(180),
                juce::Justification::centredLeft);
     g.setColour(col::boneDim);
-    g.setFont(fonts::label(10.5f));
-    // " / " separator instead of "·" — middle-dot was triggering a
-    // UTF-8/Latin-1 mojibake on Linux JUCE 8 ("Â·"). Side benefit: the
-    // slash reads cleaner at small sizes.
+    g.setFont(fonts::label(10.0f));
     g.drawText("HALF KICK / HALF BBS",
-               juce::Rectangle<int>(150, 0, 280, kHeaderH),
+               juce::Rectangle<int>(140, 0, 280, kHeaderH),
                juce::Justification::centredLeft);
-
-    // Section frames.
-    for (auto& s : sections_)
-    {
-        const auto fb = s.bounds.toFloat();
-        g.setColour(col::graphiteHi);
-        g.fillRoundedRectangle(fb, 6.0f);
-        g.setColour(s.accent.withAlpha(0.6f));
-        g.drawRoundedRectangle(fb.reduced(0.5f), 6.0f, 1.0f);
-
-        // Section title strip.
-        g.setColour(s.accent);
-        g.fillRect(s.bounds.removeFromTop(2).toFloat());
-        g.setColour(col::bone);
-        g.setFont(fonts::title(13.5f));
-        g.drawText(s.name,
-                   s.bounds.expanded(0, 0).removeFromTop(kSectionPadTop)
-                           .translated(0, 2),
-                   juce::Justification::centred);
-    }
-
-    // Bomb-tail fin — a single V-shape running across the chassis bottom.
-    // Two diagonals descending from the left and right edges, meeting at
-    // a centred apex slightly inset from the bottom edge. Filled with a
-    // horizontal gradient that picks up the FX-rack section colours so
-    // the fin reads as a continuation of the rack above it.
-    const int finTop = sections_.empty() ? getHeight() - kFinBandH
-                                          : sections_.back().bounds.getBottom() + kSectionGap;
-    if (finTop < getHeight() - 4)
-    {
-        const auto fin = juce::Rectangle<int>(0, finTop, getWidth(), getHeight() - finTop);
-        g.setColour(col::ink);
-        g.fillRect(fin);
-
-        const float w = static_cast<float>(getWidth());
-        const float topY = static_cast<float>(fin.getY());
-        const float apexY = static_cast<float>(fin.getBottom() - 4);
-        const float apexX = w * 0.5f;
-
-        // Single V poly.
-        juce::Path v;
-        v.startNewSubPath(0.0f, topY);
-        v.lineTo(w, topY);
-        v.lineTo(apexX, apexY);
-        v.closeSubPath();
-
-        // Horizontal gradient: drive (left) → through filter/delay/reverb
-        // → duck (right). Reads as the FX rack's spectrum continuing down.
-        juce::ColourGradient grad(col::drive.withAlpha(0.55f), 0.0f, topY,
-                                   col::duck.withAlpha(0.55f), w, topY, false);
-        grad.addColour(0.25, col::filterC.withAlpha(0.55f));
-        grad.addColour(0.50, col::delayC.withAlpha(0.55f));
-        grad.addColour(0.75, col::reverb.withAlpha(0.55f));
-        g.setGradientFill(grad);
-        g.fillPath(v);
-
-        // Bone hairline on the V edges for definition.
-        g.setColour(col::bone.withAlpha(0.25f));
-        g.drawLine(0.0f, topY, apexX, apexY, 1.0f);
-        g.drawLine(w, topY, apexX, apexY, 1.0f);
-
-        // Crisp top edge.
-        g.setColour(col::bone.withAlpha(0.18f));
-        g.drawHorizontalLine(fin.getY(), 0.0f, w);
-    }
+    // Hairline at bottom edge.
+    g.setColour(col::ink);
+    g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
 }
+
+void FaceplatePanel::paintSectionFrame(juce::Graphics& g, const Section& s)
+{
+    if (s.bounds.isEmpty()) return;
+    const auto fb = s.bounds.toFloat();
+
+    // Body fill — slightly lighter than the chassis so the rack reads
+    // as raised panels.
+    g.setColour(col::graphiteHi);
+    g.fillRoundedRectangle(fb, 5.0f);
+
+    // Section colour edge.
+    g.setColour(s.accent.withAlpha(0.55f));
+    g.drawRoundedRectangle(fb.reduced(0.5f), 5.0f, 1.0f);
+
+    // Title strip on top — solid 2px accent bar, then the title text on
+    // the body itself (NOT mutating s.bounds — that was the previous bug
+    // where each repaint pushed the title further down the section).
+    const auto strip = juce::Rectangle<float>(fb.getX(), fb.getY(),
+                                              fb.getWidth(), 2.0f);
+    g.setColour(s.accent);
+    g.fillRect(strip);
+
+    g.setColour(col::bone);
+    g.setFont(fonts::title(11.5f));
+    const auto titleArea = s.bounds.withHeight(kColInnerPadTop)
+                                   .translated(0, 4);
+    g.drawText(s.name, titleArea, juce::Justification::centred);
+}
+
+void FaceplatePanel::paintFinBand(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    g.setColour(col::ink);
+    g.fillRect(area);
+    g.setColour(col::bone.withAlpha(0.18f));
+    g.fillRect(area.getX(), area.getY(), area.getWidth(), 1);
+
+    const float w = static_cast<float>(area.getWidth());
+    const float topY = static_cast<float>(area.getY());
+    const float apexY = static_cast<float>(area.getBottom() - 4);
+    const float apexX = w * 0.5f;
+
+    juce::Path v;
+    v.startNewSubPath(0.0f, topY);
+    v.lineTo(w, topY);
+    v.lineTo(apexX, apexY);
+    v.closeSubPath();
+
+    juce::ColourGradient grad(col::drive.withAlpha(0.55f),  0.0f, topY,
+                              col::duck.withAlpha(0.55f),   w,    topY, false);
+    grad.addColour(0.25, col::filterC.withAlpha(0.55f));
+    grad.addColour(0.50, col::delayC .withAlpha(0.55f));
+    grad.addColour(0.75, col::reverb .withAlpha(0.55f));
+    g.setGradientFill(grad);
+    g.fillPath(v);
+
+    g.setColour(col::bone.withAlpha(0.22f));
+    g.drawLine(0.0f, topY, apexX, apexY, 1.0f);
+    g.drawLine(w,    topY, apexX, apexY, 1.0f);
+}
+
+// ────────────────────────────────────────────────────────────────────
+//  Layout
+// ────────────────────────────────────────────────────────────────────
 
 void FaceplatePanel::resized()
 {
-    // Compute section bounds. The 8 sections (VOICE A, VOICE B, MID,
-    // DRIVE, FILTER, DELAY, REVERB, DUCK) are arranged in two rows:
-    //   Row 1: VOICE A + VOICE B + MID (top half, 3 wide panels)
-    //   Row 2: DRIVE + FILTER + DELAY + REVERB + DUCK (FX rack)
-    const int contentTop = kHeaderH + kSectionGap;
-    const int contentBottom = getHeight() - kFinBandH - kSectionGap;
-    const int rowH = (contentBottom - contentTop - kSectionGap) / 2;
-
-    // Row 1 — voice (3 sections)
-    const int row1Y = contentTop;
-    const int row1H = rowH;
-    const int row1ColW = (getWidth() - kSectionGap * 4) / 3;
-    for (int i = 0; i < 3 && i < static_cast<int>(sections_.size()); ++i)
+    // ── 7 FX columns weighted by knob count so wider sections (REVERB
+    //    has 6, DUCK has 3) get proportional space. ──────────────────
+    constexpr int n = 7;
+    const float ctlCounts[n] = { 5.0f, 6.0f, 5.0f, 5.0f, 5.0f, 6.0f, 3.0f };
+    // DRIVE has 2 ComboBoxes (wider than knobs) — bump its weight.
+    const float driveBoost = 1.1f;
+    float weights[n];
+    float wSum = 0.0f;
+    for (int i = 0; i < n; ++i)
     {
-        sections_[i].bounds = { kSectionGap + i * (row1ColW + kSectionGap),
-                                row1Y, row1ColW, row1H };
+        weights[i] = ctlCounts[i] * (i == 2 ? driveBoost : 1.0f);
+        wSum += weights[i];
+    }
+
+    const int rackTop = kHeaderH + kRackOuterPad;
+    const int rackBottom = getHeight() - kFinBandH - kRackOuterPad;
+    const int rackH = rackBottom - rackTop;
+    const int rackAvailableW = getWidth() - kRackOuterPad * 2 - kRackGap * (n - 1);
+
+    int xCursor = kRackOuterPad;
+    for (int i = 0; i < n && i < static_cast<int>(sections_.size()); ++i)
+    {
+        const int w = static_cast<int>(rackAvailableW * weights[i] / wSum);
+        sections_[i].bounds = juce::Rectangle<int>(xCursor, rackTop, w, rackH);
         layoutSection(sections_[i]);
+        xCursor += w + kRackGap;
     }
 
-    // Row 2 — FX rack (5 sections).
-    const int row2Y = row1Y + row1H + kSectionGap;
-    const int row2H = rowH;
-    const int row2Available = getWidth() - kSectionGap * 6;
-    // DRIVE carries 5 controls (3 knobs + 2 choices) so it gets the
-    // widest cell. DUCK has just 3 knobs and stays slim. REVERB has 6
-    // knobs so it's runner-up width.
-    constexpr float ratios[5] = { 1.50f, 1.00f, 1.00f, 1.20f, 0.60f };
-    float ratioSum = 0.0f;
-    for (float r : ratios) ratioSum += r;
-    int xCursor = kSectionGap;
-    for (int i = 0; i < 5 && (3 + i) < static_cast<int>(sections_.size()); ++i)
+    // ── Header band ─────────────────────────────────────────────────
+    if (header_.size() >= 3)
     {
-        const int w = static_cast<int>(row2Available * ratios[i] / ratioSum);
-        sections_[3 + i].bounds = { xCursor, row2Y, w, row2H };
-        layoutSection(sections_[3 + i]);
-        xCursor += w + kSectionGap;
-    }
+        const int hY = (kHeaderH - kHeaderKnobSize - kKnobLabelH) / 2;
+        const int hRight = getWidth() - 18;
 
-    // Header — master OUT knob + LIM toggle on the right.
-    // 64 px header is tight; place knobs flush against header bottom
-    // with 4 px breathing room.
-    const int hkRight = getWidth() - 18;
-    const int hkSize = 50;          // smaller knob + label in the slim header
-    const int hkY = 4;
-    if (headerKnobs_.size() >= 2)
-    {
-        auto& lim = *headerKnobs_[1];
-        lim.slider.setBounds(hkRight - hkSize, hkY, hkSize, hkSize + 4);
-        lim.label.setBounds(hkRight - hkSize - 2, hkY + hkSize + 4, hkSize + 4, kKnobLabelH);
+        // LIM AMT (rightmost)
+        auto& limAmt = *header_[2];
+        const int limAmtX = hRight - kHeaderKnobSize;
+        limAmt.slider->setBounds(limAmtX, hY, kHeaderKnobSize, kHeaderKnobSize);
+        limAmt.label->setBounds(limAmtX - 4, hY + kHeaderKnobSize - 2,
+                                kHeaderKnobSize + 8, kKnobLabelH);
 
-        auto& master = *headerKnobs_[0];
-        const int masterX = hkRight - hkSize * 2 - 16;
-        master.slider.setBounds(masterX, hkY, hkSize, hkSize + 4);
-        master.label.setText("OUT", juce::dontSendNotification);
-        master.label.setBounds(masterX - 2, hkY + hkSize + 4, hkSize + 4, kKnobLabelH);
+        // OUT (next-left)
+        auto& out = *header_[0];
+        const int outX = limAmtX - kHeaderKnobSize - 14;
+        out.slider->setBounds(outX, hY, kHeaderKnobSize, kHeaderKnobSize);
+        out.label->setBounds(outX - 4, hY + kHeaderKnobSize - 2,
+                             kHeaderKnobSize + 8, kKnobLabelH);
 
-        if (!headerToggles_.empty())
-        {
-            auto& t = headerToggles_[0]->button;
-            t.setBounds(masterX - 72, kHeaderH / 2 - 11, 64, 22);
-        }
+        // LIM toggle (to the left of OUT)
+        auto& lim = *header_[1];
+        lim.button->setBounds(outX - 64, kHeaderH / 2 - 11, 56, 22);
     }
 }
 
 void FaceplatePanel::layoutSection(Section& s)
 {
-    // Pack knobs + choices + toggles in a flow row inside the section bounds.
-    const auto inner = s.bounds.reduced(kSectionPadSide, 0)
-                                .withTrimmedTop(kSectionPadTop)
-                                .withTrimmedBottom(kSectionPadBottom);
-    const int totalCtls = static_cast<int>(s.knobs.size()
-                                         + s.choices.size()
-                                         + s.toggles.size());
-    if (totalCtls == 0 || inner.isEmpty()) return;
+    if (s.bounds.isEmpty() || s.controls.empty()) return;
+    const auto inner = s.bounds.reduced(kColInnerPadX, 0)
+                                .withTrimmedTop(kColInnerPadTop)
+                                .withTrimmedBottom(kColInnerPadBot);
+    const int rows = static_cast<int>(s.controls.size());
+    if (rows < 1 || inner.isEmpty()) return;
 
-    const int cellW = inner.getWidth() / totalCtls;
-    const int cellH = inner.getHeight();
-    int idx = 0;
+    const int rowH = juce::jmax(40, inner.getHeight() / rows);
+    int y = inner.getY();
 
-    auto placeKnob = [&](Knob& k) {
-        const int cx = inner.getX() + idx * cellW;
-        const auto cell = juce::Rectangle<int>(cx, inner.getY(), cellW, cellH);
-        const int knobW = juce::jmin(kKnobW, cell.getWidth() - 4);
-        const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
-        k.slider.setBounds(knobX, cell.getY(), knobW, cell.getHeight() - kKnobLabelH - 2);
-        k.label.setBounds(cell.getX(), cell.getBottom() - kKnobLabelH,
-                          cell.getWidth(), kKnobLabelH);
-        ++idx;
-    };
-
-    auto placeChoice = [&](ChoiceCtl& c) {
-        const int cx = inner.getX() + idx * cellW;
-        const auto cell = juce::Rectangle<int>(cx, inner.getY(), cellW, cellH);
-        const int comboW = juce::jmin(76, cell.getWidth() - 4);
-        const int comboX = cell.getX() + (cell.getWidth() - comboW) / 2;
-        // Combo sits center; label below.
-        const int comboH = 24;
-        c.combo.setBounds(comboX, cell.getY() + (cell.getHeight() - comboH) / 2 - 6,
-                           comboW, comboH);
-        c.label.setBounds(cell.getX(), cell.getBottom() - kKnobLabelH,
-                          cell.getWidth(), kKnobLabelH);
-        ++idx;
-    };
-
-    for (auto& kp : s.knobs)    placeKnob(*kp);
-    for (auto& cp : s.choices)  placeChoice(*cp);
-    for (auto& tp : s.toggles)
+    for (auto& cp : s.controls)
     {
-        const int cx = inner.getX() + idx * cellW;
-        tp->button.setBounds(cx, inner.getY() + (cellH - 24) / 2, cellW, 24);
-        ++idx;
+        auto& c = *cp;
+        const auto cell = juce::Rectangle<int>(inner.getX(), y, inner.getWidth(), rowH);
+
+        if (c.kind == CtlKind::Knob)
+        {
+            // Knob disc takes the top portion; label below.
+            const int knobH = cell.getHeight() - kKnobLabelH - 2;
+            const int knobW = juce::jmin(cell.getWidth(), knobH);
+            const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
+            c.slider->setBounds(knobX, cell.getY(), knobW, knobH);
+            c.label->setBounds(cell.getX(), cell.getY() + knobH,
+                               cell.getWidth(), kKnobLabelH);
+        }
+        else if (c.kind == CtlKind::Choice)
+        {
+            const int comboH = 22;
+            const int comboW = juce::jmin(cell.getWidth() - 4, 84);
+            const int comboX = cell.getX() + (cell.getWidth() - comboW) / 2;
+            const int comboY = cell.getY() + (cell.getHeight() - comboH - kKnobLabelH - 2) / 2;
+            c.combo->setBounds(comboX, comboY, comboW, comboH);
+            c.label->setBounds(cell.getX(), comboY + comboH + 2,
+                               cell.getWidth(), kKnobLabelH);
+        }
+        else // Toggle
+        {
+            const int btnH = 22;
+            c.button->setBounds(cell.getX(), cell.getY() + (cell.getHeight() - btnH) / 2,
+                                cell.getWidth(), btnH);
+        }
+        y += rowH;
     }
 }
 

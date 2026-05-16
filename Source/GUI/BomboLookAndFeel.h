@@ -3,14 +3,15 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "Colours.h"
+#include "Fonts.h"
 
 namespace bombo
 {
 
-// Mil-rice LookAndFeel. Knobs get a layered look — section-color outer
-// ring → graphite cap with radial highlight → bone indicator with soft
-// shadow. The cap shading sells the depth without needing a Blender
-// pipeline (which is parked).
+// Bombo knob — value text reads inside the colored cap (no textbox below).
+// Matches the Rust UI's in-cap two-line readout:
+//   - dark rubber outer ring → dark recess ring → metal bevel →
+//     section-color core → bone indicator stem → tick dots → value text
 class BomboLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
@@ -18,7 +19,7 @@ public:
     {
         setColour(juce::Slider::backgroundColourId,        col::graphite);
         setColour(juce::Slider::rotarySliderFillColourId,  col::bone);
-        setColour(juce::Slider::rotarySliderOutlineColourId, col::bone);
+        setColour(juce::Slider::rotarySliderOutlineColourId, col::voice);
         setColour(juce::Slider::thumbColourId,             col::bone);
         setColour(juce::Slider::textBoxOutlineColourId,    juce::Colour(0));
         setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0));
@@ -44,92 +45,119 @@ public:
         const auto bounds = juce::Rectangle<float>(static_cast<float>(x),
                                                    static_cast<float>(y),
                                                    static_cast<float>(width),
-                                                   static_cast<float>(height)).reduced(3.0f);
+                                                   static_cast<float>(height));
         const float diameter = juce::jmin(bounds.getWidth(), bounds.getHeight());
         const auto cx = bounds.getCentreX();
         const auto cy = bounds.getCentreY();
-        const float radius = diameter * 0.5f;
+        const float radius = diameter * 0.5f - 4.0f;
+        if (radius < 6.0f) return;
 
-        // Tint = section colour, passed via the outline colour ID.
-        const auto tint = slider.findColour(juce::Slider::rotarySliderOutlineColourId);
+        // Section tint travels via rotarySliderOutlineColourId.
+        const auto core = slider.findColour(juce::Slider::rotarySliderOutlineColourId);
 
-        // 1. Drop shadow under the knob.
+        // 1. Mounting recess (offset drop shadow).
         g.setColour(juce::Colour(0xFF000000).withAlpha(0.35f));
-        g.fillEllipse(cx - radius + 1.0f, cy - radius + 2.0f, diameter, diameter);
+        g.fillEllipse(cx - radius - 1.0f, cy - radius + 1.5f,
+                      (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
+        g.setColour(juce::Colour(0xFF050507));
+        g.fillEllipse(cx - radius - 2.0f, cy - radius - 2.0f,
+                      (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
 
-        // 2. Outer ring — tint colour with a vertical gradient (highlight
-        //    at top, shadow at bottom) so the knob reads as 3D.
-        {
-            juce::ColourGradient ringGrad(tint.brighter(0.30f),
-                                          cx, cy - radius,
-                                          tint.darker(0.50f),
-                                          cx, cy + radius, false);
-            g.setGradientFill(ringGrad);
-            g.fillEllipse(cx - radius, cy - radius, diameter, diameter);
-        }
+        // 2. Rubber grip — dark with subtle top highlight.
+        g.setColour(juce::Colour(0xFF1A1A1A));
+        g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
+        g.setColour(juce::Colour(0xFF2A2A2A));
+        const float hlR = radius * 0.95f;
+        g.fillEllipse(cx - hlR, cy - radius - radius * 0.05f, hlR * 2.0f, hlR * 2.0f);
+        g.setColour(juce::Colour(0xFF1A1A1A));
+        g.fillEllipse(cx - radius * 0.88f, cy - radius * 0.88f,
+                      radius * 0.88f * 2.0f, radius * 0.88f * 2.0f);
 
-        // 3. Tick ring — 17 ticks across the 270° rotary sweep.
-        constexpr int kNumTicks = 17;
-        const float tickInner = radius * 0.84f;
-        const float tickOuter = radius * 0.96f;
-        const auto tickC = tint.darker(0.7f);
-        for (int i = 0; i < kNumTicks; ++i)
-        {
-            const float t = static_cast<float>(i) / static_cast<float>(kNumTicks - 1);
-            const float a = juce::jmap(t, rotaryStartAngle, rotaryEndAngle);
-            const float c = std::cos(a - juce::MathConstants<float>::halfPi);
-            const float s = std::sin(a - juce::MathConstants<float>::halfPi);
-            const bool major = (i == 0 || i == kNumTicks - 1 || i == kNumTicks / 2);
-            g.setColour(major ? col::bone.withAlpha(0.55f) : tickC);
-            g.drawLine(cx + c * tickInner, cy + s * tickInner,
-                       cx + c * tickOuter, cy + s * tickOuter,
-                       major ? 1.3f : 0.7f);
-        }
+        // 3. Metal bevel ring (between rubber and the colored cap).
+        const float coreOuterR = radius * 0.78f;
+        g.setColour(juce::Colour(0xFF666666));
+        g.fillEllipse(cx - coreOuterR - 1.5f, cy - coreOuterR - 1.5f,
+                      (coreOuterR + 1.5f) * 2.0f, (coreOuterR + 1.5f) * 2.0f);
 
-        // 4. Cap recess — slightly smaller circle in ink so the cap reads
-        //    seated inside the ring.
-        const float recessR = radius * 0.78f;
-        g.setColour(col::ink);
-        g.fillEllipse(cx - recessR, cy - recessR, recessR * 2.0f, recessR * 2.0f);
+        // 4. Colored plastic core (the section tint).
+        const float coreR = coreOuterR - 1.0f;
+        g.setColour(core);
+        g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
 
-        // 5. Cap face — graphite with a radial-ish highlight from top-left
-        //    via two stacked ellipses (cheap fake-Phong).
-        const float capR = radius * 0.74f;
-        {
-            juce::ColourGradient capGrad(col::graphiteHi.brighter(0.15f),
-                                         cx - capR * 0.4f, cy - capR * 0.5f,
-                                         col::ink, cx + capR * 0.5f, cy + capR * 0.5f,
-                                         true);
-            g.setGradientFill(capGrad);
-            g.fillEllipse(cx - capR, cy - capR, capR * 2.0f, capR * 2.0f);
-        }
-        // Specular crescent — tiny bright sliver at upper-left.
-        {
-            const float sR = capR * 0.55f;
-            juce::ColourGradient specGrad(col::bone.withAlpha(0.20f),
-                                          cx - capR * 0.45f, cy - capR * 0.45f,
-                                          col::bone.withAlpha(0.0f),
-                                          cx - capR * 0.10f, cy - capR * 0.05f, true);
-            g.setGradientFill(specGrad);
-            g.fillEllipse(cx - capR * 0.7f, cy - capR * 0.7f, sR * 1.8f, sR * 1.4f);
-        }
+        // 5. Inner shadow at core's outer edge (sells the recessed-under
+        //    bevel illusion).
+        g.setColour(juce::Colour::fromRGBA(0, 0, 0, 0x40));
+        g.drawEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f, 1.0f);
 
-        // 6. Indicator line — short bone stroke with a subtle shadow.
+        // 6. Indicator stem — bone wedge from core edge to rubber outer.
         const float a = juce::jmap(sliderPos, rotaryStartAngle, rotaryEndAngle);
-        const float ic = std::cos(a - juce::MathConstants<float>::halfPi);
-        const float is = std::sin(a - juce::MathConstants<float>::halfPi);
-        const float inR = capR * 0.25f;
-        const float outR = capR * 0.92f;
-        // Shadow.
-        g.setColour(col::ink.withAlpha(0.7f));
-        g.drawLine(cx + ic * inR + 1.0f, cy + is * inR + 1.0f,
-                   cx + ic * outR + 1.0f, cy + is * outR + 1.0f, 2.6f);
-        // Indicator.
+        const float ang = a - juce::MathConstants<float>::halfPi;
+        const float ic = std::cos(ang);
+        const float is = std::sin(ang);
+        const float stemInR = coreR;
+        const float stemOutR = radius;
+        const float stemW = 2.4f;
+        juce::Path stem;
+        const float perpC = -is;
+        const float perpS =  ic;
+        stem.startNewSubPath(cx + ic * stemInR  + perpC * stemW * 0.5f,
+                             cy + is * stemInR  + perpS * stemW * 0.5f);
+        stem.lineTo(cx + ic * stemOutR + perpC * stemW * 0.6f,
+                    cy + is * stemOutR + perpS * stemW * 0.6f);
+        stem.lineTo(cx + ic * stemOutR - perpC * stemW * 0.6f,
+                    cy + is * stemOutR - perpS * stemW * 0.6f);
+        stem.lineTo(cx + ic * stemInR  - perpC * stemW * 0.5f,
+                    cy + is * stemInR  - perpS * stemW * 0.5f);
+        stem.closeSubPath();
         g.setColour(col::bone);
-        g.drawLine(cx + ic * inR, cy + is * inR,
-                   cx + ic * outR, cy + is * outR, 2.4f);
-        // Tip cap dot for definition.
-        g.fillEllipse(cx + ic * outR - 1.6f, cy + is * outR - 1.6f, 3.2f, 3.2f);
+        g.fillPath(stem);
+
+        // 7. Tick dots — 11 uniform markers on the rubber outer edge.
+        const float dotR = juce::jmax(0.9f, radius * 0.045f);
+        const float dotRingR = radius + 2.5f;
+        for (int i = 0; i <= 10; ++i)
+        {
+            const float t = static_cast<float>(i) / 10.0f;
+            const float ta = juce::jmap(t, rotaryStartAngle, rotaryEndAngle)
+                           - juce::MathConstants<float>::halfPi;
+            const float dx = cx + std::cos(ta) * dotRingR;
+            const float dy = cy + std::sin(ta) * dotRingR;
+            g.setColour(col::bone.withAlpha(0.85f));
+            g.fillEllipse(dx - dotR, dy - dotR, dotR * 2.0f, dotR * 2.0f);
+        }
+
+        // 8. Value text INSIDE the cap. Pull via slider.getTextFromValue
+        //    so the param's stringFromValueFunction does the formatting.
+        //    Splits "value unit" into two lines if there's a space.
+        const auto text = slider.getTextFromValue(slider.getValue());
+        const float capInner = coreR * 0.95f;
+        const int spaceIdx = text.indexOfChar(' ');
+        const float valueFontSize = juce::jlimit(7.5f, 12.0f, capInner * 0.55f);
+        g.setColour(col::ink.withAlpha(0.85f));
+        if (spaceIdx > 0)
+        {
+            const auto num  = text.substring(0, spaceIdx);
+            const auto unit = text.substring(spaceIdx + 1);
+            const float unitFontSize = juce::jmax(6.5f, valueFontSize * 0.78f);
+            g.setFont(fonts::value(valueFontSize));
+            g.drawText(num,
+                       juce::Rectangle<float>(cx - capInner, cy - capInner,
+                                              capInner * 2.0f, capInner * 1.3f),
+                       juce::Justification::centredBottom);
+            g.setFont(fonts::value(unitFontSize));
+            g.drawText(unit,
+                       juce::Rectangle<float>(cx - capInner, cy - capInner * 0.05f,
+                                              capInner * 2.0f, capInner * 1.0f),
+                       juce::Justification::centredTop);
+        }
+        else
+        {
+            g.setFont(fonts::value(valueFontSize));
+            g.drawText(text,
+                       juce::Rectangle<float>(cx - capInner, cy - capInner,
+                                              capInner * 2.0f, capInner * 2.0f),
+                       juce::Justification::centred);
+        }
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override
@@ -137,13 +165,10 @@ public:
         g.fillAll(label.findColour(juce::Label::backgroundColourId));
         if (!label.isBeingEdited())
         {
-            const auto colour = label.findColour(juce::Label::textColourId);
-            g.setColour(colour);
+            g.setColour(label.findColour(juce::Label::textColourId));
             g.setFont(label.getFont());
-            g.drawFittedText(label.getText(),
-                             label.getLocalBounds(),
-                             label.getJustificationType(),
-                             1, 0.9f);
+            g.drawFittedText(label.getText(), label.getLocalBounds(),
+                             label.getJustificationType(), 1, 0.9f);
         }
     }
 
