@@ -9,16 +9,18 @@ namespace bombo
 namespace
 {
 constexpr int kHeaderH        = 56;
-constexpr int kFinBandH       = 64;
-constexpr int kRackGap        = 4;     // gap between FX columns
+constexpr int kFinBandH       = 80;
+constexpr int kRackGap        = 4;
 constexpr int kRackOuterPad   = 10;
 constexpr int kColInnerPadX   = 6;
-constexpr int kColInnerPadTop = 26;    // room for the section title
+constexpr int kColInnerPadTop = 26;
 constexpr int kColInnerPadBot = 8;
-constexpr int kKnobSlotW      = 78;
-constexpr int kKnobSlotH      = 86;    // knob disc + label below
-constexpr int kKnobLabelH     = 13;
-constexpr int kHeaderKnobSize = 44;
+// FIXED slot height: every knob across every section uses this same
+// row pitch so the rack reads as one grid, not as 7 differently-sized
+// columns. Sections with fewer controls leave empty space at the bottom.
+constexpr int kRowH           = 88;
+constexpr int kKnobLabelH     = 14;
+constexpr int kHeaderKnobSize = 40;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -112,6 +114,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts)
                                        juce::MathConstants<float>::pi * 2.75f, true);
         c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
         c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::voice);
+        c->slider->setWantsKeyboardFocus(false);
+        c->slider->setMouseClickGrabsKeyboardFocus(false);
         c->label = std::make_unique<juce::Label>();
         c->label->setText("OUT", juce::dontSendNotification);
         c->label->setJustificationType(juce::Justification::centred);
@@ -128,6 +132,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts)
         c->kind = CtlKind::Toggle;
         c->button = std::make_unique<juce::ToggleButton>("LIM");
         c->button->setColour(juce::ToggleButton::textColourId, col::boneDim);
+        c->button->setWantsKeyboardFocus(false);
+        c->button->setMouseClickGrabsKeyboardFocus(false);
         c->bAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
             apvts_, pid::limiterOn, *c->button);
         addAndMakeVisible(*c->button);
@@ -143,6 +149,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts)
                                        juce::MathConstants<float>::pi * 2.75f, true);
         c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
         c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::accentAmber);
+        c->slider->setWantsKeyboardFocus(false);
+        c->slider->setMouseClickGrabsKeyboardFocus(false);
         c->label = std::make_unique<juce::Label>();
         c->label->setText("LIM", juce::dontSendNotification);
         c->label->setJustificationType(juce::Justification::centred);
@@ -167,6 +175,10 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
                                    juce::MathConstants<float>::pi * 2.75f, true);
     c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, s.accent);
+    // Don't steal keyboard focus on click — Space / T / Enter must keep
+    // reaching the editor's keyPressed for the trigger bridge.
+    c->slider->setWantsKeyboardFocus(false);
+    c->slider->setMouseClickGrabsKeyboardFocus(false);
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
@@ -190,6 +202,8 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
     if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts_.getParameter(paramId)))
         c->combo->addItemList(p->choices, 1);
     c->combo->setColour(juce::ComboBox::textColourId, col::bone);
+    c->combo->setWantsKeyboardFocus(false);
+    c->combo->setMouseClickGrabsKeyboardFocus(false);
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
@@ -210,6 +224,8 @@ FaceplatePanel::addToggle(Section& s, const juce::String& paramId,
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Toggle;
     c->button = std::make_unique<juce::ToggleButton>(displayName);
+    c->button->setWantsKeyboardFocus(false);
+    c->button->setMouseClickGrabsKeyboardFocus(false);
     c->bAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts_, paramId, *c->button);
     addAndMakeVisible(*c->button);
@@ -265,18 +281,22 @@ void FaceplatePanel::paintSectionFrame(juce::Graphics& g, const Section& s)
     g.setColour(s.accent.withAlpha(0.55f));
     g.drawRoundedRectangle(fb.reduced(0.5f), 5.0f, 1.0f);
 
-    // Title strip on top — solid 2px accent bar, then the title text on
-    // the body itself (NOT mutating s.bounds — that was the previous bug
-    // where each repaint pushed the title further down the section).
+    // Title bar: 3 px accent strip at the very top, plus a darker
+    // band beneath it for the title text so the section name has
+    // a stable backdrop regardless of the accent's luminance.
     const auto strip = juce::Rectangle<float>(fb.getX(), fb.getY(),
-                                              fb.getWidth(), 2.0f);
+                                              fb.getWidth(), 3.0f);
     g.setColour(s.accent);
     g.fillRect(strip);
+
+    g.setColour(col::ink);
+    g.fillRect(juce::Rectangle<float>(fb.getX(), fb.getY() + 3.0f,
+                                      fb.getWidth(), 20.0f));
 
     g.setColour(col::bone);
     g.setFont(fonts::title(11.5f));
     const auto titleArea = s.bounds.withHeight(kColInnerPadTop)
-                                   .translated(0, 4);
+                                   .translated(0, 3);
     g.drawText(s.name, titleArea, juce::Justification::centred);
 }
 
@@ -377,20 +397,18 @@ void FaceplatePanel::layoutSection(Section& s)
     const auto inner = s.bounds.reduced(kColInnerPadX, 0)
                                 .withTrimmedTop(kColInnerPadTop)
                                 .withTrimmedBottom(kColInnerPadBot);
-    const int rows = static_cast<int>(s.controls.size());
-    if (rows < 1 || inner.isEmpty()) return;
+    if (inner.isEmpty()) return;
 
-    const int rowH = juce::jmax(40, inner.getHeight() / rows);
     int y = inner.getY();
-
     for (auto& cp : s.controls)
     {
         auto& c = *cp;
-        const auto cell = juce::Rectangle<int>(inner.getX(), y, inner.getWidth(), rowH);
+        const auto cell = juce::Rectangle<int>(inner.getX(), y,
+                                               inner.getWidth(), kRowH);
 
         if (c.kind == CtlKind::Knob)
         {
-            // Knob disc takes the top portion; label below.
+            // Disc takes top (cell.h - labelH); label below.
             const int knobH = cell.getHeight() - kKnobLabelH - 2;
             const int knobW = juce::jmin(cell.getWidth(), knobH);
             const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
@@ -400,8 +418,9 @@ void FaceplatePanel::layoutSection(Section& s)
         }
         else if (c.kind == CtlKind::Choice)
         {
-            const int comboH = 22;
-            const int comboW = juce::jmin(cell.getWidth() - 4, 84);
+            // ComboBox + label centred in the row.
+            const int comboH = 24;
+            const int comboW = juce::jmin(cell.getWidth() - 6, 90);
             const int comboX = cell.getX() + (cell.getWidth() - comboW) / 2;
             const int comboY = cell.getY() + (cell.getHeight() - comboH - kKnobLabelH - 2) / 2;
             c.combo->setBounds(comboX, comboY, comboW, comboH);
@@ -414,7 +433,7 @@ void FaceplatePanel::layoutSection(Section& s)
             c.button->setBounds(cell.getX(), cell.getY() + (cell.getHeight() - btnH) / 2,
                                 cell.getWidth(), btnH);
         }
-        y += rowH;
+        y += kRowH;
     }
 }
 

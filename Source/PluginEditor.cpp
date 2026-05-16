@@ -1,6 +1,13 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 
+#include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_audio_utils/juce_audio_utils.h>
+// StandaloneFilterWindow.h uses AudioProcessorPlayer (juce_audio_utils)
+// and MidiInput / AudioDeviceManager (juce_audio_devices); both modules
+// must be transitively available before the header is parsed.
+#include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+
 BomboEditor::BomboEditor(BomboProcessor& p)
     : juce::AudioProcessorEditor(&p),
       processorRef(p),
@@ -14,6 +21,21 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     setResizable(true, true);
     setResizeLimits(1080, 620, 1600, 960);
     setWantsKeyboardFocus(true);
+
+    // ── Standalone-only: enable every available MIDI input on first
+    //    launch. JUCE's StandalonePluginHolder defaults MIDI inputs
+    //    off — users have had to dig through Options → Audio/MIDI
+    //    Settings. Auto-enabling matches the Rust archive's behaviour
+    //    where MIDI just worked when you launched the standalone.
+    //    The setting persists in ~/.config/Bombo/Bombo.settings.
+   #if JucePlugin_Build_Standalone
+    if (auto* holder = juce::StandalonePluginHolder::getInstance())
+    {
+        auto& dm = holder->deviceManager;
+        for (const auto& dev : juce::MidiInput::getAvailableDevices())
+            dm.setMidiInputDeviceEnabled(dev.identifier, true);
+    }
+   #endif
 }
 
 BomboEditor::~BomboEditor()

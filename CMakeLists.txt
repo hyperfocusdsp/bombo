@@ -83,6 +83,7 @@ target_link_libraries(Bombo
         BomboResources
         juce::juce_audio_processors
         juce::juce_audio_utils
+        juce::juce_audio_devices
         juce::juce_dsp
         juce::juce_gui_basics
         juce::juce_graphics
