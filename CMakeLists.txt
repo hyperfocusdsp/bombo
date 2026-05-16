@@ -56,6 +56,8 @@ target_sources(Bombo
         Source/GUI/Theme/Palette.h
         Source/GUI/Theme/ThemeProvider.h
         Source/GUI/Theme/ThemeProvider.cpp
+        Source/State/PersistentState.h
+        Source/State/PersistentState.cpp
         Source/GUI/Fonts.h
         Source/GUI/Fonts.cpp
         Source/GUI/BalanceFader.h
@@ -136,7 +138,8 @@ if(BOMBO_BUILD_TESTS)
     target_sources(Bombo_Tests PRIVATE
         tests/RunTests.cpp
         tests/PaletteTests.cpp
-        Source/GUI/Theme/ThemeProvider.cpp)
+        Source/GUI/Theme/ThemeProvider.cpp
+        Source/State/PersistentState.cpp)
     target_include_directories(Bombo_Tests PRIVATE Source tests)
     target_compile_definitions(Bombo_Tests PRIVATE
         JUCE_WEB_BROWSER=0
@@ -144,6 +147,7 @@ if(BOMBO_BUILD_TESTS)
     target_link_libraries(Bombo_Tests
         PRIVATE
             juce::juce_core
+            juce::juce_data_structures
             juce::juce_events
             juce::juce_graphics
             juce::juce_dsp
