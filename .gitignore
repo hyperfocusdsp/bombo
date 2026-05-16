@@ -1,0 +1,13 @@
+build/
+build-*/
+.cache/
+.cmake/
+CMakeUserPresets.json
+compile_commands.json
+*.user
+.vscode/
+.idea/
+
+# Runtime artefacts
+Resources/Layout.png
+Resources/untitled.drawdio.json
