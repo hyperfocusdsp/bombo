@@ -5,23 +5,30 @@
 namespace bombo::col
 {
 
-// Chassis / panel.
-inline const juce::Colour graphite   { 0xFF14'1517u };  // Bombo base background.
-inline const juce::Colour graphiteHi { 0xFF1A'1C'1Fu };  // Section fill.
-inline const juce::Colour ink        { 0xFF0A'0B'0Du };  // Recesses, label silk.
-inline const juce::Colour bone       { 0xFFF4'F1'EAu };  // Hyperfocus warm white.
-inline const juce::Colour boneDim    { 0xFF8A'88'82u };  // Sub-label / secondary text.
+// Chassis / panel — graphite stays dark; bone/ink are the brand neutrals.
+inline const juce::Colour graphite   { 0xFF14'15'17u };
+inline const juce::Colour graphiteHi { 0xFF1A'1C'1Fu };
+inline const juce::Colour ink        { 0xFF0A'0B'0Du };
+inline const juce::Colour bone       { 0xFFF4'F1'EAu };
+inline const juce::Colour boneDim    { 0xFF8A'88'82u };
 
-// Section accents — mil-rice palette, ported from the Rust archive's
-// editor.rs C_* constants. Each FX section in the rack carries its own
-// tint on knob ticks + label underline.
-inline const juce::Colour voice      { 0xFFA8'98'80u };  // warm bone
-inline const juce::Colour drive      { 0xFFC7'7A'55u };  // rust / oxide red
-inline const juce::Colour filterC    { 0xFF7B'8E'A8u };  // gunmetal blue
-inline const juce::Colour delayC     { 0xFF8F'A6'64u };  // olive drab
-inline const juce::Colour reverb     { 0xFFA4'B5'8Au };  // sage
-inline const juce::Colour duck       { 0xFFB5'9A'6Bu };  // khaki
+// Section column body fills — saturated mil-rice palette to match the
+// pre-port reference. Each FX column paints with its own colour; VOICE A
+// and VOICE B stay close to chassis so the synth side reads as the
+// "neutral" half.
+inline const juce::Colour voice      { 0xFF40'3D'38u };  // warm charcoal — sits above chassis
+inline const juce::Colour drive      { 0xFFD2'78'45u };  // rust orange
+inline const juce::Colour delayC     { 0xFF3E'A4'9Eu };  // teal
+inline const juce::Colour reverb     { 0xFF6A'AE'5Au };  // green
+inline const juce::Colour filterC    { 0xFF5C'8A'BBu };  // gunmetal blue
+inline const juce::Colour duck       { 0xFFC8'A2'71u };  // sand / khaki
 
-inline const juce::Colour accentAmber{ 0xFFFF'B8'00u };  // Hyperfocus hero (used SPARINGLY).
+// Knob — caps are dark plastic regardless of column tint so values stay
+// readable on every backdrop. Bevel is a thin metal ring.
+inline const juce::Colour knobCap    { 0xFF1B'1C'1Eu };  // near-black core
+inline const juce::Colour knobBevel  { 0xFF60'60'66u };  // metal bevel
+inline const juce::Colour knobRubber { 0xFF15'15'17u };  // outer grip
+
+inline const juce::Colour accentAmber{ 0xFFFF'B8'00u };  // hero — OUT macro, LIM pill
 
 } // namespace bombo::col

@@ -56,9 +56,15 @@ void BomboProcessor::cacheParameterPointers()
     pDuckDepth       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckDepth));
     pLimiterOn       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(limiterOn));
     pLimiterAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(limiterAmount));
+    pDriveMute       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(driveMute));
+    pDelayMute       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(delayMute));
+    pReverbMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(reverbMute));
+    pFilterMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(filterMute));
+    pDuckMute        = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(duckMute));
 
     jassert(pMasterOut != nullptr && pWaveform != nullptr && pDriveMode != nullptr);
     jassert(pLimiterOn != nullptr && pReverbMix != nullptr);
+    jassert(pDriveMute != nullptr && pDelayMute != nullptr);
 }
 
 bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
@@ -88,6 +94,11 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.duckDepth       = pDuckDepth->get();
     p.limiterOn       = pLimiterOn->get();
     p.limiterAmount   = pLimiterAmount->get();
+    p.driveMute       = pDriveMute->get();
+    p.delayMute       = pDelayMute->get();
+    p.reverbMute      = pReverbMute->get();
+    p.filterMute      = pFilterMute->get();
+    p.duckMute        = pDuckMute->get();
     return p;
 }
 
@@ -126,6 +137,8 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     chain_.reset();
     chainParams_ = buildChainParamsFromApvts();
     chain_.update(chainParams_);
+
+    waveBuffer_.clear();
 
     masterGainSmoothed.reset(sampleRate, 0.010);
     masterGainSmoothed.setCurrentAndTargetValue(
@@ -251,6 +264,11 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
 
         if (left)  left[i]  = out;
         if (right) right[i] = out;
+
+        // Feed the scope ring after master gain so what users see matches
+        // what they hear. push() decimates internally; cost is one cmp+inc
+        // per sample plus a relaxed/release atomic store every kDecim'th.
+        waveBuffer_.push(out);
     }
 }
 

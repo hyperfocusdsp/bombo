@@ -48,6 +48,14 @@ struct ChainParams
     // LIMITER
     bool  limiterOn     = true;
     float limiterAmount = 0.5f;
+    // SECTION MUTES — when set, the named stage passes its input through
+    // unmodified (filter) or contributes zero (delay/reverb), so the
+    // user can A/B with that effect bypassed.
+    bool  driveMute  = false;
+    bool  filterMute = false;
+    bool  delayMute  = false;
+    bool  reverbMute = false;
+    bool  duckMute   = false;
 };
 
 class RumbleChain
@@ -133,7 +141,9 @@ public:
     {
         // DRIVE on the dry path (voice-clip family — same shaper palette).
         float driven = dry;
-        if (params_.driveAmount > 0.0f && params_.driveMode != VC_OFF)
+        if (!params_.driveMute
+            && params_.driveAmount > 0.0f
+            && params_.driveMode != VC_OFF)
         {
             const float shaped = voiceClipApply(params_.driveMode,
                                                 params_.driveAmount, dry);
@@ -141,16 +151,23 @@ public:
         }
 
         // FILTER (HP then LP — kicks want the rumble bus AC-coupled and
-        // top-trimmed before it enters the wet stages).
-        const float filtered = lpFilter_.process(hpFilter_.process(driven));
+        // top-trimmed before it enters the wet stages). Mute bypasses to
+        // raw input — but we still process the filters silently so their
+        // state stays warm and re-enabling doesn't pop.
+        float filtered = driven;
+        if (!params_.filterMute)
+            filtered = lpFilter_.process(hpFilter_.process(driven));
 
         // DELAY and REVERB run from the same filtered source, summed wet.
-        const float dWet = delay_.process(filtered);
-        const float rWet = reverb_.process(filtered);
+        // Muted stages contribute zero to the wet sum so the dry kick
+        // passes through cleanly.
+        const float dWet = params_.delayMute  ? 0.0f : delay_.process(filtered);
+        const float rWet = params_.reverbMute ? 0.0f : reverb_.process(filtered);
         float wet = dWet * params_.delayMix + rWet * params_.reverbMix;
 
         // Sidechain duck the wet off the dry (filtered) signal.
-        wet = ducker_.process(filtered, wet, params_.duckDepth);
+        if (!params_.duckMute)
+            wet = ducker_.process(filtered, wet, params_.duckDepth);
 
         const float sum = filtered + wet;
         const float limited = multiband_.process(sum, params_.limiterOn, params_.limiterAmount);
