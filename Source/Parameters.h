@@ -64,6 +64,13 @@ namespace pid
     // LIMITER
     inline constexpr const char* limiterOn       = "limiter_on";
     inline constexpr const char* limiterAmount   = "limiter_amount";
+    // SECTION MUTES — click the section title strip in the UI to toggle.
+    // Voice A/B aren't mutable (they're the source).
+    inline constexpr const char* driveMute       = "drive_mute";
+    inline constexpr const char* delayMute       = "delay_mute";
+    inline constexpr const char* reverbMute      = "reverb_mute";
+    inline constexpr const char* filterMute      = "filter_mute";
+    inline constexpr const char* duckMute        = "duck_mute";
 }
 
 inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
@@ -237,6 +244,18 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::ParameterID{pid::limiterOn, 1}, "Limiter On", true));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::limiterAmount, 1},
         "Limiter Amount", Range(0.0f, 1.0f, 0.001f), 0.5f, normFormat));
+
+    // Section mutes — all default to off so existing presets sound the same.
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::driveMute,  1}, "Drive Mute",  false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::delayMute,  1}, "Delay Mute",  false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::reverbMute, 1}, "Reverb Mute", false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::filterMute, 1}, "Filter Mute", false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::duckMute,   1}, "Duck Mute",   false));
 
     return { p.begin(), p.end() };
 }

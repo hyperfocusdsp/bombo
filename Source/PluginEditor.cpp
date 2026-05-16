@@ -11,15 +11,26 @@
 BomboEditor::BomboEditor(BomboProcessor& p)
     : juce::AudioProcessorEditor(&p),
       processorRef(p),
-      faceplate(p.apvts)
+      faceplate(p.apvts, &p.waveBuffer())
 {
     setLookAndFeel(&lnf);
     addAndMakeVisible(faceplate);
-    // 1-row 7-column rack fits comfortably at this size; resizable so
-    // the user can dial it to their workflow.
-    setSize(1280, 720);
+
+    // Design-size coordinates the faceplate paints in. Resizing applies
+    // an AffineTransform::scale so every knob, label, column, fin, and
+    // band scales together — no per-child re-layout, no overflow.
+    constexpr double kDesignW    = 820.0;
+    constexpr double kDesignH    = 920.0;
+    constexpr double kAspect     = kDesignW / kDesignH;
+    constexpr int    kMinWidth   = 600;
+    constexpr int    kMaxWidth   = 1400;
+
+    setSize(static_cast<int>(kDesignW), static_cast<int>(kDesignH));
     setResizable(true, true);
-    setResizeLimits(1080, 620, 1600, 960);
+    setResizeLimits(kMinWidth, static_cast<int>(kMinWidth / kAspect),
+                    kMaxWidth, static_cast<int>(kMaxWidth / kAspect));
+    if (auto* c = getConstrainer())
+        c->setFixedAspectRatio(kAspect);
     setWantsKeyboardFocus(true);
 
     // ── Standalone-only: enable every available MIDI input on first
@@ -45,12 +56,30 @@ BomboEditor::~BomboEditor()
 
 void BomboEditor::paint(juce::Graphics& g)
 {
+    // Same colour as the faceplate's outside-chassis backdrop so any
+    // letterbox strip is invisible at the editor edge.
     g.fillAll(bombo::col::graphite);
 }
 
 void BomboEditor::resized()
 {
-    faceplate.setBounds(getLocalBounds());
+    // Faceplate paints in fixed 820×920 design coordinates and we apply a
+    // uniform scale transform so every child scales together. The
+    // constrainer keeps width/height locked to design aspect, so both
+    // scale factors come out equal in practice — `jmin` covers the
+    // rounding-gap case. Bounds are set to `editor / scale` (rounded up)
+    // so the transformed faceplate fully covers the editor, even when
+    // the scale isn't an exact integer ratio — kills the thin right-edge
+    // strip that previously appeared at off-design sizes.
+    constexpr float kDesignW = 820.0f;
+    constexpr float kDesignH = 920.0f;
+    const float scale = juce::jmin(static_cast<float>(getWidth())  / kDesignW,
+                                   static_cast<float>(getHeight()) / kDesignH);
+    if (scale <= 0.0f) return;
+    faceplate.setTransform(juce::AffineTransform::scale(scale));
+    const int boundsW = static_cast<int>(std::ceil(static_cast<float>(getWidth())  / scale));
+    const int boundsH = static_cast<int>(std::ceil(static_cast<float>(getHeight()) / scale));
+    faceplate.setBounds(0, 0, boundsW, boundsH);
 }
 
 void BomboEditor::visibilityChanged()

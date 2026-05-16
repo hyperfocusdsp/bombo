@@ -8,10 +8,14 @@
 namespace bombo
 {
 
-// Bombo knob — value text reads inside the colored cap (no textbox below).
-// Matches the Rust UI's in-cap two-line readout:
-//   - dark rubber outer ring → dark recess ring → metal bevel →
-//     section-color core → bone indicator stem → tick dots → value text
+// Bombo knob. Section colour lives in the column body — the knob cap is
+// dark plastic with a bone indicator + bone value text. Hosts that want a
+// hero tint (e.g. the OUT macro) override `rotarySliderOutlineColourId`
+// to amber; everyone else uses the default `col::knobCap`.
+//
+// Two-line value layout (number above, unit below) is preserved from the
+// pre-port UI: `slider.getTextFromValue` is split on the first space so
+// the param's `stringFromValueFunction` does the formatting.
 class BomboLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
@@ -19,7 +23,9 @@ public:
     {
         setColour(juce::Slider::backgroundColourId,        col::graphite);
         setColour(juce::Slider::rotarySliderFillColourId,  col::bone);
-        setColour(juce::Slider::rotarySliderOutlineColourId, col::voice);
+        // Default cap = dark plastic. Per-knob override is supported (the
+        // OUT macro sets this to col::accentAmber).
+        setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
         setColour(juce::Slider::thumbColourId,             col::bone);
         setColour(juce::Slider::textBoxOutlineColourId,    juce::Colour(0));
         setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0));
@@ -31,7 +37,7 @@ public:
         setColour(juce::ComboBox::arrowColourId,           col::boneDim);
         setColour(juce::PopupMenu::backgroundColourId,     col::graphiteHi);
         setColour(juce::PopupMenu::textColourId,           col::bone);
-        setColour(juce::PopupMenu::highlightedBackgroundColourId, col::voice);
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, col::accentAmber);
         setColour(juce::PopupMenu::highlightedTextColourId, col::ink);
         setColour(juce::ToggleButton::textColourId,        col::bone);
         setColour(juce::ToggleButton::tickColourId,        col::accentAmber);
@@ -52,8 +58,11 @@ public:
         const float radius = diameter * 0.5f - 4.0f;
         if (radius < 6.0f) return;
 
-        // Section tint travels via rotarySliderOutlineColourId.
+        // Cap colour: dark by default, amber for the OUT macro.
         const auto core = slider.findColour(juce::Slider::rotarySliderOutlineColourId);
+        const bool capIsDark = core.getPerceivedBrightness() < 0.5f;
+        const auto indicatorColour = capIsDark ? col::bone : col::ink;
+        const auto valueColour     = capIsDark ? col::bone : col::ink;
 
         // 1. Mounting recess (offset drop shadow).
         g.setColour(juce::Colour(0xFF000000).withAlpha(0.35f));
@@ -64,39 +73,41 @@ public:
                       (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
 
         // 2. Rubber grip — dark with subtle top highlight.
-        g.setColour(juce::Colour(0xFF1A1A1A));
+        g.setColour(col::knobRubber);
         g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
-        g.setColour(juce::Colour(0xFF2A2A2A));
+        g.setColour(juce::Colour(0xFF24'24'26u));
         const float hlR = radius * 0.95f;
         g.fillEllipse(cx - hlR, cy - radius - radius * 0.05f, hlR * 2.0f, hlR * 2.0f);
-        g.setColour(juce::Colour(0xFF1A1A1A));
+        g.setColour(col::knobRubber);
         g.fillEllipse(cx - radius * 0.88f, cy - radius * 0.88f,
                       radius * 0.88f * 2.0f, radius * 0.88f * 2.0f);
 
-        // 3. Metal bevel ring (between rubber and the colored cap).
-        const float coreOuterR = radius * 0.78f;
-        g.setColour(juce::Colour(0xFF666666));
+        // 3. Metal bevel ring between rubber and the cap core.
+        const float coreOuterR = radius * 0.80f;
+        g.setColour(col::knobBevel);
         g.fillEllipse(cx - coreOuterR - 1.5f, cy - coreOuterR - 1.5f,
                       (coreOuterR + 1.5f) * 2.0f, (coreOuterR + 1.5f) * 2.0f);
 
-        // 4. Colored plastic core (the section tint).
+        // 4. Cap core. Subtle top-down gradient sells the moulded-plastic feel.
         const float coreR = coreOuterR - 1.0f;
-        g.setColour(core);
+        const auto coreTop = core.brighter(0.10f);
+        const auto coreBot = core.darker (0.18f);
+        g.setGradientFill(juce::ColourGradient(coreTop, cx, cy - coreR,
+                                               coreBot, cx, cy + coreR, false));
         g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
 
-        // 5. Inner shadow at core's outer edge (sells the recessed-under
-        //    bevel illusion).
-        g.setColour(juce::Colour::fromRGBA(0, 0, 0, 0x40));
+        // 5. Inner shadow at cap edge for recessed look.
+        g.setColour(juce::Colour::fromRGBA(0, 0, 0, 0x55));
         g.drawEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f, 1.0f);
 
-        // 6. Indicator stem — bone wedge from core edge to rubber outer.
+        // 6. Indicator stem — wedge from cap edge out to the rubber outer.
         const float a = juce::jmap(sliderPos, rotaryStartAngle, rotaryEndAngle);
         const float ang = a - juce::MathConstants<float>::halfPi;
         const float ic = std::cos(ang);
         const float is = std::sin(ang);
-        const float stemInR = coreR;
+        const float stemInR  = coreR;
         const float stemOutR = radius;
-        const float stemW = 2.4f;
+        const float stemW    = 2.6f;
         juce::Path stem;
         const float perpC = -is;
         const float perpS =  ic;
@@ -109,7 +120,7 @@ public:
         stem.lineTo(cx + ic * stemInR  - perpC * stemW * 0.5f,
                     cy + is * stemInR  - perpS * stemW * 0.5f);
         stem.closeSubPath();
-        g.setColour(col::bone);
+        g.setColour(indicatorColour);
         g.fillPath(stem);
 
         // 7. Tick dots — 11 uniform markers on the rubber outer edge.
@@ -122,23 +133,22 @@ public:
                            - juce::MathConstants<float>::halfPi;
             const float dx = cx + std::cos(ta) * dotRingR;
             const float dy = cy + std::sin(ta) * dotRingR;
-            g.setColour(col::bone.withAlpha(0.85f));
+            g.setColour(col::bone.withAlpha(0.60f));
             g.fillEllipse(dx - dotR, dy - dotR, dotR * 2.0f, dotR * 2.0f);
         }
 
-        // 8. Value text INSIDE the cap. Pull via slider.getTextFromValue
-        //    so the param's stringFromValueFunction does the formatting.
-        //    Splits "value unit" into two lines if there's a space.
+        // 8. Value text inside the cap. Two-line layout when the formatter
+        //    returns "<number> <unit>"; single-line otherwise.
         const auto text = slider.getTextFromValue(slider.getValue());
         const float capInner = coreR * 0.95f;
         const int spaceIdx = text.indexOfChar(' ');
-        const float valueFontSize = juce::jlimit(7.5f, 12.0f, capInner * 0.55f);
-        g.setColour(col::ink.withAlpha(0.85f));
+        const float valueFontSize = juce::jlimit(8.0f, 13.0f, capInner * 0.62f);
+        g.setColour(valueColour.withAlpha(0.92f));
         if (spaceIdx > 0)
         {
             const auto num  = text.substring(0, spaceIdx);
             const auto unit = text.substring(spaceIdx + 1);
-            const float unitFontSize = juce::jmax(6.5f, valueFontSize * 0.78f);
+            const float unitFontSize = juce::jmax(6.5f, valueFontSize * 0.72f);
             g.setFont(fonts::value(valueFontSize));
             g.drawText(num,
                        juce::Rectangle<float>(cx - capInner, cy - capInner,

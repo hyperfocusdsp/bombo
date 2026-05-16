@@ -2,170 +2,169 @@
 
 #include "Colours.h"
 #include "Fonts.h"
+#include "WaveBuffer.h"
 #include "../Parameters.h"
 
 namespace bombo
 {
 namespace
 {
-constexpr int kHeaderH        = 56;
-constexpr int kFinBandH       = 80;
-constexpr int kRackGap        = 4;
-constexpr int kRackOuterPad   = 10;
-constexpr int kColInnerPadX   = 6;
-constexpr int kColInnerPadTop = 26;
-constexpr int kColInnerPadBot = 8;
-// FIXED slot height: every knob across every section uses this same
-// row pitch so the rack reads as one grid, not as 7 differently-sized
-// columns. Sections with fewer controls leave empty space at the bottom.
-constexpr int kRowH           = 88;
-constexpr int kKnobLabelH     = 14;
-constexpr int kHeaderKnobSize = 40;
-}
+// ── Chassis & band geometry ─────────────────────────────────────────
+// The chassis is a single polygon: rounded-top rectangle with a tapered
+// bottom (bomb tail). Everything outside the chassis paints `col::ink`
+// so the JUCE resize-corner has a dark, unambiguous background.
+// Chassis is now flush with the window on the sides + top. The only
+// "outside chassis" region is the bottom-left + bottom-right wedges
+// formed by the bomb-tail V — and the backdrop colour matches the
+// chassis interior so those wedges are invisible at the edge. The JUCE
+// resize-corner widget paints its own stripes against this backdrop in
+// the bottom-right wedge.
+constexpr int kChassisMarginX   = 0;
+constexpr int kChassisMarginTop = 0;
+constexpr int kChassisMarginBot = 4;
+constexpr int kChassisCornerR   = 0;
+constexpr int kTailH            = 160;
+
+// Bands inside the chassis rect portion.
+constexpr int kHeaderH      = 50;
+constexpr int kScopeH       = 100;
+constexpr int kMacroH       = 90;
+constexpr int kRackPadX     = 6;        // padding between chassis edge and column 0/N-1
+constexpr int kRackTopGap   = 4;
+constexpr int kRackBotGap   = 4;
+
+// FX columns.
+constexpr int kColGap       = 12;
+constexpr int kColTitleH    = 20;
+constexpr int kColAccentH   = 3;
+constexpr int kModuleIdH    = 14;
+constexpr int kInnerPadX    = 5;
+constexpr int kRowH         = 72;
+constexpr int kKnobLabelH   = 13;
+constexpr int kNCols        = 7;
+
+constexpr int kMacroKnobSize = 46;
+} // namespace
 
 // ────────────────────────────────────────────────────────────────────
 //  Construction
 // ────────────────────────────────────────────────────────────────────
 
-FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts)
+FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
+                               const WaveBuffer* waveBuffer)
     : apvts_(apvts)
 {
-    // ── 7 columns, left to right ────────────────────────────────────
-    // VOICE A: 5 controls — WAVE + 4 voice knobs.
+    addAndMakeVisible(scope_);
+    scope_.setWaveBuffer(waveBuffer);
+
+    // ── 7 FX columns — order matches the pre-port reference ─────────
     {
-        Section s; s.name = "VOICE A"; s.accent = col::voice;
-        addChoice(s, pid::waveform,   "WAVE");
-        addKnob  (s, pid::pitchStart, "PITCH");
-        addKnob  (s, pid::pitchEnd,   "END");
-        addKnob  (s, pid::pitchDecay, "P.DEC");
-        addKnob  (s, pid::pitchCurve, "CURVE");
+        Section s;
+        s.name = "VOICE A"; s.moduleId = "AMP-1";
+        s.accent = col::voice; s.labelOnBg = col::bone;
+        addChoice(s, pid::waveform,   "WAVE",  s.labelOnBg);
+        addKnob  (s, pid::pitchStart, "PITCH", s.labelOnBg);
+        addKnob  (s, pid::pitchEnd,   "END",   s.labelOnBg);
+        addKnob  (s, pid::pitchDecay, "P.DEC", s.labelOnBg);
+        addKnob  (s, pid::pitchCurve, "CURVE", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
-    // VOICE B: 6 knobs — voice-B set + the MID layer's 2 most useful knobs
-    // folded in so MID doesn't need its own column.
     {
-        Section s; s.name = "VOICE B"; s.accent = col::voice;
-        addKnob(s, pid::ampAttack,    "ATK");
-        addKnob(s, pid::ampDecay,     "DEC");
-        addKnob(s, pid::clickAmount,  "CLICK");
-        addKnob(s, pid::noiseAmount,  "BODY");
-        addKnob(s, pid::noiseColor,   "COLOR");
-        addKnob(s, pid::driftAmount,  "DRIFT");
+        Section s;
+        s.name = "VOICE B"; s.moduleId = "OSS-1";
+        s.accent = col::voice; s.labelOnBg = col::bone;
+        addKnob(s, pid::ampAttack,   "ATK",   s.labelOnBg);
+        addKnob(s, pid::ampDecay,    "DEC",   s.labelOnBg);
+        addKnob(s, pid::clickAmount, "CLICK", s.labelOnBg);
+        addKnob(s, pid::noiseAmount, "BODY",  s.labelOnBg);
+        addKnob(s, pid::noiseColor,  "COLOR", s.labelOnBg);
+        addKnob(s, pid::driftAmount, "DRIFT", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
-    // DRIVE: V.AMT + V.MODE + B.AMT + B.MODE + MIX = 5 controls.
     {
-        Section s; s.name = "DRIVE"; s.accent = col::drive;
-        addKnob  (s, pid::driveAmount,   "V.AMT");
-        addChoice(s, pid::driveMode,     "V.MODE");
-        addKnob  (s, pid::fxDriveAmount, "B.AMT");
-        addChoice(s, pid::fxDriveMode,   "B.MODE");
-        addKnob  (s, pid::fxDriveMix,    "MIX");
+        Section s;
+        s.name = "DRIVE"; s.moduleId = "SAT-A"; s.mutePid = pid::driveMute;
+        s.accent = col::drive; s.labelOnBg = col::ink;
+        addKnob  (s, pid::driveAmount,   "V.AMT",  s.labelOnBg);
+        addChoice(s, pid::driveMode,     "V.MODE", s.labelOnBg);
+        addKnob  (s, pid::fxDriveAmount, "B.AMT",  s.labelOnBg);
+        addChoice(s, pid::fxDriveMode,   "B.MODE", s.labelOnBg);
+        addKnob  (s, pid::fxDriveMix,    "MIX",    s.labelOnBg);
         sections_.push_back(std::move(s));
     }
-    // FILTER: HP + HP Q + LP + LP Q + COLOR.
     {
-        Section s; s.name = "FILTER"; s.accent = col::filterC;
-        addKnob(s, pid::filterHp,    "HP");
-        addKnob(s, pid::filterHpQ,   "HP Q");
-        addKnob(s, pid::filterLp,    "LP");
-        addKnob(s, pid::filterLpQ,   "LP Q");
-        addKnob(s, pid::filterColor, "COLOR");
+        Section s;
+        s.name = "DELAY"; s.moduleId = "DLY-1"; s.mutePid = pid::delayMute;
+        s.accent = col::delayC; s.labelOnBg = col::ink;
+        addKnob(s, pid::delayTime,     "TIME",  s.labelOnBg);
+        addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg);
+        addKnob(s, pid::delayDrift,    "DRIFT", s.labelOnBg);
+        addKnob(s, pid::delayMorph,    "TONE",  s.labelOnBg);
+        addKnob(s, pid::delayMix,      "MIX",   s.labelOnBg);
         sections_.push_back(std::move(s));
     }
-    // DELAY.
     {
-        Section s; s.name = "DELAY"; s.accent = col::delayC;
-        addKnob(s, pid::delayTime,     "TIME");
-        addKnob(s, pid::delayFeedback, "FBK");
-        addKnob(s, pid::delayDrift,    "DRIFT");
-        addKnob(s, pid::delayMorph,    "TONE");
-        addKnob(s, pid::delayMix,      "MIX");
+        Section s;
+        s.name = "REVERB"; s.moduleId = "RVB-FDN"; s.mutePid = pid::reverbMute;
+        s.accent = col::reverb; s.labelOnBg = col::ink;
+        addKnob(s, pid::reverbSize,      "SIZE",  s.labelOnBg);
+        addKnob(s, pid::reverbDecay,     "DECAY", s.labelOnBg);
+        addKnob(s, pid::reverbDamp,      "DAMP",  s.labelOnBg);
+        addKnob(s, pid::reverbDiffusion, "DIFF",  s.labelOnBg);
+        addKnob(s, pid::reverbPredelay,  "PRE",   s.labelOnBg);
+        addKnob(s, pid::reverbMix,       "MIX",   s.labelOnBg);
         sections_.push_back(std::move(s));
     }
-    // REVERB.
     {
-        Section s; s.name = "REVERB"; s.accent = col::reverb;
-        addKnob(s, pid::reverbSize,      "SIZE");
-        addKnob(s, pid::reverbDecay,     "DECAY");
-        addKnob(s, pid::reverbDamp,      "DAMP");
-        addKnob(s, pid::reverbDiffusion, "DIFF");
-        addKnob(s, pid::reverbPredelay,  "PRE");
-        addKnob(s, pid::reverbMix,       "MIX");
+        Section s;
+        s.name = "FILTER"; s.moduleId = "SVF-2P"; s.mutePid = pid::filterMute;
+        s.accent = col::filterC; s.labelOnBg = col::ink;
+        addKnob(s, pid::filterHp,    "HP",    s.labelOnBg);
+        addKnob(s, pid::filterHpQ,   "HP Q",  s.labelOnBg);
+        addKnob(s, pid::filterLp,    "LP",    s.labelOnBg);
+        addKnob(s, pid::filterLpQ,   "LP Q",  s.labelOnBg);
+        addKnob(s, pid::filterColor, "COLOR", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
-    // DUCK.
     {
-        Section s; s.name = "DUCK"; s.accent = col::duck;
-        addKnob(s, pid::duckAtk,   "ATK");
-        addKnob(s, pid::duckRel,   "REL");
-        addKnob(s, pid::duckDepth, "DEPTH");
+        Section s;
+        s.name = "DUCK"; s.moduleId = "SC-CMP"; s.mutePid = pid::duckMute;
+        s.accent = col::duck; s.labelOnBg = col::ink;
+        addKnob(s, pid::duckAtk,   "ATK",   s.labelOnBg);
+        addKnob(s, pid::duckRel,   "REL",   s.labelOnBg);
+        addKnob(s, pid::duckDepth, "DEPTH", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
 
-    // ── Header band — master OUT + LIM toggle + LIM AMT ─────────────
-    // master OUT
+    // ── Macro row ───────────────────────────────────────────────────
+    macro_[0] = makePlaceholderKnob("PITCH",  col::boneDim);
+    macro_[1] = makePlaceholderKnob("DECAY",  col::boneDim);
+    macro_[2] = makePlaceholderKnob("PUNCH",  col::boneDim);
+    macro_[3] = makePlaceholderKnob("WEIGHT", col::boneDim);
+    macro_[4] = makePlaceholderKnob("MOOD",   col::boneDim);
+    macro_[5] = makePlaceholderKnob("SPACE",  col::boneDim);
+    macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::accentAmber, col::boneDim);
+    for (auto& m : macro_)
     {
-        auto c = std::make_unique<Control>();
-        c->kind = CtlKind::Knob;
-        c->slider = std::make_unique<juce::Slider>();
-        c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
-                                       juce::MathConstants<float>::pi * 2.75f, true);
-        c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
-        c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::voice);
-        c->slider->setWantsKeyboardFocus(false);
-        c->slider->setMouseClickGrabsKeyboardFocus(false);
-        c->label = std::make_unique<juce::Label>();
-        c->label->setText("OUT", juce::dontSendNotification);
-        c->label->setJustificationType(juce::Justification::centred);
-        c->label->setFont(fonts::label(9.5f));
-        c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-            apvts_, pid::masterOut, *c->slider);
-        addAndMakeVisible(*c->slider);
-        addAndMakeVisible(*c->label);
-        header_.push_back(std::move(c));
+        if (m == nullptr) continue;
+        if (m->slider) addAndMakeVisible(*m->slider);
+        if (m->label)  addAndMakeVisible(*m->label);
     }
-    // LIM toggle
-    {
-        auto c = std::make_unique<Control>();
-        c->kind = CtlKind::Toggle;
-        c->button = std::make_unique<juce::ToggleButton>("LIM");
-        c->button->setColour(juce::ToggleButton::textColourId, col::boneDim);
-        c->button->setWantsKeyboardFocus(false);
-        c->button->setMouseClickGrabsKeyboardFocus(false);
-        c->bAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-            apvts_, pid::limiterOn, *c->button);
-        addAndMakeVisible(*c->button);
-        header_.push_back(std::move(c));
-    }
-    // LIM AMT
-    {
-        auto c = std::make_unique<Control>();
-        c->kind = CtlKind::Knob;
-        c->slider = std::make_unique<juce::Slider>();
-        c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
-                                       juce::MathConstants<float>::pi * 2.75f, true);
-        c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
-        c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::accentAmber);
-        c->slider->setWantsKeyboardFocus(false);
-        c->slider->setMouseClickGrabsKeyboardFocus(false);
-        c->label = std::make_unique<juce::Label>();
-        c->label->setText("LIM", juce::dontSendNotification);
-        c->label->setJustificationType(juce::Justification::centred);
-        c->label->setFont(fonts::label(9.5f));
-        c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-            apvts_, pid::limiterAmount, *c->slider);
-        addAndMakeVisible(*c->slider);
-        addAndMakeVisible(*c->label);
-        header_.push_back(std::move(c));
-    }
+    wireMacroFanOut();
+
+    // ── LIM pill ────────────────────────────────────────────────────
+    limPill_ = std::make_unique<juce::ToggleButton>("LIM");
+    limPill_->setColour(juce::ToggleButton::textColourId, col::bone);
+    limPill_->setWantsKeyboardFocus(false);
+    limPill_->setMouseClickGrabsKeyboardFocus(false);
+    limAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        apvts_, pid::limiterOn, *limPill_);
+    addAndMakeVisible(*limPill_);
 }
 
 FaceplatePanel::Control*
 FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
-                        const juce::String& displayName)
+                        const juce::String& displayName, juce::Colour labelColour)
 {
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Knob;
@@ -174,15 +173,14 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
     c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
-    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, s.accent);
-    // Don't steal keyboard focus on click — Space / T / Enter must keep
-    // reaching the editor's keyPressed for the trigger bridge.
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
-    c->label->setFont(fonts::label(9.5f));
+    c->label->setFont(fonts::label(10.0f));
+    c->label->setColour(juce::Label::textColourId, labelColour);
     c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts_, paramId, *c->slider);
     addAndMakeVisible(*c->slider);
@@ -194,20 +192,22 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
 
 FaceplatePanel::Control*
 FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
-                          const juce::String& displayName)
+                          const juce::String& displayName, juce::Colour labelColour)
 {
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Choice;
     c->combo = std::make_unique<juce::ComboBox>();
     if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts_.getParameter(paramId)))
         c->combo->addItemList(p->choices, 1);
-    c->combo->setColour(juce::ComboBox::textColourId, col::bone);
+    c->combo->setColour(juce::ComboBox::textColourId,       col::bone);
+    c->combo->setColour(juce::ComboBox::backgroundColourId, col::ink.withAlpha(0.75f));
     c->combo->setWantsKeyboardFocus(false);
     c->combo->setMouseClickGrabsKeyboardFocus(false);
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
-    c->label->setFont(fonts::label(9.5f));
+    c->label->setFont(fonts::label(10.0f));
+    c->label->setColour(juce::Label::textColourId, labelColour);
     c->cAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         apvts_, paramId, *c->combo);
     addAndMakeVisible(*c->combo);
@@ -217,21 +217,55 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
     return raw;
 }
 
-FaceplatePanel::Control*
-FaceplatePanel::addToggle(Section& s, const juce::String& paramId,
-                          const juce::String& displayName)
+std::unique_ptr<FaceplatePanel::Control>
+FaceplatePanel::makeBoundKnob(const juce::String& paramId,
+                              const juce::String& displayName,
+                              juce::Colour capColour,
+                              juce::Colour labelColour)
 {
     auto c = std::make_unique<Control>();
-    c->kind = CtlKind::Toggle;
-    c->button = std::make_unique<juce::ToggleButton>(displayName);
-    c->button->setWantsKeyboardFocus(false);
-    c->button->setMouseClickGrabsKeyboardFocus(false);
-    c->bAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        apvts_, paramId, *c->button);
-    addAndMakeVisible(*c->button);
-    Control* raw = c.get();
-    s.controls.push_back(std::move(c));
-    return raw;
+    c->kind = CtlKind::Knob;
+    c->slider = std::make_unique<juce::Slider>();
+    c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
+                                   juce::MathConstants<float>::pi * 2.75f, true);
+    c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, capColour);
+    c->slider->setWantsKeyboardFocus(false);
+    c->slider->setMouseClickGrabsKeyboardFocus(false);
+    c->label = std::make_unique<juce::Label>();
+    c->label->setText(displayName, juce::dontSendNotification);
+    c->label->setJustificationType(juce::Justification::centred);
+    c->label->setFont(fonts::label(9.5f));
+    c->label->setColour(juce::Label::textColourId, labelColour);
+    c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts_, paramId, *c->slider);
+    return c;
+}
+
+std::unique_ptr<FaceplatePanel::Control>
+FaceplatePanel::makePlaceholderKnob(const juce::String& displayName,
+                                    juce::Colour labelColour)
+{
+    auto c = std::make_unique<Control>();
+    c->kind = CtlKind::Knob;
+    c->slider = std::make_unique<juce::Slider>();
+    c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+    c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
+                                   juce::MathConstants<float>::pi * 2.75f, true);
+    c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
+    c->slider->setRange(0.0, 1.0, 0.0);
+    c->slider->setValue(0.5, juce::dontSendNotification);
+    c->slider->setNumDecimalPlacesToDisplay(2);
+    c->slider->setWantsKeyboardFocus(false);
+    c->slider->setMouseClickGrabsKeyboardFocus(false);
+    c->label = std::make_unique<juce::Label>();
+    c->label->setText(displayName, juce::dontSendNotification);
+    c->label->setJustificationType(juce::Justification::centred);
+    c->label->setFont(fonts::label(9.5f));
+    c->label->setColour(juce::Label::textColourId, labelColour);
+    return c;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -240,95 +274,194 @@ FaceplatePanel::addToggle(Section& s, const juce::String& paramId,
 
 void FaceplatePanel::paint(juce::Graphics& g)
 {
-    g.fillAll(col::graphite);
+    paintBackground(g);
+    paintChassis(g);
+    paintHeader(g, headerBounds_);
+    for (const auto& s : sections_) paintSection(g, s);
+    paintChassisTail(g);
+}
 
-    const auto bounds = getLocalBounds();
-    paintHeader(g, bounds.withHeight(kHeaderH));
-    for (const auto& s : sections_) paintSectionFrame(g, s);
-    paintFinBand(g, bounds.withTrimmedTop(getHeight() - kFinBandH));
+void FaceplatePanel::paintBackground(juce::Graphics& g)
+{
+    // Backdrop matches the chassis interior colour. Any "outside chassis"
+    // pixels (bottom-left / bottom-right wedges of the V tail, or sub-
+    // pixel rounding on the side edges under non-integer scale) blend in
+    // seamlessly — no visible border band on the right side of the window.
+    g.fillAll(col::graphite);
+}
+
+void FaceplatePanel::paintChassis(juce::Graphics& g)
+{
+    if (chassisPath_.isEmpty()) return;
+
+    // Chassis fill: vertical gradient so the bomb body has a hint of depth.
+    juce::ColourGradient grad(col::graphiteHi,
+                              static_cast<float>(getWidth()) * 0.5f,
+                              static_cast<float>(chassisRectArea_.getY()),
+                              col::graphite,
+                              static_cast<float>(getWidth()) * 0.5f,
+                              static_cast<float>(chassisApexY_),
+                              false);
+    grad.addColour(0.78, col::graphite);
+    g.setGradientFill(grad);
+    g.fillPath(chassisPath_);
+}
+
+void FaceplatePanel::paintChassisTail(juce::Graphics& g)
+{
+    if (chassisPath_.isEmpty()) return;
+
+    // Below the rack, paint a faint horizontal gradient using the column
+    // accents so the tail reads as a continuation of the rack signal
+    // chain, not as dead chassis space. Clipped by the chassis path so
+    // the gradient terminates at the V edge.
+    const float x0 = static_cast<float>(chassisRectArea_.getX());
+    const float x1 = static_cast<float>(chassisRectArea_.getRight());
+    const float y0 = static_cast<float>(chassisRectBottomY_);
+    const float y1 = static_cast<float>(chassisApexY_);
+
+    juce::ColourGradient grad(col::drive.withAlpha(0.18f),  x0, 0.0f,
+                              col::duck .withAlpha(0.18f),  x1, 0.0f,
+                              false);
+    grad.addColour(0.18, col::voice  .withAlpha(0.18f));
+    grad.addColour(0.36, col::delayC .withAlpha(0.18f));
+    grad.addColour(0.52, col::reverb .withAlpha(0.18f));
+    grad.addColour(0.70, col::filterC.withAlpha(0.18f));
+
+    g.saveState();
+    g.reduceClipRegion(chassisPath_);
+    g.setGradientFill(grad);
+    g.fillRect(juce::Rectangle<float>(x0, y0, x1 - x0, y1 - y0));
+    g.restoreState();
 }
 
 void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
 {
+    // Header band — slightly lighter strip at the chassis top. Clipped to
+    // the chassis path so the rounded corners stay crisp.
+    g.saveState();
+    g.reduceClipRegion(chassisPath_);
     g.setColour(col::graphiteHi);
     g.fillRect(area);
+    g.restoreState();
+
+    // BOMBO logo.
     g.setColour(col::bone);
     g.setFont(fonts::title(26.0f));
     g.drawText("BOMBO",
-               area.reduced(18, 0).removeFromLeft(180),
+               area.withTrimmedLeft(20).removeFromLeft(160),
                juce::Justification::centredLeft);
+
+    // Subtitle.
     g.setColour(col::boneDim);
-    g.setFont(fonts::label(10.0f));
-    g.drawText("HALF KICK / HALF BBS",
-               juce::Rectangle<int>(140, 0, 280, kHeaderH),
+    g.setFont(fonts::label(10.5f));
+    g.drawText("half kick  \xE2\x80\xA2  half BBS",
+               area.withTrimmedLeft(180).withWidth(280),
                juce::Justification::centredLeft);
+
     // Hairline at bottom edge.
-    g.setColour(col::ink);
+    g.setColour(col::ink.withAlpha(0.7f));
     g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
+
+    // MNT pill.
+    {
+        const auto r = mntPillBounds_.toFloat();
+        g.setColour(col::graphite);
+        g.fillRoundedRectangle(r, r.getHeight() * 0.5f);
+        g.setColour(col::boneDim.withAlpha(0.65f));
+        g.drawRoundedRectangle(r.reduced(0.5f), r.getHeight() * 0.5f, 1.0f);
+        g.setColour(col::boneDim);
+        g.setFont(fonts::label(9.0f));
+        g.drawText("MNT 100%", mntPillBounds_, juce::Justification::centred);
+    }
+
+    // SYNTH / INSERT FX tab.
+    {
+        const auto sR = synthTabBounds_.toFloat();
+        g.setColour(col::accentAmber);
+        g.fillRoundedRectangle(sR, 4.0f);
+        g.setColour(col::ink);
+        g.setFont(fonts::label(10.0f));
+        g.drawText("SYNTH", synthTabBounds_, juce::Justification::centred);
+
+        const auto fR = insertFxTabBounds_.toFloat();
+        g.setColour(col::graphite);
+        g.fillRoundedRectangle(fR, 4.0f);
+        g.setColour(col::boneDim);
+        g.drawRoundedRectangle(fR.reduced(0.5f), 4.0f, 1.0f);
+        g.setColour(col::boneDim);
+        g.drawText("INSERT FX", insertFxTabBounds_, juce::Justification::centred);
+    }
 }
 
-void FaceplatePanel::paintSectionFrame(juce::Graphics& g, const Section& s)
+void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
 {
-    if (s.bounds.isEmpty()) return;
-    const auto fb = s.bounds.toFloat();
+    if (s.rectBounds.isEmpty()) return;
 
-    // Body fill — slightly lighter than the chassis so the rack reads
-    // as raised panels.
-    g.setColour(col::graphiteHi);
-    g.fillRoundedRectangle(fb, 5.0f);
+    const auto rb = s.rectBounds.toFloat();
+    const bool muted = isMuted(s);
 
-    // Section colour edge.
-    g.setColour(s.accent.withAlpha(0.55f));
-    g.drawRoundedRectangle(fb.reduced(0.5f), 5.0f, 1.0f);
+    // Column body — desaturate + dim the accent when muted so it reads as
+    // "bypassed" without losing column identity entirely.
+    const auto bodyColour = muted
+        ? s.accent.withSaturation(0.20f).withBrightness(s.accent.getBrightness() * 0.55f)
+        : s.accent;
+    g.setColour(bodyColour);
+    g.fillRect(rb);
 
-    // Title bar: 3 px accent strip at the very top, plus a darker
-    // band beneath it for the title text so the section name has
-    // a stable backdrop regardless of the accent's luminance.
-    const auto strip = juce::Rectangle<float>(fb.getX(), fb.getY(),
-                                              fb.getWidth(), 3.0f);
-    g.setColour(s.accent);
-    g.fillRect(strip);
+    // Subtle top gloss for raised-panel feel.
+    {
+        juce::ColourGradient gloss(juce::Colours::white.withAlpha(0.07f),
+                                   rb.getX(), rb.getY(),
+                                   juce::Colours::transparentBlack,
+                                   rb.getX(), rb.getY() + rb.getHeight() * 0.18f,
+                                   false);
+        g.setGradientFill(gloss);
+        g.fillRect(rb.withHeight(rb.getHeight() * 0.18f));
+    }
 
-    g.setColour(col::ink);
-    g.fillRect(juce::Rectangle<float>(fb.getX(), fb.getY() + 3.0f,
-                                      fb.getWidth(), 20.0f));
+    // Title strip: 3 px accent tab + ink bar with bone title text.
+    // For muteable sections the whole title strip is the click target —
+    // we slightly brighten the ink bar when muted so the bypass state
+    // reads at a glance.
+    {
+        const auto accentStrip = juce::Rectangle<int>(s.rectBounds.getX(),
+                                                      s.rectBounds.getY(),
+                                                      s.rectBounds.getWidth(),
+                                                      kColAccentH);
+        const auto titleBar = juce::Rectangle<int>(s.rectBounds.getX(),
+                                                   s.rectBounds.getY() + kColAccentH,
+                                                   s.rectBounds.getWidth(),
+                                                   kColTitleH - kColAccentH);
+        g.setColour(bodyColour.darker(0.45f));
+        g.fillRect(accentStrip);
+        g.setColour(muted ? col::graphite : col::ink);
+        g.fillRect(titleBar);
+        g.setColour(muted ? col::boneDim : col::bone);
+        g.setFont(fonts::title(11.5f));
+        g.drawText(s.name, titleBar, juce::Justification::centred);
+        // Strike-through line when muted — unambiguous bypass cue.
+        if (muted)
+        {
+            const float midY = titleBar.getCentreY();
+            g.setColour(col::boneDim.withAlpha(0.55f));
+            g.drawLine(titleBar.getX() + 8.0f, midY,
+                       titleBar.getRight() - 8.0f, midY, 1.0f);
+        }
+    }
 
-    g.setColour(col::bone);
-    g.setFont(fonts::title(11.5f));
-    const auto titleArea = s.bounds.withHeight(kColInnerPadTop)
-                                   .translated(0, 3);
-    g.drawText(s.name, titleArea, juce::Justification::centred);
-}
+    // Module ID strip at the bottom of the column rect.
+    {
+        g.setColour(col::ink.withAlpha(0.55f));
+        g.fillRect(s.moduleIdBounds);
+        g.setColour(col::bone.withAlpha(0.45f));
+        g.setFont(fonts::label(8.5f));
+        g.drawText(s.moduleId, s.moduleIdBounds, juce::Justification::centred);
+    }
 
-void FaceplatePanel::paintFinBand(juce::Graphics& g, juce::Rectangle<int> area)
-{
-    g.setColour(col::ink);
-    g.fillRect(area);
-    g.setColour(col::bone.withAlpha(0.18f));
-    g.fillRect(area.getX(), area.getY(), area.getWidth(), 1);
-
-    const float w = static_cast<float>(area.getWidth());
-    const float topY = static_cast<float>(area.getY());
-    const float apexY = static_cast<float>(area.getBottom() - 4);
-    const float apexX = w * 0.5f;
-
-    juce::Path v;
-    v.startNewSubPath(0.0f, topY);
-    v.lineTo(w, topY);
-    v.lineTo(apexX, apexY);
-    v.closeSubPath();
-
-    juce::ColourGradient grad(col::drive.withAlpha(0.55f),  0.0f, topY,
-                              col::duck.withAlpha(0.55f),   w,    topY, false);
-    grad.addColour(0.25, col::filterC.withAlpha(0.55f));
-    grad.addColour(0.50, col::delayC .withAlpha(0.55f));
-    grad.addColour(0.75, col::reverb .withAlpha(0.55f));
-    g.setGradientFill(grad);
-    g.fillPath(v);
-
-    g.setColour(col::bone.withAlpha(0.22f));
-    g.drawLine(0.0f, topY, apexX, apexY, 1.0f);
-    g.drawLine(w,    topY, apexX, apexY, 1.0f);
+    // Thin column outline.
+    g.setColour(col::ink.withAlpha(0.50f));
+    g.drawRect(s.rectBounds, 1);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -337,66 +470,92 @@ void FaceplatePanel::paintFinBand(juce::Graphics& g, juce::Rectangle<int> area)
 
 void FaceplatePanel::resized()
 {
-    // ── 7 FX columns weighted by knob count so wider sections (REVERB
-    //    has 6, DUCK has 3) get proportional space. ──────────────────
-    constexpr int n = 7;
-    const float ctlCounts[n] = { 5.0f, 6.0f, 5.0f, 5.0f, 5.0f, 6.0f, 3.0f };
-    // DRIVE has 2 ComboBoxes (wider than knobs) — bump its weight.
-    const float driveBoost = 1.1f;
-    float weights[n];
-    float wSum = 0.0f;
-    for (int i = 0; i < n; ++i)
+    const int w = getWidth();
+    const int h = getHeight();
+
+    // ── Chassis bounds ──────────────────────────────────────────────
+    const int chassisL = kChassisMarginX;
+    const int chassisR = w - kChassisMarginX;
+    const int chassisT = kChassisMarginTop;
+    const int chassisApexY = h - kChassisMarginBot;
+    const int chassisRectBot = chassisApexY - kTailH;
+
+    chassisRectArea_   = { chassisL, chassisT, chassisR - chassisL,
+                           chassisRectBot - chassisT };
+    chassisRectBottomY_ = chassisRectBot;
+    chassisApexY_       = chassisApexY;
+
+    // Build the chassis path: rounded top, straight sides, V tail.
     {
-        weights[i] = ctlCounts[i] * (i == 2 ? driveBoost : 1.0f);
-        wSum += weights[i];
+        const float xL = static_cast<float>(chassisL);
+        const float xR = static_cast<float>(chassisR);
+        const float yT = static_cast<float>(chassisT);
+        const float yB = static_cast<float>(chassisRectBot);
+        const float yA = static_cast<float>(chassisApexY);
+        const float xC = (xL + xR) * 0.5f;
+        const float r  = static_cast<float>(kChassisCornerR);
+
+        chassisPath_.clear();
+        chassisPath_.startNewSubPath(xL, yT + r);
+        chassisPath_.quadraticTo(xL, yT, xL + r, yT);
+        chassisPath_.lineTo(xR - r, yT);
+        chassisPath_.quadraticTo(xR, yT, xR, yT + r);
+        chassisPath_.lineTo(xR, yB);
+        chassisPath_.lineTo(xC, yA);
+        chassisPath_.lineTo(xL, yB);
+        chassisPath_.closeSubPath();
     }
 
-    const int rackTop = kHeaderH + kRackOuterPad;
-    const int rackBottom = getHeight() - kFinBandH - kRackOuterPad;
-    const int rackH = rackBottom - rackTop;
-    const int rackAvailableW = getWidth() - kRackOuterPad * 2 - kRackGap * (n - 1);
+    // ── Bands inside the chassis rect ───────────────────────────────
+    headerBounds_ = { chassisL, chassisT, chassisR - chassisL, kHeaderH };
 
-    int xCursor = kRackOuterPad;
-    for (int i = 0; i < n && i < static_cast<int>(sections_.size()); ++i)
+    const int scopeTop = chassisT + kHeaderH;
+    scopeBounds_  = { chassisL + 8, scopeTop + 8,
+                      (chassisR - chassisL) - 16, kScopeH - 16 };
+    scope_.setBounds(scopeBounds_);
+
+    const int macroTop = scopeTop + kScopeH;
+    layoutMacros({ chassisL, macroTop, chassisR - chassisL, kMacroH });
+
+    // ── Rack columns ────────────────────────────────────────────────
+    const int rackOuterLeft  = chassisL + kRackPadX;
+    const int rackOuterRight = chassisR - kRackPadX;
+    const int rackInnerW     = rackOuterRight - rackOuterLeft;
+    const int totalGap       = (kNCols - 1) * kColGap;
+    const int colW           = (rackInnerW - totalGap) / kNCols;
+    const int totalUsed      = colW * kNCols + totalGap;
+    const int leftMargin     = rackOuterLeft + (rackInnerW - totalUsed) / 2;
+
+    const int rectTop = macroTop + kMacroH + kRackTopGap;
+    const int rectBot = chassisRectBot - kRackBotGap;
+    const int rectH   = rectBot - rectTop;
+
+    for (int i = 0; i < kNCols && i < static_cast<int>(sections_.size()); ++i)
     {
-        const int w = static_cast<int>(rackAvailableW * weights[i] / wSum);
-        sections_[i].bounds = juce::Rectangle<int>(xCursor, rackTop, w, rackH);
-        layoutSection(sections_[i]);
-        xCursor += w + kRackGap;
+        auto& s = sections_[i];
+        const int x = leftMargin + i * (colW + kColGap);
+        s.rectBounds = { x, rectTop, colW, rectH };
+        s.titleBounds = { s.rectBounds.getX(),
+                          s.rectBounds.getY(),
+                          s.rectBounds.getWidth(),
+                          kColTitleH };
+        s.moduleIdBounds = { s.rectBounds.getX(),
+                             s.rectBounds.getBottom() - kModuleIdH,
+                             s.rectBounds.getWidth(),
+                             kModuleIdH };
+        layoutSection(s);
     }
 
-    // ── Header band ─────────────────────────────────────────────────
-    if (header_.size() >= 3)
-    {
-        const int hY = (kHeaderH - kHeaderKnobSize - kKnobLabelH) / 2;
-        const int hRight = getWidth() - 18;
-
-        // LIM AMT (rightmost)
-        auto& limAmt = *header_[2];
-        const int limAmtX = hRight - kHeaderKnobSize;
-        limAmt.slider->setBounds(limAmtX, hY, kHeaderKnobSize, kHeaderKnobSize);
-        limAmt.label->setBounds(limAmtX - 4, hY + kHeaderKnobSize - 2,
-                                kHeaderKnobSize + 8, kKnobLabelH);
-
-        // OUT (next-left)
-        auto& out = *header_[0];
-        const int outX = limAmtX - kHeaderKnobSize - 14;
-        out.slider->setBounds(outX, hY, kHeaderKnobSize, kHeaderKnobSize);
-        out.label->setBounds(outX - 4, hY + kHeaderKnobSize - 2,
-                             kHeaderKnobSize + 8, kKnobLabelH);
-
-        // LIM toggle (to the left of OUT)
-        auto& lim = *header_[1];
-        lim.button->setBounds(outX - 64, kHeaderH / 2 - 11, 56, 22);
-    }
+    layoutHeader(headerBounds_);
 }
 
 void FaceplatePanel::layoutSection(Section& s)
 {
-    if (s.bounds.isEmpty() || s.controls.empty()) return;
-    const auto inner = s.bounds.reduced(kColInnerPadX, 0)
-                                .withTrimmedTop(kColInnerPadTop)
-                                .withTrimmedBottom(kColInnerPadBot);
+    if (s.rectBounds.isEmpty() || s.controls.empty()) return;
+
+    auto inner = s.rectBounds.reduced(kInnerPadX, 0)
+                              .withTrimmedTop(kColTitleH)
+                              .withTrimmedBottom(kModuleIdH);
     if (inner.isEmpty()) return;
 
     int y = inner.getY();
@@ -408,7 +567,6 @@ void FaceplatePanel::layoutSection(Section& s)
 
         if (c.kind == CtlKind::Knob)
         {
-            // Disc takes top (cell.h - labelH); label below.
             const int knobH = cell.getHeight() - kKnobLabelH - 2;
             const int knobW = juce::jmin(cell.getWidth(), knobH);
             const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
@@ -418,22 +576,206 @@ void FaceplatePanel::layoutSection(Section& s)
         }
         else if (c.kind == CtlKind::Choice)
         {
-            // ComboBox + label centred in the row.
             const int comboH = 24;
-            const int comboW = juce::jmin(cell.getWidth() - 6, 90);
+            const int comboW = juce::jmin(cell.getWidth() - 6, 100);
             const int comboX = cell.getX() + (cell.getWidth() - comboW) / 2;
-            const int comboY = cell.getY() + (cell.getHeight() - comboH - kKnobLabelH - 2) / 2;
+            const int comboY = cell.getY()
+                             + (cell.getHeight() - comboH - kKnobLabelH - 2) / 2;
             c.combo->setBounds(comboX, comboY, comboW, comboH);
             c.label->setBounds(cell.getX(), comboY + comboH + 2,
                                cell.getWidth(), kKnobLabelH);
         }
-        else // Toggle
+        else
         {
             const int btnH = 22;
-            c.button->setBounds(cell.getX(), cell.getY() + (cell.getHeight() - btnH) / 2,
+            c.button->setBounds(cell.getX(),
+                                cell.getY() + (cell.getHeight() - btnH) / 2,
                                 cell.getWidth(), btnH);
         }
         y += kRowH;
+    }
+}
+
+void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
+{
+    constexpr int kPillH = 22;
+    constexpr int kLimW  = 50;
+    constexpr int kMntW  = 78;
+    constexpr int kTabW  = 64;
+    constexpr int kPad   = 8;
+
+    const int y = (area.getHeight() - kPillH) / 2 + area.getY();
+    int xCursor = area.getRight() - 14;
+
+    insertFxTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
+    xCursor -= kTabW + 1;
+    synthTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
+    xCursor -= kTabW + kPad;
+    mntPillBounds_ = { xCursor - kMntW, y, kMntW, kPillH };
+    xCursor -= kMntW + kPad;
+    if (limPill_)
+        limPill_->setBounds(xCursor - kLimW, y, kLimW, kPillH);
+}
+
+// ────────────────────────────────────────────────────────────────────
+//  Macro fan-out
+// ────────────────────────────────────────────────────────────────────
+
+void FaceplatePanel::writeParam(const juce::String& paramId, float plainValue)
+{
+    if (auto* p = apvts_.getParameter(paramId))
+    {
+        const float norm = p->convertTo0to1(plainValue);
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(norm);
+        p->endChangeGesture();
+    }
+}
+
+bool FaceplatePanel::isMuted(const Section& s) const noexcept
+{
+    if (s.mutePid.isEmpty()) return false;
+    if (auto* p = apvts_.getRawParameterValue(s.mutePid))
+        return p->load() > 0.5f;
+    return false;
+}
+
+void FaceplatePanel::toggleMute(const Section& s)
+{
+    if (s.mutePid.isEmpty()) return;
+    if (auto* p = apvts_.getParameter(s.mutePid))
+    {
+        const float cur = p->getValue();
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(cur > 0.5f ? 0.0f : 1.0f);
+        p->endChangeGesture();
+        repaint();
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────
+//  Mouse events — section title click toggles mute
+// ────────────────────────────────────────────────────────────────────
+
+void FaceplatePanel::mouseDown(const juce::MouseEvent& e)
+{
+    const auto pt = e.getPosition();
+    for (const auto& s : sections_)
+    {
+        if (s.mutePid.isEmpty()) continue;
+        if (s.titleBounds.contains(pt))
+        {
+            toggleMute(s);
+            return;
+        }
+    }
+}
+
+void FaceplatePanel::mouseMove(const juce::MouseEvent& e)
+{
+    const auto pt = e.getPosition();
+    for (const auto& s : sections_)
+    {
+        if (s.mutePid.isEmpty()) continue;
+        if (s.titleBounds.contains(pt))
+        {
+            setMouseCursor(juce::MouseCursor::PointingHandCursor);
+            return;
+        }
+    }
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+}
+
+void FaceplatePanel::wireMacroFanOut()
+{
+    // Each macro is a 0..1 slider that fans out to a small set of params.
+    // The mappings below were picked by ear for a kick — at v=0.5 the
+    // sound sits close to a default-ish kick; the macro then sweeps the
+    // target params through musically useful ranges.
+    //
+    // SliderAttachment isn't used for the 6 placeholder macros because no
+    // APVTS param exists for them yet; instead we drive APVTS params on
+    // change, and the bound underlying knobs reflect the new positions
+    // automatically (their SliderAttachments listen to host changes).
+
+    auto wire = [](juce::Slider* s, std::function<void(float)> fn)
+    {
+        if (!s) return;
+        s->onValueChange = [s, fn = std::move(fn)] { fn(static_cast<float>(s->getValue())); };
+    };
+
+    // PITCH — sweeps the pitch envelope start/end frequencies.
+    wire(macro_[0]->slider.get(), [this](float v)
+    {
+        writeParam(pid::pitchStart, juce::jmap(v, 60.0f, 280.0f));
+        writeParam(pid::pitchEnd,   juce::jmap(v, 25.0f,  90.0f));
+    });
+
+    // DECAY — overall length: amp decay (primary) + pitch envelope decay.
+    wire(macro_[1]->slider.get(), [this](float v)
+    {
+        writeParam(pid::ampDecay,   juce::jmap(v, 120.0f, 1500.0f));
+        writeParam(pid::pitchDecay, juce::jmap(v,  30.0f,  400.0f));
+    });
+
+    // PUNCH — click amount up, amp attack down (snappier).
+    wire(macro_[2]->slider.get(), [this](float v)
+    {
+        writeParam(pid::clickAmount, juce::jmap(v, 0.0f,  0.85f));
+        writeParam(pid::ampAttack,   juce::jmap(v, 5.0f,  0.2f));   // inverse
+    });
+
+    // WEIGHT — body up, LP opens up, HP shelves down.
+    wire(macro_[3]->slider.get(), [this](float v)
+    {
+        writeParam(pid::noiseAmount, juce::jmap(v,  0.05f, 0.6f));
+        writeParam(pid::filterLp,    juce::jmap(v,  800.0f, 6000.0f));
+        writeParam(pid::filterHp,    juce::jmap(v,  120.0f,  25.0f)); // inverse
+    });
+
+    // MOOD — drives both voice clip and rumble-bus saturator together.
+    wire(macro_[4]->slider.get(), [this](float v)
+    {
+        writeParam(pid::driveAmount,   juce::jmap(v, 0.0f, 0.80f));
+        writeParam(pid::fxDriveAmount, juce::jmap(v, 0.0f, 0.60f));
+    });
+
+    // SPACE — reverb + delay send levels together.
+    wire(macro_[5]->slider.get(), [this](float v)
+    {
+        writeParam(pid::reverbMix, juce::jmap(v, 0.0f, 0.65f));
+        writeParam(pid::delayMix,  juce::jmap(v, 0.0f, 0.45f));
+    });
+
+    // macro_[6] (OUT) is APVTS-bound directly — no fan-out needed.
+}
+
+void FaceplatePanel::layoutMacros(juce::Rectangle<int> area)
+{
+    // Aligns 1:1 with the FX columns below (same gap / colW math).
+    const int rackOuterLeft  = area.getX() + kRackPadX;
+    const int rackOuterRight = area.getRight() - kRackPadX;
+    const int rackInnerW     = rackOuterRight - rackOuterLeft;
+    const int totalGap       = (kNCols - 1) * kColGap;
+    const int colW           = (rackInnerW - totalGap) / kNCols;
+    const int totalUsed      = colW * kNCols + totalGap;
+    const int leftMargin     = rackOuterLeft + (rackInnerW - totalUsed) / 2;
+
+    const int knobH = kMacroKnobSize;
+    const int labelH = kKnobLabelH;
+    const int bandH = knobH + labelH + 4;
+    const int yTop = area.getY() + (area.getHeight() - bandH) / 2;
+
+    for (int i = 0; i < kNCols; ++i)
+    {
+        auto& m = macro_[i];
+        if (!m) continue;
+        const int cx = leftMargin + i * (colW + kColGap) + colW / 2;
+        const int knobX = cx - knobH / 2;
+        if (m->slider) m->slider->setBounds(knobX, yTop, knobH, knobH);
+        if (m->label)  m->label ->setBounds(leftMargin + i * (colW + kColGap),
+                                            yTop + knobH + 2,
+                                            colW, labelH);
     }
 }
 
