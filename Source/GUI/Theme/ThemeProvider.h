@@ -44,6 +44,14 @@ public:
     // Broadcasts on actual change.
     void setActive(const std::string& name);
 
+    // Reads the three bundled theme JSONs from BinaryData and registers them.
+    // Idempotent — calling multiple times is safe.
+    // After loading, active_ is refreshed from the registry so a JSON-loaded
+    // BANDW replaces the hard-coded constructor default. No broadcast — value
+    // is identical by design (BANDW JSON matches the constructor's hard-coded
+    // bandwPalette() byte-for-byte, verified in T4).
+    void loadBundledThemes();
+
     // All registered theme names, in insertion order.
     const std::vector<std::string>& registeredNames() const { return order_; }
 

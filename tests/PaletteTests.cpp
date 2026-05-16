@@ -10,6 +10,8 @@
 #include <juce_core/juce_core.h>
 #include <juce_events/juce_events.h>
 
+#include <algorithm>
+
 namespace
 {
 
@@ -165,10 +167,41 @@ public:
     }
 };
 
+class ThemeProviderBundledTest : public juce::UnitTest
+{
+public:
+    ThemeProviderBundledTest() : juce::UnitTest("ThemeProvider: bundled themes register") {}
+
+    void runTest() override
+    {
+        beginTest("after loadBundledThemes, all three names present");
+        bombo::ThemeProvider::get().loadBundledThemes();
+        const auto& names = bombo::ThemeProvider::get().registeredNames();
+
+        const bool hasBandw    = std::find(names.begin(), names.end(), std::string("bandw"))    != names.end();
+        const bool hasPhosphor = std::find(names.begin(), names.end(), std::string("phosphor")) != names.end();
+        const bool hasNightrun = std::find(names.begin(), names.end(), std::string("nightrun")) != names.end();
+
+        expect(hasBandw,    "bandw registered");
+        expect(hasPhosphor, "phosphor registered");
+        expect(hasNightrun, "nightrun registered");
+
+        beginTest("switching to phosphor changes accentAmber");
+        bombo::ThemeProvider::get().setActive("phosphor");
+        bombo::ThemeProvider::get().dispatchPendingMessages();
+        expect(bombo::ThemeProvider::current().accentAmber == juce::Colour { 0xFFCC8A00u },
+               "phosphor accent matches JSON");
+
+        // Restore for any later tests that depend on bandw being active.
+        bombo::ThemeProvider::get().setActive("bandw");
+    }
+};
+
 static PaletteDefaultsTest             paletteDefaultsTest;
 static ThemeProviderListenerTest       themeProviderListenerTest;
 static PersistentStateRoundTripTest    persistentStateRoundTripTest;
 static PersistentStateMissingFileTest  persistentStateMissingFileTest;
 static ThemeLoaderTest                 themeLoaderTest;
+static ThemeProviderBundledTest        themeProviderBundledTest;
 
 } // anonymous namespace

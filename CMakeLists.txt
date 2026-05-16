@@ -152,6 +152,7 @@ if(BOMBO_BUILD_TESTS)
         JUCE_USE_CURL=0)
     target_link_libraries(Bombo_Tests
         PRIVATE
+            BomboResources
             juce::juce_core
             juce::juce_data_structures
             juce::juce_events
