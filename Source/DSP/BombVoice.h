@@ -96,6 +96,22 @@ public:
         fadeoutGain_ = 1.0f;
         fadeoutStep_ = 0.0f;
         samplePos_   = 0;
+        // COLOR filter: one-pole LP applied to the full body sum (mid +
+        // click + noise + sample). Cutoff sweep matches NoiseGen's range
+        // direction (color=0 → dark, color=1 → bright) but starts higher
+        // so the kick body doesn't disappear at color=0. Coefficient cached
+        // at trigger time so the per-sample tick is just one MAC.
+        {
+            constexpr float tau_c = 6.28318530717958647692f;
+            const float color = t.noiseColor;
+            const float maxHz = sampleRate_ * 0.49f;
+            const float baseHz = 200.0f * std::pow(100.0f, color);
+            const float cutoffHz = baseHz < maxHz ? baseHz : maxHz;
+            const float rc = 1.0f / (tau_c * cutoffHz);
+            const float dt = 1.0f / sampleRate_;
+            bodyColorAlpha_ = dt / (rc + dt);
+            bodyColorZ_ = 0.0f;
+        }
 
         constexpr float halfPi = 1.57079632679489661923f;
         osc_.trigger(halfPi);
@@ -163,6 +179,14 @@ public:
             }
         }
 
+        // COLOR knob: one-pole LP across the full body sum so mid + click +
+        // sample all darken together with the noise. (NoiseGen still does
+        // its own coloring of the noise spectrum; this filter sits on top,
+        // unifying the perceived "tone" of the whole body section.)
+        const float bodyMix = mid + clickOut + noiseOut + sampleOut;
+        bodyColorZ_ = bodyColorZ_ + bodyColorAlpha_ * (bodyMix - bodyColorZ_);
+        if (std::fpclassify(bodyColorZ_) == FP_SUBNORMAL) bodyColorZ_ = 0.0f;
+
         // Apply Voice A / Voice B section mutes + A↔B balance (tent gain).
         // balance 0   → A only; 0.5 → both at unity; 1   → B only.
         const float bal = trig_.voiceBalance;
@@ -171,7 +195,7 @@ public:
         const float subPart  = trig_.voiceAMute ? 0.0f : (sub * aGain);
         const float bodyPart = trig_.voiceBMute
             ? 0.0f
-            : ((mid + clickOut + noiseOut + sampleOut) * bGain);
+            : (bodyColorZ_ * bGain);
         const float raw = subPart + bodyPart;
 
         // DRIVE column mute bypasses the per-voice clipper as well as the
@@ -211,6 +235,9 @@ private:
     float          lastClickCenterHz_ = -1.0f;
     float          fadeoutGain_ = 1.0f;
     float          fadeoutStep_ = 0.0f;
+    // COLOR (unified body LP) — cached at trigger time.
+    float          bodyColorAlpha_ = 1.0f;
+    float          bodyColorZ_     = 0.0f;
 };
 
 } // namespace bombo
