@@ -72,7 +72,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     {
         Section s;
         s.name = "VOICE A"; s.moduleId = "AMP-1"; s.mutePid = pid::voiceAMute;
-        s.accent = col::voice; s.labelOnBg = col::bone;
+        s.accent = col::voice(); s.labelOnBg = col::bone();
         addChoice(s, pid::waveform,   "WAVE",  s.labelOnBg);
         addKnob  (s, pid::pitchStart, "PITCH", s.labelOnBg);
         addKnob  (s, pid::pitchEnd,   "END",   s.labelOnBg);
@@ -83,7 +83,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     {
         Section s;
         s.name = "VOICE B"; s.moduleId = "OSS-1"; s.mutePid = pid::voiceBMute;
-        s.accent = col::voice; s.labelOnBg = col::bone;
+        s.accent = col::voice(); s.labelOnBg = col::bone();
         addKnob      (s, pid::ampAttack,   "ATK",    s.labelOnBg);
         addKnob      (s, pid::ampDecay,    "DEC",    s.labelOnBg);
         addKnob      (s, pid::clickAmount, "CLICK",  s.labelOnBg);
@@ -95,7 +95,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     {
         Section s;
         s.name = "DRIVE"; s.moduleId = "SAT-A"; s.mutePid = pid::driveMute;
-        s.accent = col::drive; s.labelOnBg = col::ink;
+        s.accent = col::drive(); s.labelOnBg = col::ink();
         addKnob  (s, pid::driveAmount,   "V.AMT",  s.labelOnBg);
         addChoice(s, pid::driveMode,     "V.MODE", s.labelOnBg);
         addKnob  (s, pid::fxDriveAmount, "B.AMT",  s.labelOnBg);
@@ -106,7 +106,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     {
         Section s;
         s.name = "DELAY"; s.moduleId = "DLY-1"; s.mutePid = pid::delayMute;
-        s.accent = col::delayC; s.labelOnBg = col::ink;
+        s.accent = col::delayC(); s.labelOnBg = col::ink();
         addKnob(s, pid::delayTime,     "TIME",  s.labelOnBg);
         addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg);
         addKnob(s, pid::delayDrift,    "DRIFT", s.labelOnBg);
@@ -117,7 +117,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     {
         Section s;
         s.name = "REVERB"; s.moduleId = "RVB-FDN"; s.mutePid = pid::reverbMute;
-        s.accent = col::reverb; s.labelOnBg = col::ink;
+        s.accent = col::reverb(); s.labelOnBg = col::ink();
         addKnob(s, pid::reverbSize,      "SIZE",  s.labelOnBg);
         addKnob(s, pid::reverbDecay,     "DECAY", s.labelOnBg);
         addKnob(s, pid::reverbDamp,      "DAMP",  s.labelOnBg);
@@ -129,7 +129,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     {
         Section s;
         s.name = "FILTER"; s.moduleId = "SVF-2P"; s.mutePid = pid::filterMute;
-        s.accent = col::filterC; s.labelOnBg = col::ink;
+        s.accent = col::filterC(); s.labelOnBg = col::ink();
         addKnob(s, pid::filterHp,    "HP",    s.labelOnBg);
         addKnob(s, pid::filterHpQ,   "HP Q",  s.labelOnBg);
         addKnob(s, pid::filterLp,    "LP",    s.labelOnBg);
@@ -140,7 +140,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     {
         Section s;
         s.name = "DUCK"; s.moduleId = "SC-CMP"; s.mutePid = pid::duckMute;
-        s.accent = col::duck; s.labelOnBg = col::ink;
+        s.accent = col::duck(); s.labelOnBg = col::ink();
         addKnob(s, pid::duckAtk,   "ATK",   s.labelOnBg);
         addKnob(s, pid::duckHold,  "HOLD",  s.labelOnBg);
         addKnob(s, pid::duckRel,   "REL",   s.labelOnBg);
@@ -149,13 +149,13 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     }
 
     // ── Macro row ───────────────────────────────────────────────────
-    macro_[0] = makePlaceholderKnob("PITCH",  col::boneDim);
-    macro_[1] = makePlaceholderKnob("DECAY",  col::boneDim);
-    macro_[2] = makePlaceholderKnob("PUNCH",  col::boneDim);
-    macro_[3] = makePlaceholderKnob("WEIGHT", col::boneDim);
-    macro_[4] = makePlaceholderKnob("MOOD",   col::boneDim);
-    macro_[5] = makePlaceholderKnob("SPACE",  col::boneDim);
-    macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::accentAmber, col::boneDim);
+    macro_[0] = makePlaceholderKnob("PITCH",  col::boneDim());
+    macro_[1] = makePlaceholderKnob("DECAY",  col::boneDim());
+    macro_[2] = makePlaceholderKnob("PUNCH",  col::boneDim());
+    macro_[3] = makePlaceholderKnob("WEIGHT", col::boneDim());
+    macro_[4] = makePlaceholderKnob("MOOD",   col::boneDim());
+    macro_[5] = makePlaceholderKnob("SPACE",  col::boneDim());
+    macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::accentAmber(), col::boneDim());
     for (auto& m : macro_)
     {
         if (m == nullptr) continue;
@@ -166,7 +166,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
 
     // ── LIM pill ────────────────────────────────────────────────────
     limPill_ = std::make_unique<juce::ToggleButton>("LIM");
-    limPill_->setColour(juce::ToggleButton::textColourId, col::bone);
+    limPill_->setColour(juce::ToggleButton::textColourId, col::bone());
     limPill_->setWantsKeyboardFocus(false);
     limPill_->setMouseClickGrabsKeyboardFocus(false);
     limAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -175,7 +175,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
 
     // ── Loop toggle (small "↻" pill) ────────────────────────────────
     loopBtn_ = std::make_unique<juce::ToggleButton>("LOOP");
-    loopBtn_->setColour(juce::ToggleButton::textColourId, col::bone);
+    loopBtn_->setColour(juce::ToggleButton::textColourId, col::bone());
     loopBtn_->setWantsKeyboardFocus(false);
     loopBtn_->setMouseClickGrabsKeyboardFocus(false);
     loopAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -208,7 +208,7 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
     c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
-    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap());
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
     c->label = std::make_unique<juce::Label>();
@@ -240,7 +240,7 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
     c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
-    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap());
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
 
@@ -340,7 +340,7 @@ FaceplatePanel::makePlaceholderKnob(const juce::String& displayName,
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
     c->slider->setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
-    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
+    c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap());
     c->slider->setRange(0.0, 1.0, 0.0);
     c->slider->setValue(0.5, juce::dontSendNotification);
     c->slider->setNumDecimalPlacesToDisplay(2);
@@ -382,14 +382,14 @@ void FaceplatePanel::paintChassis(juce::Graphics& g)
     if (chassisPath_.isEmpty()) return;
 
     // Chassis fill: vertical gradient so the bomb body has a hint of depth.
-    juce::ColourGradient grad(col::graphiteHi,
+    juce::ColourGradient grad(col::graphiteHi(),
                               static_cast<float>(getWidth()) * 0.5f,
                               static_cast<float>(chassisRectArea_.getY()),
-                              col::graphite,
+                              col::graphite(),
                               static_cast<float>(getWidth()) * 0.5f,
                               static_cast<float>(chassisApexY_),
                               false);
-    grad.addColour(0.78, col::graphite);
+    grad.addColour(0.78, col::graphite());
     g.setGradientFill(grad);
     g.fillPath(chassisPath_);
 }
@@ -407,13 +407,13 @@ void FaceplatePanel::paintChassisTail(juce::Graphics& g)
     const float y0 = static_cast<float>(chassisRectBottomY_);
     const float y1 = static_cast<float>(chassisApexY_);
 
-    juce::ColourGradient grad(col::drive.withAlpha(0.18f),  x0, 0.0f,
-                              col::duck .withAlpha(0.18f),  x1, 0.0f,
+    juce::ColourGradient grad(col::drive().withAlpha(0.18f),  x0, 0.0f,
+                              col::duck ().withAlpha(0.18f),  x1, 0.0f,
                               false);
-    grad.addColour(0.18, col::voice  .withAlpha(0.18f));
-    grad.addColour(0.36, col::delayC .withAlpha(0.18f));
-    grad.addColour(0.52, col::reverb .withAlpha(0.18f));
-    grad.addColour(0.70, col::filterC.withAlpha(0.18f));
+    grad.addColour(0.18, col::voice  ().withAlpha(0.18f));
+    grad.addColour(0.36, col::delayC ().withAlpha(0.18f));
+    grad.addColour(0.52, col::reverb ().withAlpha(0.18f));
+    grad.addColour(0.70, col::filterC().withAlpha(0.18f));
 
     g.saveState();
     g.reduceClipRegion(chassisPath_);
@@ -428,26 +428,26 @@ void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
     // the chassis path so the rounded corners stay crisp.
     g.saveState();
     g.reduceClipRegion(chassisPath_);
-    g.setColour(col::graphiteHi);
+    g.setColour(col::graphiteHi());
     g.fillRect(area);
     g.restoreState();
 
     // BOMBO logo.
-    g.setColour(col::bone);
+    g.setColour(col::bone());
     g.setFont(fonts::title(26.0f));
     g.drawText("BOMBO",
                area.withTrimmedLeft(20).removeFromLeft(160),
                juce::Justification::centredLeft);
 
     // Subtitle.
-    g.setColour(col::boneDim);
+    g.setColour(col::boneDim());
     g.setFont(fonts::label(10.5f));
     g.drawText("half kick  \xE2\x80\xA2  half BBS",
                area.withTrimmedLeft(180).withWidth(280),
                juce::Justification::centredLeft);
 
     // Hairline at bottom edge.
-    g.setColour(col::ink.withAlpha(0.7f));
+    g.setColour(col::ink().withAlpha(0.7f));
     g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
 
     // BPM display + Loop toggle are real components; they paint themselves.
@@ -455,18 +455,18 @@ void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
     // SYNTH / INSERT FX tab.
     {
         const auto sR = synthTabBounds_.toFloat();
-        g.setColour(col::accentAmber);
+        g.setColour(col::accentAmber());
         g.fillRoundedRectangle(sR, 4.0f);
-        g.setColour(col::ink);
+        g.setColour(col::ink());
         g.setFont(fonts::label(10.0f));
         g.drawText("SYNTH", synthTabBounds_, juce::Justification::centred);
 
         const auto fR = insertFxTabBounds_.toFloat();
-        g.setColour(col::graphite);
+        g.setColour(col::graphite());
         g.fillRoundedRectangle(fR, 4.0f);
-        g.setColour(col::boneDim);
+        g.setColour(col::boneDim());
         g.drawRoundedRectangle(fR.reduced(0.5f), 4.0f, 1.0f);
-        g.setColour(col::boneDim);
+        g.setColour(col::boneDim());
         g.drawText("INSERT FX", insertFxTabBounds_, juce::Justification::centred);
     }
 }
@@ -512,16 +512,16 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
                                                    kColTitleH - kColAccentH);
         g.setColour(bodyColour.darker(0.45f));
         g.fillRect(accentStrip);
-        g.setColour(muted ? col::graphite : col::ink);
+        g.setColour(muted ? col::graphite() : col::ink());
         g.fillRect(titleBar);
-        g.setColour(muted ? col::boneDim : col::bone);
+        g.setColour(muted ? col::boneDim() : col::bone());
         g.setFont(fonts::title(11.5f));
         g.drawText(s.name, titleBar, juce::Justification::centred);
         // Strike-through line when muted — unambiguous bypass cue.
         if (muted)
         {
             const float midY = titleBar.getCentreY();
-            g.setColour(col::boneDim.withAlpha(0.55f));
+            g.setColour(col::boneDim().withAlpha(0.55f));
             g.drawLine(titleBar.getX() + 8.0f, midY,
                        titleBar.getRight() - 8.0f, midY, 1.0f);
         }
@@ -529,15 +529,15 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
 
     // Module ID strip at the bottom of the column rect.
     {
-        g.setColour(col::ink.withAlpha(0.55f));
+        g.setColour(col::ink().withAlpha(0.55f));
         g.fillRect(s.moduleIdBounds);
-        g.setColour(col::bone.withAlpha(0.45f));
+        g.setColour(col::bone().withAlpha(0.45f));
         g.setFont(fonts::label(8.5f));
         g.drawText(s.moduleId, s.moduleIdBounds, juce::Justification::centred);
     }
 
     // Thin column outline.
-    g.setColour(col::ink.withAlpha(0.50f));
+    g.setColour(col::ink().withAlpha(0.50f));
     g.drawRect(s.rectBounds, 1);
 }
 

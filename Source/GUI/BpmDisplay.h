@@ -48,10 +48,10 @@ public:
         const float radius = r.getHeight() * 0.5f;
         const bool hostLocked = hostBpmDisplayed_ > 0.5f;
 
-        g.setColour(col::graphite);
+        g.setColour(col::graphite());
         g.fillRoundedRectangle(r, radius);
-        g.setColour(hostLocked ? col::accentAmber.withAlpha(0.55f)
-                                : col::boneDim.withAlpha(0.65f));
+        g.setColour(hostLocked ? col::accentAmber().withAlpha(0.55f)
+                                : col::boneDim().withAlpha(0.65f));
         g.drawRoundedRectangle(r.reduced(0.5f), radius, 1.0f);
 
         // "BPM <value>" — host-locked rows draw amber-tinted so the user
@@ -60,13 +60,13 @@ public:
             hostLocked ? hostBpmDisplayed_ : static_cast<float>(slider_.getValue())));
         const juce::String label = juce::String(displayed).paddedLeft(' ', 3);
 
-        g.setColour(hostLocked ? col::accentAmber : col::bone);
+        g.setColour(hostLocked ? col::accentAmber() : col::bone());
         g.setFont(fonts::value(10.0f));
         g.drawText(label,
                    r.withTrimmedRight(r.getWidth() * 0.42f),
                    juce::Justification::centredRight);
 
-        g.setColour(col::boneDim);
+        g.setColour(col::boneDim());
         g.setFont(fonts::label(8.5f));
         g.drawText("BPM",
                    r.withTrimmedLeft(r.getWidth() * 0.62f).translated(-2.0f, 0.0f),
@@ -129,11 +129,11 @@ private:
         editor_->setBorder({ 0, 0, 0, 0 });
         editor_->setIndents(4, 0);
         editor_->setJustification(juce::Justification::centred);
-        editor_->setColour(juce::TextEditor::backgroundColourId, col::graphite);
-        editor_->setColour(juce::TextEditor::textColourId,       col::bone);
-        editor_->setColour(juce::TextEditor::outlineColourId,    col::accentAmber);
-        editor_->setColour(juce::TextEditor::focusedOutlineColourId, col::accentAmber);
-        editor_->setColour(juce::TextEditor::highlightColourId,  col::accentAmber.withAlpha(0.35f));
+        editor_->setColour(juce::TextEditor::backgroundColourId, col::graphite());
+        editor_->setColour(juce::TextEditor::textColourId,       col::bone());
+        editor_->setColour(juce::TextEditor::outlineColourId,    col::accentAmber());
+        editor_->setColour(juce::TextEditor::focusedOutlineColourId, col::accentAmber());
+        editor_->setColour(juce::TextEditor::highlightColourId,  col::accentAmber().withAlpha(0.35f));
         editor_->setFont(fonts::value(10.5f));
         editor_->setInputRestrictions(3, "0123456789"); // 3 digits, integer
         editor_->setText(juce::String(static_cast<int>(std::round(slider_.getValue()))),
