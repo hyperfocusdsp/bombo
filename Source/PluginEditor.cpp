@@ -33,6 +33,41 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         c->setFixedAspectRatio(kAspect);
     setWantsKeyboardFocus(true);
 
+    // First-launch fit: defer until the message loop is idle. Setting
+    // size synchronously in the constructor races with StandaloneFilter-
+    // Window's window-mapping negotiation (which bounces the editor
+    // between our target and setResizeLimits' min for 10+ cycles before
+    // settling). callAsync runs after that's done so the size sticks.
+    // Picks the biggest connected display by area (laptop+external →
+    // external is almost always where you work). Capped by min/max.
+    // JUCE's StandalonePluginHolder persists window-X/Y on close;
+    // window-W/H currently isn't persisted by JUCE, so this also runs
+    // on every launch — harmless since it always lands at the same fit.
+    juce::MessageManager::callAsync(
+        [=, safe = juce::Component::SafePointer<BomboEditor>(this)]() mutable
+        {
+            if (safe == nullptr) return;
+            const auto& displays = juce::Desktop::getInstance().getDisplays().displays;
+            const juce::Displays::Display* biggest = nullptr;
+            for (const auto& d : displays)
+            {
+                if (biggest == nullptr
+                    || (d.userArea.getWidth() * d.userArea.getHeight())
+                       > (biggest->userArea.getWidth() * biggest->userArea.getHeight()))
+                    biggest = &d;
+            }
+            if (biggest == nullptr) return;
+            const auto area = biggest->userArea;
+            constexpr int kChromePad = 60;
+            const double padW = juce::jmax(1, area.getWidth()  - kChromePad);
+            const double padH = juce::jmax(1, area.getHeight() - kChromePad);
+            const double scale = std::min(padW / kDesignW, padH / kDesignH);
+            int w = static_cast<int>(std::round(kDesignW * scale));
+            w = juce::jlimit(kMinWidth, kMaxWidth, w);
+            const int h = static_cast<int>(std::round(w / kAspect));
+            safe->setSize(w, h);
+        });
+
     // ── Standalone-only: enable every available MIDI input on first
     //    launch. JUCE's StandalonePluginHolder defaults MIDI inputs
     //    off — users have had to dig through Options → Audio/MIDI
