@@ -7,6 +7,7 @@
 #include "Parameters.h"
 #include "DSP/BombVoice.h"
 #include "DSP/RumbleChain.h"
+#include "GUI/WaveBuffer.h"
 
 class BomboProcessor : public juce::AudioProcessor
 {
@@ -45,6 +46,10 @@ public:
     // Atomic so the audio thread can swap(0) without a lock. Capped at
     // kNumVoices per buffer in processBlock.
     void triggerFromKeyboard() noexcept { keyboardTriggers_.fetch_add(1, std::memory_order_relaxed); }
+
+    // Post-master scope feed. Editor pulls from this at 30 Hz to draw the
+    // hero scope strip. Producer side is RT-safe.
+    const bombo::WaveBuffer& waveBuffer() const noexcept { return waveBuffer_; }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -110,6 +115,11 @@ private:
     juce::AudioParameterFloat*  pDuckDepth = nullptr;
     juce::AudioParameterBool*   pLimiterOn = nullptr;
     juce::AudioParameterFloat*  pLimiterAmount = nullptr;
+    juce::AudioParameterBool*   pDriveMute  = nullptr;
+    juce::AudioParameterBool*   pDelayMute  = nullptr;
+    juce::AudioParameterBool*   pReverbMute = nullptr;
+    juce::AudioParameterBool*   pFilterMute = nullptr;
+    juce::AudioParameterBool*   pDuckMute   = nullptr;
 
     bombo::ChainParams buildChainParamsFromApvts() const noexcept;
 
@@ -124,6 +134,8 @@ private:
     bombo::ChainParams chainParams_{}; // Phase 1b: defaults only; APVTS wiring lands in Phase 2.
 
     std::atomic<int> keyboardTriggers_{0};
+
+    bombo::WaveBuffer waveBuffer_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboProcessor)
 };
