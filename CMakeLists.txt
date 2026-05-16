@@ -92,3 +92,28 @@ target_link_libraries(Bombo
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags)
+
+# ── DSP unit tests ────────────────────────────────────────────────
+# JUCE UnitTestRunner. Builds a console exe that runs every registered
+# UnitTest subclass; ctest treats nonzero exit as failure.
+option(BOMBO_BUILD_TESTS "Build Bombo DSP unit tests" ON)
+if(BOMBO_BUILD_TESTS)
+    enable_testing()
+    juce_add_console_app(Bombo_Tests
+        PRODUCT_NAME "Bombo_Tests")
+    target_sources(Bombo_Tests PRIVATE tests/RunTests.cpp)
+    target_include_directories(Bombo_Tests PRIVATE Source)
+    target_compile_definitions(Bombo_Tests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0)
+    target_link_libraries(Bombo_Tests
+        PRIVATE
+            juce::juce_core
+            juce::juce_events
+            juce::juce_dsp
+            juce::juce_audio_basics
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_lto_flags)
+    add_test(NAME bombo_unit_tests COMMAND Bombo_Tests)
+endif()

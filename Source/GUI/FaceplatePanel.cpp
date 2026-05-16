@@ -11,6 +11,7 @@ namespace
 constexpr int kChassisW = 1320;
 constexpr int kChassisH = 950;
 constexpr int kHeaderH = 86;
+constexpr int kFinBandH = 110;   // reserved at bottom for the bomb-tail fin
 constexpr int kSectionGap = 12;
 constexpr int kSectionPadTop = 30;
 constexpr int kSectionPadBottom = 14;
@@ -245,6 +246,56 @@ void FaceplatePanel::paint(juce::Graphics& g)
                            .translated(0, 2),
                    juce::Justification::centred);
     }
+
+    // Bomb-tail fin band — the smooth-diagonal V apex visual flourish at
+    // the bottom of the chassis. Five diagonal polys converging towards
+    // the center, picking up section-color tints from the FX rack
+    // directly above so it reads as a continuation of the rack. The full
+    // transparent-window pass (where the fin would let the host's BG
+    // shine through) is parked — solid fill here still reads as the
+    // identity at zero host-compat risk.
+    const int finTop = sections_.empty() ? getHeight() - 24
+                                          : sections_.back().bounds.getBottom() + 8;
+    if (finTop < getHeight() - 4)
+    {
+        auto fin = juce::Rectangle<int>(0, finTop, getWidth(), getHeight() - finTop);
+        g.setColour(col::ink);
+        g.fillRect(fin);
+
+        // Pick up the FX rack column colours (rows 3..7 of sections_).
+        const juce::Colour finColours[5] = {
+            col::drive, col::filterC, col::delayC, col::reverb, col::duck
+        };
+        const int colCount = 5;
+        const float w = static_cast<float>(getWidth());
+        const float h = static_cast<float>(fin.getHeight());
+        const float apexX = w * 0.5f;
+        const float apexY = static_cast<float>(fin.getBottom() - 4);
+        const float topY = static_cast<float>(fin.getY());
+
+        for (int i = 0; i < colCount; ++i)
+        {
+            const float x0 = w * static_cast<float>(i) / static_cast<float>(colCount);
+            const float x1 = w * static_cast<float>(i + 1) / static_cast<float>(colCount);
+            // Diagonal poly leaning toward the apex.
+            juce::Path p;
+            p.startNewSubPath(x0, topY);
+            p.lineTo(x1, topY);
+            const float tipX = juce::jmap(static_cast<float>(i + 0.5f) / colCount,
+                                          0.0f, 1.0f, w * 0.18f, w * 0.82f);
+            const float tipBlend = 0.55f + 0.45f * (1.0f - std::abs(tipX - apexX) / (w * 0.5f));
+            p.quadraticTo(juce::jmap(0.5f, x0, x1),
+                          topY + h * tipBlend,
+                          apexX, apexY);
+            p.closeSubPath();
+            g.setColour(finColours[i].withAlpha(0.55f));
+            g.fillPath(p);
+        }
+
+        // Crisp top edge so the fin reads as a separate panel.
+        g.setColour(col::bone.withAlpha(0.18f));
+        g.drawHorizontalLine(fin.getY(), 0.0f, w);
+    }
 }
 
 void FaceplatePanel::resized()
@@ -254,7 +305,7 @@ void FaceplatePanel::resized()
     //   Row 1: VOICE A + VOICE B + MID (top half, 3 wide panels)
     //   Row 2: DRIVE + FILTER + DELAY + REVERB + DUCK (FX rack)
     const int contentTop = kHeaderH + kSectionGap;
-    const int contentBottom = getHeight() - kSectionGap;
+    const int contentBottom = getHeight() - kFinBandH - kSectionGap;
     const int rowH = (contentBottom - contentTop - kSectionGap) / 2;
 
     // Row 1 — voice (3 sections)

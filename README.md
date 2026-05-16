@@ -22,10 +22,20 @@ KVRDC 2026 entry, target submission **July 5, 2026**. Active rewrite from nih-pl
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
-# Install (Linux)
-rm -rf ~/.vst3/Bombo.vst3
-cp -r build/Bombo_artefacts/Release/VST3/Bombo.vst3 ~/.vst3/
+# Install
+./tools/install-linux.sh        # Linux
+# ./tools/install-macos.sh      # macOS (ad-hoc signed, no Apple Dev)
+# tools\install-windows.ps1     # Windows
 
 # Standalone
 ./build/Bombo_artefacts/Release/Standalone/Bombo
 ```
+
+## Test
+
+```bash
+cmake --build build --target Bombo_Tests
+ctest --test-dir build --output-on-failure
+```
+
+See `TESTING.md` for the full sanity-check checklist + how to A/B against the Rust archive.
