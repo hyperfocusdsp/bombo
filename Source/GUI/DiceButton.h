@@ -38,9 +38,9 @@ public:
         const bool hot = isMouseOver(true);
 
         // Body — rounded square. Amber when hovered, bone-on-graphite at rest.
-        g.setColour(hot ? col::accentAmber : col::graphite);
+        g.setColour(hot ? col::accentAmber() : col::graphite());
         g.fillRoundedRectangle(bounds, 3.5f);
-        g.setColour(hot ? col::ink : col::boneDim.withAlpha(0.75f));
+        g.setColour(hot ? col::ink() : col::boneDim().withAlpha(0.75f));
         g.drawRoundedRectangle(bounds.reduced(0.5f), 3.5f, 1.0f);
 
         // Pips — classic die face pattern on a 3×3 grid (with corner +
@@ -56,7 +56,7 @@ public:
             g.fillEllipse(x - pipR, y - pipR, pipR * 2.0f, pipR * 2.0f);
         };
 
-        g.setColour(hot ? col::ink : col::bone.withAlpha(0.92f));
+        g.setColour(hot ? col::ink() : col::bone().withAlpha(0.92f));
         switch (face_)
         {
             case 1:

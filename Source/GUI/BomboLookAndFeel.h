@@ -21,27 +21,27 @@ class BomboLookAndFeel : public juce::LookAndFeel_V4
 public:
     BomboLookAndFeel()
     {
-        setColour(juce::Slider::backgroundColourId,        col::graphite);
-        setColour(juce::Slider::rotarySliderFillColourId,  col::bone);
+        setColour(juce::Slider::backgroundColourId,        col::graphite());
+        setColour(juce::Slider::rotarySliderFillColourId,  col::bone());
         // Default cap = dark plastic. Per-knob override is supported (the
         // OUT macro sets this to col::accentAmber).
-        setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap);
-        setColour(juce::Slider::thumbColourId,             col::bone);
+        setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap());
+        setColour(juce::Slider::thumbColourId,             col::bone());
         setColour(juce::Slider::textBoxOutlineColourId,    juce::Colour(0));
         setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0));
-        setColour(juce::Slider::textBoxTextColourId,       col::boneDim);
-        setColour(juce::Label::textColourId,               col::bone);
-        setColour(juce::ComboBox::backgroundColourId,      col::ink);
-        setColour(juce::ComboBox::textColourId,            col::bone);
-        setColour(juce::ComboBox::outlineColourId,         col::graphiteHi);
-        setColour(juce::ComboBox::arrowColourId,           col::boneDim);
-        setColour(juce::PopupMenu::backgroundColourId,     col::graphiteHi);
-        setColour(juce::PopupMenu::textColourId,           col::bone);
-        setColour(juce::PopupMenu::highlightedBackgroundColourId, col::accentAmber);
-        setColour(juce::PopupMenu::highlightedTextColourId, col::ink);
-        setColour(juce::ToggleButton::textColourId,        col::bone);
-        setColour(juce::ToggleButton::tickColourId,        col::accentAmber);
-        setColour(juce::ToggleButton::tickDisabledColourId, col::boneDim);
+        setColour(juce::Slider::textBoxTextColourId,       col::boneDim());
+        setColour(juce::Label::textColourId,               col::bone());
+        setColour(juce::ComboBox::backgroundColourId,      col::ink());
+        setColour(juce::ComboBox::textColourId,            col::bone());
+        setColour(juce::ComboBox::outlineColourId,         col::graphiteHi());
+        setColour(juce::ComboBox::arrowColourId,           col::boneDim());
+        setColour(juce::PopupMenu::backgroundColourId,     col::graphiteHi());
+        setColour(juce::PopupMenu::textColourId,           col::bone());
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, col::accentAmber());
+        setColour(juce::PopupMenu::highlightedTextColourId, col::ink());
+        setColour(juce::ToggleButton::textColourId,        col::bone());
+        setColour(juce::ToggleButton::tickColourId,        col::accentAmber());
+        setColour(juce::ToggleButton::tickDisabledColourId, col::boneDim());
     }
 
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
@@ -61,8 +61,8 @@ public:
         // Cap colour: dark by default, amber for the OUT macro.
         const auto core = slider.findColour(juce::Slider::rotarySliderOutlineColourId);
         const bool capIsDark = core.getPerceivedBrightness() < 0.5f;
-        const auto indicatorColour = capIsDark ? col::bone : col::ink;
-        const auto valueColour     = capIsDark ? col::bone : col::ink;
+        const auto indicatorColour = capIsDark ? col::bone() : col::ink();
+        const auto valueColour     = capIsDark ? col::bone() : col::ink();
 
         // 1. Mounting recess (offset drop shadow).
         g.setColour(juce::Colour(0xFF000000).withAlpha(0.35f));
@@ -73,18 +73,18 @@ public:
                       (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
 
         // 2. Rubber grip — dark with subtle top highlight.
-        g.setColour(col::knobRubber);
+        g.setColour(col::knobRubber());
         g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
         g.setColour(juce::Colour(0xFF24'24'26u));
         const float hlR = radius * 0.95f;
         g.fillEllipse(cx - hlR, cy - radius - radius * 0.05f, hlR * 2.0f, hlR * 2.0f);
-        g.setColour(col::knobRubber);
+        g.setColour(col::knobRubber());
         g.fillEllipse(cx - radius * 0.88f, cy - radius * 0.88f,
                       radius * 0.88f * 2.0f, radius * 0.88f * 2.0f);
 
         // 3. Metal bevel ring between rubber and the cap core.
         const float coreOuterR = radius * 0.80f;
-        g.setColour(col::knobBevel);
+        g.setColour(col::knobBevel());
         g.fillEllipse(cx - coreOuterR - 1.5f, cy - coreOuterR - 1.5f,
                       (coreOuterR + 1.5f) * 2.0f, (coreOuterR + 1.5f) * 2.0f);
 
@@ -143,8 +143,8 @@ public:
                                - juce::MathConstants<float>::halfPi;
                 const float cc = std::cos(ta);
                 const float ss = std::sin(ta);
-                g.setColour(i == activeIdx ? col::bone
-                                            : col::bone.withAlpha(0.45f));
+                g.setColour(i == activeIdx ? col::bone()
+                                            : col::bone().withAlpha(0.45f));
                 g.drawLine(cx + cc * tickInR,  cy + ss * tickInR,
                            cx + cc * tickOutR, cy + ss * tickOutR,
                            i == activeIdx ? 2.0f : 1.4f);
@@ -161,7 +161,7 @@ public:
                                - juce::MathConstants<float>::halfPi;
                 const float dx = cx + std::cos(ta) * dotRingR;
                 const float dy = cy + std::sin(ta) * dotRingR;
-                g.setColour(col::bone.withAlpha(0.60f));
+                g.setColour(col::bone().withAlpha(0.60f));
                 g.fillEllipse(dx - dotR, dy - dotR, dotR * 2.0f, dotR * 2.0f);
             }
         }

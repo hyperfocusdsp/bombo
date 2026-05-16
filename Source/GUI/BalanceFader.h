@@ -49,20 +49,20 @@ public:
                       (radius + 1.0f) * 2.0f, (radius + 1.0f) * 2.0f);
 
         // Rubber outer.
-        g.setColour(col::knobRubber);
+        g.setColour(col::knobRubber());
         g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
 
         // Cap core — slightly amber-tinted so the user can spot it as the
         // "global between-A-and-B" control, not a regular column knob.
         const float coreR = radius * 0.72f;
-        const auto coreTop = col::knobCap.brighter(0.12f);
-        const auto coreBot = col::knobCap.darker(0.22f);
+        const auto coreTop = col::knobCap().brighter(0.12f);
+        const auto coreBot = col::knobCap().darker(0.22f);
         g.setGradientFill(juce::ColourGradient(coreTop, cx, cy - coreR,
                                                coreBot, cx, cy + coreR, false));
         g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
 
         const bool hot = isMouseOver(true);
-        g.setColour(hot ? col::accentAmber.withAlpha(0.85f)
+        g.setColour(hot ? col::accentAmber().withAlpha(0.85f)
                         : juce::Colour::fromRGBA(0, 0, 0, 0x55));
         g.drawEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f, 1.0f);
 
@@ -89,11 +89,11 @@ public:
         stem.lineTo(cx + ic * stemInR  - perpC * stemW * 0.5f,
                     cy + is * stemInR  - perpS * stemW * 0.5f);
         stem.closeSubPath();
-        g.setColour(col::bone);
+        g.setColour(col::bone());
         g.fillPath(stem);
 
         // "A·B" cap label.
-        g.setColour(col::bone.withAlpha(0.85f));
+        g.setColour(col::bone().withAlpha(0.85f));
         g.setFont(fonts::value(juce::jlimit(7.0f, 9.0f, coreR * 0.55f)));
         g.drawText("A·B",
                    juce::Rectangle<float>(cx - coreR, cy - coreR,
