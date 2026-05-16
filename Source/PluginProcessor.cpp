@@ -65,6 +65,28 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     for (auto& slot : pending_) { slot.live = false; slot.samplesUntil = 0; }
     activeVoice_ = 0;
 
+    chain_.setSampleRate(currentSampleRate_);
+    chain_.reset();
+
+    // Phase-1b chain defaults — audible rumble without UI control yet.
+    // APVTS wiring for these lands in Phase 2.
+    chainParams_ = bombo::ChainParams{};
+    chainParams_.delayMs = 380.0f;
+    chainParams_.delayFeedback = 0.55f;
+    chainParams_.delayDrift = 0.25f;
+    chainParams_.delayMorph = 0.4f;
+    chainParams_.delayMix = 0.25f;
+    chainParams_.reverbSize = 0.55f;
+    chainParams_.reverbDecay = 0.70f;
+    chainParams_.reverbDamp = 0.45f;
+    chainParams_.reverbDiffusion = 0.6f;
+    chainParams_.reverbPredelayMs = 30.0f;
+    chainParams_.reverbMix = 0.35f;
+    chainParams_.duckAttackMs = 2.0f;
+    chainParams_.duckReleaseMs = 220.0f;
+    chainParams_.duckDepth = 0.6f;
+    chain_.update(chainParams_);
+
     masterGainSmoothed.reset(sampleRate, 0.010);
     masterGainSmoothed.setCurrentAndTargetValue(
         juce::Decibels::decibelsToGain(pMasterOut->get()));
@@ -155,6 +177,8 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     auto* left  = numChannels > 0 ? buffer.getWritePointer(0) : nullptr;
     auto* right = numChannels > 1 ? buffer.getWritePointer(1) : nullptr;
 
+    chain_.update(chainParams_);
+
     for (int i = 0; i < numSamples; ++i)
     {
         const int nFired = tickPending();
@@ -162,13 +186,15 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         {
             stealVoice();
             voices_[activeVoice_].trigger(trig);
+            chain_.killTail();
         }
 
         float dry = 0.0f;
         for (auto& v : voices_) dry += v.tick();
 
+        const float wet = chain_.process(dry);
         const float g = masterGainSmoothed.getNextValue();
-        const float out = dry * g;
+        const float out = wet * g;
 
         if (left)  left[i]  = out;
         if (right) right[i] = out;
