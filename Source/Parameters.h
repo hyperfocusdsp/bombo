@@ -32,6 +32,38 @@ namespace pid
     inline constexpr const char* driveAmount     = "drive_amount";
     inline constexpr const char* driveMode       = "drive_mode";
     inline constexpr const char* driftAmount     = "drift_amount";
+
+    // ── Rumble FX chain ─────────────────────────────────────────────
+    // DRIVE (a separate stage from per-voice drive — sits on the rumble bus).
+    inline constexpr const char* fxDriveAmount   = "fx_drive_amount";
+    inline constexpr const char* fxDriveMode     = "fx_drive_mode";
+    inline constexpr const char* fxDriveMix      = "fx_drive_mix";
+    // FILTER
+    inline constexpr const char* filterHp        = "filter_hp";
+    inline constexpr const char* filterHpQ       = "filter_hp_q";
+    inline constexpr const char* filterLp        = "filter_lp";
+    inline constexpr const char* filterLpQ       = "filter_lp_q";
+    inline constexpr const char* filterColor     = "filter_color";
+    // DELAY
+    inline constexpr const char* delayTime       = "delay_time";
+    inline constexpr const char* delayFeedback   = "delay_feedback";
+    inline constexpr const char* delayDrift      = "delay_drift";
+    inline constexpr const char* delayMorph      = "delay_morph";
+    inline constexpr const char* delayMix        = "delay_mix";
+    // REVERB
+    inline constexpr const char* reverbSize      = "reverb_size";
+    inline constexpr const char* reverbDecay     = "reverb_decay";
+    inline constexpr const char* reverbDamp      = "reverb_damp";
+    inline constexpr const char* reverbDiffusion = "reverb_diffusion";
+    inline constexpr const char* reverbPredelay  = "reverb_predelay";
+    inline constexpr const char* reverbMix       = "reverb_mix";
+    // DUCK
+    inline constexpr const char* duckAtk         = "duck_atk";
+    inline constexpr const char* duckRel         = "duck_rel";
+    inline constexpr const char* duckDepth       = "duck_depth";
+    // LIMITER
+    inline constexpr const char* limiterOn       = "limiter_on";
+    inline constexpr const char* limiterAmount   = "limiter_amount";
 }
 
 inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
@@ -107,6 +139,62 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::driftAmount, 1},
         "Drift", Range(0.0f, 1.0f, 0.001f), 0.0f, pctFormat));
+
+    // ── Rumble FX chain ─────────────────────────────────────────────
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::fxDriveAmount, 1},
+        "FX Drive", Range(0.0f, 1.0f, 0.001f), 0.0f, pctFormat));
+    p.push_back(std::make_unique<Choice>(juce::ParameterID{pid::fxDriveMode, 1},
+        "FX Drive Mode", juce::StringArray{"Off", "Tanh", "Diode", "Cubic"},
+        VC_TANH));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::fxDriveMix, 1},
+        "FX Drive Mix", Range(0.0f, 1.0f, 0.001f), 1.0f, pctFormat));
+
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::filterHp, 1},
+        "HP Freq", skewRange(20.0f, 2000.0f, 0.4f), 30.0f, hzFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::filterHpQ, 1},
+        "HP Q", Range(0.5f, 3.0f, 0.01f), 0.707f, FAttr()));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::filterLp, 1},
+        "LP Freq", skewRange(200.0f, 18000.0f, 0.4f), 4500.0f, hzFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::filterLpQ, 1},
+        "LP Q", Range(0.5f, 3.0f, 0.01f), 0.707f, FAttr()));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::filterColor, 1},
+        "Filter Color", Range(0.0f, 1.0f, 0.001f), 0.0f, pctFormat));
+
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayTime, 1},
+        "Delay Time", skewRange(1.0f, 1000.0f, 0.4f), 380.0f, msFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayFeedback, 1},
+        "Delay Fbk", Range(0.0f, 0.92f, 0.001f), 0.55f, pctFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayDrift, 1},
+        "Delay Drift", Range(0.0f, 1.0f, 0.001f), 0.25f, pctFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMorph, 1},
+        "Delay Tone", Range(0.0f, 1.0f, 0.001f), 0.4f, pctFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMix, 1},
+        "Delay Mix", Range(0.0f, 1.0f, 0.001f), 0.25f, pctFormat));
+
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbSize, 1},
+        "Reverb Size", Range(0.0f, 1.0f, 0.001f), 0.55f, pctFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbDecay, 1},
+        "Reverb Decay", Range(0.0f, 1.0f, 0.001f), 0.70f, pctFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbDamp, 1},
+        "Reverb Damp", Range(0.0f, 1.0f, 0.001f), 0.45f, pctFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbDiffusion, 1},
+        "Reverb Diffusion", Range(0.0f, 1.0f, 0.001f), 0.6f, pctFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbPredelay, 1},
+        "Reverb Predelay", skewRange(0.0f, 500.0f, 0.4f), 30.0f, msFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbMix, 1},
+        "Reverb Mix", Range(0.0f, 1.0f, 0.001f), 0.35f, pctFormat));
+
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckAtk, 1},
+        "Duck Atk", skewRange(0.1f, 50.0f, 0.4f), 2.0f, msFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckRel, 1},
+        "Duck Rel", skewRange(10.0f, 500.0f, 0.4f), 220.0f, msFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckDepth, 1},
+        "Duck Depth", Range(0.0f, 1.0f, 0.001f), 0.6f, pctFormat));
+
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::limiterOn, 1}, "Limiter On", true));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::limiterAmount, 1},
+        "Limiter Amount", Range(0.0f, 1.0f, 0.001f), 0.5f, pctFormat));
 
     return { p.begin(), p.end() };
 }

@@ -79,6 +79,34 @@ private:
     juce::AudioParameterChoice* pDriveMode = nullptr;
     juce::AudioParameterFloat*  pDriftAmount = nullptr;
 
+    // Rumble FX chain params (Phase 2).
+    juce::AudioParameterFloat*  pFxDriveAmount = nullptr;
+    juce::AudioParameterChoice* pFxDriveMode = nullptr;
+    juce::AudioParameterFloat*  pFxDriveMix = nullptr;
+    juce::AudioParameterFloat*  pFilterHp = nullptr;
+    juce::AudioParameterFloat*  pFilterHpQ = nullptr;
+    juce::AudioParameterFloat*  pFilterLp = nullptr;
+    juce::AudioParameterFloat*  pFilterLpQ = nullptr;
+    juce::AudioParameterFloat*  pFilterColor = nullptr;
+    juce::AudioParameterFloat*  pDelayTime = nullptr;
+    juce::AudioParameterFloat*  pDelayFeedback = nullptr;
+    juce::AudioParameterFloat*  pDelayDrift = nullptr;
+    juce::AudioParameterFloat*  pDelayMorph = nullptr;
+    juce::AudioParameterFloat*  pDelayMix = nullptr;
+    juce::AudioParameterFloat*  pReverbSize = nullptr;
+    juce::AudioParameterFloat*  pReverbDecay = nullptr;
+    juce::AudioParameterFloat*  pReverbDamp = nullptr;
+    juce::AudioParameterFloat*  pReverbDiffusion = nullptr;
+    juce::AudioParameterFloat*  pReverbPredelay = nullptr;
+    juce::AudioParameterFloat*  pReverbMix = nullptr;
+    juce::AudioParameterFloat*  pDuckAtk = nullptr;
+    juce::AudioParameterFloat*  pDuckRel = nullptr;
+    juce::AudioParameterFloat*  pDuckDepth = nullptr;
+    juce::AudioParameterBool*   pLimiterOn = nullptr;
+    juce::AudioParameterFloat*  pLimiterAmount = nullptr;
+
+    bombo::ChainParams buildChainParamsFromApvts() const noexcept;
+
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> masterGainSmoothed;
 
     std::array<bombo::BombVoice, kNumVoices> voices_;
