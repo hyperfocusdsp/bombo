@@ -42,7 +42,10 @@ juce_add_plugin(Bombo
 
 juce_add_binary_data(BomboResources
     SOURCES
-        Resources/Fonts/AllertaStencil-Regular.ttf)
+        Resources/Fonts/AllertaStencil-Regular.ttf
+        Resources/Themes/bandw.json
+        Resources/Themes/phosphor.json
+        Resources/Themes/nightrun.json)
 
 target_sources(Bombo
     PRIVATE
@@ -56,6 +59,8 @@ target_sources(Bombo
         Source/GUI/Theme/Palette.h
         Source/GUI/Theme/ThemeProvider.h
         Source/GUI/Theme/ThemeProvider.cpp
+        Source/GUI/Theme/ThemeLoader.h
+        Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.h
         Source/State/PersistentState.cpp
         Source/GUI/Fonts.h
@@ -139,6 +144,7 @@ if(BOMBO_BUILD_TESTS)
         tests/RunTests.cpp
         tests/PaletteTests.cpp
         Source/GUI/Theme/ThemeProvider.cpp
+        Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.cpp)
     target_include_directories(Bombo_Tests PRIVATE Source tests)
     target_compile_definitions(Bombo_Tests PRIVATE

@@ -1,0 +1,21 @@
+{
+  "name": "bandw",
+  "displayName": "BANDW",
+  "palette": {
+    "graphite":    "#FF141517",
+    "graphiteHi":  "#FF1A1C1F",
+    "ink":         "#FF0A0B0D",
+    "bone":        "#FFF4F1EA",
+    "boneDim":     "#FF8A8882",
+    "voice":       "#FF403D38",
+    "drive":       "#FFD27845",
+    "delayC":      "#FF3EA49E",
+    "reverb":      "#FF6AAE5A",
+    "filterC":     "#FF5C8ABB",
+    "duck":        "#FFC8A271",
+    "knobCap":     "#FF1B1C1E",
+    "knobBevel":   "#FF606066",
+    "knobRubber":  "#FF151517",
+    "accentAmber": "#FFFFB800"
+  }
+}
