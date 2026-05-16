@@ -9,16 +9,16 @@ namespace bombo
 namespace
 {
 constexpr int kChassisW = 1320;
-constexpr int kChassisH = 950;
-constexpr int kHeaderH = 86;
-constexpr int kFinBandH = 110;   // reserved at bottom for the bomb-tail fin
-constexpr int kSectionGap = 12;
-constexpr int kSectionPadTop = 30;
-constexpr int kSectionPadBottom = 14;
-constexpr int kSectionPadSide = 14;
-constexpr int kKnobW = 84;
-constexpr int kKnobH = 74;
-constexpr int kKnobLabelH = 14;
+constexpr int kChassisH = 880;
+constexpr int kHeaderH = 64;
+constexpr int kFinBandH = 70;
+constexpr int kSectionGap = 10;
+constexpr int kSectionPadTop = 26;
+constexpr int kSectionPadBottom = 10;
+constexpr int kSectionPadSide = 10;
+constexpr int kKnobW = 78;
+constexpr int kKnobH = 82;
+constexpr int kKnobLabelH = 13;
 }
 
 FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts)
@@ -156,8 +156,14 @@ FaceplatePanel::Knob* FaceplatePanel::addKnob(Section& s,
 {
     auto knob = std::make_unique<Knob>();
     knob->slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    knob->slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 60, 12);
+    knob->slider.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
+                                     juce::MathConstants<float>::pi * 2.75f,
+                                     true);
+    knob->slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 70, 13);
     knob->slider.setColour(juce::Slider::rotarySliderOutlineColourId, s.accent);
+    // Trim the readout: the param's own value-to-string is still used for
+    // formatted units; this caps fallback decimals when none is set.
+    knob->slider.setNumDecimalPlacesToDisplay(2);
     knob->label.setText(displayName, juce::dontSendNotification);
     knob->label.setJustificationType(juce::Justification::centred);
     knob->label.setFont(fonts::label(9.5f));
@@ -217,14 +223,17 @@ void FaceplatePanel::paint(juce::Graphics& g)
 
     // Title.
     g.setColour(col::bone);
-    g.setFont(fonts::title(34.0f));
+    g.setFont(fonts::title(28.0f));
     g.drawText("BOMBO",
-               headerArea.reduced(24, 0),
+               headerArea.reduced(20, 0),
                juce::Justification::centredLeft);
     g.setColour(col::boneDim);
-    g.setFont(fonts::label(11.5f));
-    g.drawText("half kick · half BBS",
-               juce::Rectangle<int>(170, 0, 280, kHeaderH),
+    g.setFont(fonts::label(10.5f));
+    // " / " separator instead of "·" — middle-dot was triggering a
+    // UTF-8/Latin-1 mojibake on Linux JUCE 8 ("Â·"). Side benefit: the
+    // slash reads cleaner at small sizes.
+    g.drawText("HALF KICK / HALF BBS",
+               juce::Rectangle<int>(150, 0, 280, kHeaderH),
                juce::Justification::centredLeft);
 
     // Section frames.
@@ -247,52 +256,47 @@ void FaceplatePanel::paint(juce::Graphics& g)
                    juce::Justification::centred);
     }
 
-    // Bomb-tail fin band — the smooth-diagonal V apex visual flourish at
-    // the bottom of the chassis. Five diagonal polys converging towards
-    // the center, picking up section-color tints from the FX rack
-    // directly above so it reads as a continuation of the rack. The full
-    // transparent-window pass (where the fin would let the host's BG
-    // shine through) is parked — solid fill here still reads as the
-    // identity at zero host-compat risk.
-    const int finTop = sections_.empty() ? getHeight() - 24
-                                          : sections_.back().bounds.getBottom() + 8;
+    // Bomb-tail fin — a single V-shape running across the chassis bottom.
+    // Two diagonals descending from the left and right edges, meeting at
+    // a centred apex slightly inset from the bottom edge. Filled with a
+    // horizontal gradient that picks up the FX-rack section colours so
+    // the fin reads as a continuation of the rack above it.
+    const int finTop = sections_.empty() ? getHeight() - kFinBandH
+                                          : sections_.back().bounds.getBottom() + kSectionGap;
     if (finTop < getHeight() - 4)
     {
-        auto fin = juce::Rectangle<int>(0, finTop, getWidth(), getHeight() - finTop);
+        const auto fin = juce::Rectangle<int>(0, finTop, getWidth(), getHeight() - finTop);
         g.setColour(col::ink);
         g.fillRect(fin);
 
-        // Pick up the FX rack column colours (rows 3..7 of sections_).
-        const juce::Colour finColours[5] = {
-            col::drive, col::filterC, col::delayC, col::reverb, col::duck
-        };
-        const int colCount = 5;
         const float w = static_cast<float>(getWidth());
-        const float h = static_cast<float>(fin.getHeight());
-        const float apexX = w * 0.5f;
-        const float apexY = static_cast<float>(fin.getBottom() - 4);
         const float topY = static_cast<float>(fin.getY());
+        const float apexY = static_cast<float>(fin.getBottom() - 4);
+        const float apexX = w * 0.5f;
 
-        for (int i = 0; i < colCount; ++i)
-        {
-            const float x0 = w * static_cast<float>(i) / static_cast<float>(colCount);
-            const float x1 = w * static_cast<float>(i + 1) / static_cast<float>(colCount);
-            // Diagonal poly leaning toward the apex.
-            juce::Path p;
-            p.startNewSubPath(x0, topY);
-            p.lineTo(x1, topY);
-            const float tipX = juce::jmap(static_cast<float>(i + 0.5f) / colCount,
-                                          0.0f, 1.0f, w * 0.18f, w * 0.82f);
-            const float tipBlend = 0.55f + 0.45f * (1.0f - std::abs(tipX - apexX) / (w * 0.5f));
-            p.quadraticTo(juce::jmap(0.5f, x0, x1),
-                          topY + h * tipBlend,
-                          apexX, apexY);
-            p.closeSubPath();
-            g.setColour(finColours[i].withAlpha(0.55f));
-            g.fillPath(p);
-        }
+        // Single V poly.
+        juce::Path v;
+        v.startNewSubPath(0.0f, topY);
+        v.lineTo(w, topY);
+        v.lineTo(apexX, apexY);
+        v.closeSubPath();
 
-        // Crisp top edge so the fin reads as a separate panel.
+        // Horizontal gradient: drive (left) → through filter/delay/reverb
+        // → duck (right). Reads as the FX rack's spectrum continuing down.
+        juce::ColourGradient grad(col::drive.withAlpha(0.55f), 0.0f, topY,
+                                   col::duck.withAlpha(0.55f), w, topY, false);
+        grad.addColour(0.25, col::filterC.withAlpha(0.55f));
+        grad.addColour(0.50, col::delayC.withAlpha(0.55f));
+        grad.addColour(0.75, col::reverb.withAlpha(0.55f));
+        g.setGradientFill(grad);
+        g.fillPath(v);
+
+        // Bone hairline on the V edges for definition.
+        g.setColour(col::bone.withAlpha(0.25f));
+        g.drawLine(0.0f, topY, apexX, apexY, 1.0f);
+        g.drawLine(w, topY, apexX, apexY, 1.0f);
+
+        // Crisp top edge.
         g.setColour(col::bone.withAlpha(0.18f));
         g.drawHorizontalLine(fin.getY(), 0.0f, w);
     }
@@ -319,12 +323,14 @@ void FaceplatePanel::resized()
         layoutSection(sections_[i]);
     }
 
-    // Row 2 — FX rack (5 sections — keep DUCK narrower).
+    // Row 2 — FX rack (5 sections).
     const int row2Y = row1Y + row1H + kSectionGap;
     const int row2H = rowH;
     const int row2Available = getWidth() - kSectionGap * 6;
-    // 5 columns, ratio 1.05 : 1 : 1 : 1.1 : 0.85 (REVERB + DRIVE wider, DUCK slim).
-    constexpr float ratios[5] = { 1.05f, 1.0f, 1.0f, 1.1f, 0.85f };
+    // DRIVE carries 5 controls (3 knobs + 2 choices) so it gets the
+    // widest cell. DUCK has just 3 knobs and stays slim. REVERB has 6
+    // knobs so it's runner-up width.
+    constexpr float ratios[5] = { 1.50f, 1.00f, 1.00f, 1.20f, 0.60f };
     float ratioSum = 0.0f;
     for (float r : ratios) ratioSum += r;
     int xCursor = kSectionGap;
@@ -337,23 +343,27 @@ void FaceplatePanel::resized()
     }
 
     // Header — master OUT knob + LIM toggle on the right.
-    const int hkRight = getWidth() - 24;
+    // 64 px header is tight; place knobs flush against header bottom
+    // with 4 px breathing room.
+    const int hkRight = getWidth() - 18;
+    const int hkSize = 50;          // smaller knob + label in the slim header
+    const int hkY = 4;
     if (headerKnobs_.size() >= 2)
     {
         auto& lim = *headerKnobs_[1];
-        lim.slider.setBounds(hkRight - kKnobW, 6, kKnobW, kKnobH);
-        lim.label.setBounds(hkRight - kKnobW, 6 + kKnobH, kKnobW, kKnobLabelH);
+        lim.slider.setBounds(hkRight - hkSize, hkY, hkSize, hkSize + 4);
+        lim.label.setBounds(hkRight - hkSize - 2, hkY + hkSize + 4, hkSize + 4, kKnobLabelH);
 
         auto& master = *headerKnobs_[0];
-        const int masterX = hkRight - kKnobW * 2 - 18;
-        master.slider.setBounds(masterX, 6, kKnobW, kKnobH);
+        const int masterX = hkRight - hkSize * 2 - 16;
+        master.slider.setBounds(masterX, hkY, hkSize, hkSize + 4);
         master.label.setText("OUT", juce::dontSendNotification);
-        master.label.setBounds(masterX, 6 + kKnobH, kKnobW, kKnobLabelH);
+        master.label.setBounds(masterX - 2, hkY + hkSize + 4, hkSize + 4, kKnobLabelH);
 
         if (!headerToggles_.empty())
         {
             auto& t = headerToggles_[0]->button;
-            t.setBounds(masterX - 80, kHeaderH / 2 - 12, 72, 24);
+            t.setBounds(masterX - 72, kHeaderH / 2 - 11, 64, 22);
         }
     }
 }

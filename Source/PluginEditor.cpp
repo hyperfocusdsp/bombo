@@ -8,8 +8,10 @@ BomboEditor::BomboEditor(BomboProcessor& p)
 {
     setLookAndFeel(&lnf);
     addAndMakeVisible(faceplate);
-    setSize(1320, 950);
-    setResizable(false, false);
+    setSize(1320, 880);
+    setResizable(true, true);
+    setResizeLimits(1100, 740, 1600, 1080);
+    setWantsKeyboardFocus(true);
 }
 
 BomboEditor::~BomboEditor()
@@ -25,4 +27,25 @@ void BomboEditor::paint(juce::Graphics& g)
 void BomboEditor::resized()
 {
     faceplate.setBounds(getLocalBounds());
+}
+
+void BomboEditor::visibilityChanged()
+{
+    if (isVisible()) grabKeyboardFocus();
+}
+
+bool BomboEditor::keyPressed(const juce::KeyPress& key)
+{
+    // Space, T, or Return → fire a kick. Matches the Rust archive's
+    // editor bridge: editor pushes count, audio thread drains at the
+    // top of process().
+    const auto ch = juce::CharacterFunctions::toLowerCase(key.getTextCharacter());
+    if (key.getKeyCode() == juce::KeyPress::spaceKey
+        || key.getKeyCode() == juce::KeyPress::returnKey
+        || ch == 't')
+    {
+        processorRef.triggerFromKeyboard();
+        return true;
+    }
+    return false;
 }

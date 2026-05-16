@@ -194,6 +194,18 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     // buffer; drain the rest from the host's queue so they don't accumulate.
     const int bufSamples = numSamples > 0 ? numSamples - 1 : 0;
     int scheduled = 0;
+
+    // Drain editor keyboard triggers first (Space / T). They land at
+    // sample 0 of the buffer since the editor doesn't tell us when each
+    // key was pressed within the block.
+    int kbCount = keyboardTriggers_.exchange(0, std::memory_order_relaxed);
+    if (kbCount > kNumVoices) kbCount = kNumVoices;
+    for (int i = 0; i < kbCount; ++i)
+    {
+        pushPending(0);
+        ++scheduled;
+    }
+
     for (const auto meta : midi)
     {
         const auto& msg = meta.getMessage();
