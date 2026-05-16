@@ -41,6 +41,30 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // Idempotent across multiple plugin instances in the same process.
     bombo::ThemeProvider::get().loadBundledThemes();
 
+    // Populate selector from registered themes.
+    {
+        int itemId = 1;
+        for (const auto& name : bombo::ThemeProvider::get().registeredNames())
+            themeSelector_.addItem(juce::String(name), itemId++);
+    }
+
+    // Restore persisted theme (set the provider FIRST, then sync the selector
+    // text so its onChange is not triggered with the wrong order).
+    {
+        const juce::String saved = persistentState_.getActiveTheme();
+        bombo::ThemeProvider::get().setActive(saved.toStdString());
+        themeSelector_.setText(saved, juce::dontSendNotification);
+    }
+
+    themeSelector_.onChange = [this]
+    {
+        const juce::String name = themeSelector_.getText();
+        bombo::ThemeProvider::get().setActive(name.toStdString());
+        persistentState_.setActiveTheme(name);
+    };
+
+    addAndMakeVisible(themeSelector_);
+
    #if JUCE_LINUX
     // Run exactly once per process. Inside a DAW host, the host's own X
     // window may not benefit, but the claim itself is harmless (idempotent
@@ -189,6 +213,9 @@ void BomboEditor::resized()
     const int boundsW = static_cast<int>(std::ceil(static_cast<float>(getWidth())  / scale));
     const int boundsH = static_cast<int>(std::ceil(static_cast<float>(getHeight()) / scale));
     faceplate.setBounds(0, 0, boundsW, boundsH);
+
+    // Temporary theme selector — will be replaced by HeaderBar in Plan B.
+    themeSelector_.setBounds(getWidth() - 110, 4, 100, 22);
 
    #if JucePlugin_Build_Standalone
     // Persist the editor width so the next launch reopens at this scale.
