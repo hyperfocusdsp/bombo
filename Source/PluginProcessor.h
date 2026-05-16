@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "Parameters.h"
@@ -39,6 +40,11 @@ public:
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
+
+    // Editor-side trigger bridge (Space / T keys, on-screen buttons).
+    // Atomic so the audio thread can swap(0) without a lock. Capped at
+    // kNumVoices per buffer in processBlock.
+    void triggerFromKeyboard() noexcept { keyboardTriggers_.fetch_add(1, std::memory_order_relaxed); }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -116,6 +122,8 @@ private:
 
     bombo::RumbleChain chain_{ 48000.0f };
     bombo::ChainParams chainParams_{}; // Phase 1b: defaults only; APVTS wiring lands in Phase 2.
+
+    std::atomic<int> keyboardTriggers_{0};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboProcessor)
 };

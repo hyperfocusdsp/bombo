@@ -13,7 +13,30 @@ cmake --build build -j$(nproc)
 # tools\install-windows.ps1        # Windows: → C:\Program Files\Common Files\VST3\
 ```
 
-Standalone binary: `./build/Bombo_artefacts/Release/Standalone/Bombo`.
+Standalone binary: `./build/Bombo_artefacts/Release/Standalone/Bombo` (or just `bombo-launch` if you have `~/.local/bin/` on PATH).
+
+### First-run setup
+
+**Enable MIDI input in the standalone.** JUCE Standalone ships with no MIDI inputs enabled by default:
+
+1. Click **Options** in the top-left of the standalone window
+2. **Audio/MIDI Settings…**
+3. Tick the box next to your controller (e.g. **Arturia BeatStep**)
+4. Close — the setting persists in `~/.config/Bombo/Bombo.settings`
+
+**Triggering without MIDI:** press **Space**, **T**, or **Enter** in the editor window — fires a kick at the buffer head. Works in both standalone and inside a DAW (as long as the plugin editor has keyboard focus).
+
+**Hyprland users:** the chassis is fixed-aspect, so it tiles badly. The rule below makes it float at native size; it's already in `~/.config/hypr/hyprland.conf`:
+
+```
+windowrule {
+    name = bombo-float
+    match:class = ^Bombo$
+    float = true
+    center = true
+    size = 1320 880
+}
+```
 
 ## Run the unit tests
 
@@ -33,7 +56,7 @@ Load `Bombo.vst3` (or `Bombo.component` on macOS) on an instrument track in Bitw
 | What to verify | How |
 |---|---|
 | Plugin scans cleanly | DAW plugin browser shows Bombo under Hyperfocus DSP / Drum |
-| Audio fires on note-on | C-2 / C-1 → audible kick. Hits at the buffer head should land sample-accurate. |
+| Audio fires on note-on | C-2 / C-1 → audible kick. Hits at the buffer head should land sample-accurate. Also: Space / T / Enter in the editor → same trigger. |
 | Voice stealing | Play a 16th-note flam (≥4 hits inside ~20 ms). The first 4 voices crossfade with 5 ms fadeout; further hits drop without crackle. |
 | FX chain audible | Adjust `Reverb Mix` and `Delay Mix` — the wet bus should grow. `Duck Depth` should pull the wet down on each kick. |
 | Master limiter holds | Push `Master Out` to +6 dB. The output peak should stay at ≈-0.45 dBFS (no clipping). |

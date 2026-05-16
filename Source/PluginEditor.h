@@ -17,6 +17,9 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
 
+    bool keyPressed(const juce::KeyPress& key) override;
+    void visibilityChanged() override;
+
 private:
     BomboProcessor& processorRef;
     bombo::BomboLookAndFeel lnf;
