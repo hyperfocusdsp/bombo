@@ -4,6 +4,7 @@
 // below — the linker keeps the static instances alive across TUs.
 #include "GUI/Theme/Palette.h"
 #include "GUI/Theme/ThemeProvider.h"
+#include "State/PersistentState.h"
 
 #include <juce_core/juce_core.h>
 #include <juce_events/juce_events.h>
@@ -67,7 +68,58 @@ public:
     }
 };
 
-static PaletteDefaultsTest        paletteDefaultsTest;
-static ThemeProviderListenerTest  themeProviderListenerTest;
+class PersistentStateRoundTripTest : public juce::UnitTest
+{
+public:
+    PersistentStateRoundTripTest() : juce::UnitTest("PersistentState: round-trip write/read") {}
+
+    void runTest() override
+    {
+        beginTest("setActiveTheme then getActiveTheme returns same value");
+        // Use a temp directory so the test doesn't pollute the real
+        // ~/.config/Bombo state.
+        auto tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                       .getChildFile("bombo_test_state_" + juce::String(juce::Time::currentTimeMillis()));
+        tmp.createDirectory();
+
+        {
+            bombo::PersistentState state(tmp);
+            state.setActiveTheme("phosphor");
+        }   // dtor flushes
+
+        {
+            bombo::PersistentState state(tmp);
+            expectEquals(state.getActiveTheme(), juce::String("phosphor"),
+                         "theme name persists across PersistentState instances");
+        }
+
+        tmp.deleteRecursively();
+    }
+};
+
+class PersistentStateMissingFileTest : public juce::UnitTest
+{
+public:
+    PersistentStateMissingFileTest() : juce::UnitTest("PersistentState: missing file returns default") {}
+
+    void runTest() override
+    {
+        beginTest("getActiveTheme returns \"bandw\" when no state file exists");
+        auto tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                       .getChildFile("bombo_test_state_missing_" + juce::String(juce::Time::currentTimeMillis()));
+        tmp.createDirectory();
+
+        bombo::PersistentState state(tmp);
+        expectEquals(state.getActiveTheme(), juce::String("bandw"),
+                     "default theme is bandw when file is absent");
+
+        tmp.deleteRecursively();
+    }
+};
+
+static PaletteDefaultsTest             paletteDefaultsTest;
+static ThemeProviderListenerTest       themeProviderListenerTest;
+static PersistentStateRoundTripTest    persistentStateRoundTripTest;
+static PersistentStateMissingFileTest  persistentStateMissingFileTest;
 
 } // anonymous namespace
