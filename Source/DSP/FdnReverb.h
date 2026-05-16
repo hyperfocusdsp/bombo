@@ -19,6 +19,7 @@ public:
     static constexpr int kMaxAllpassSamples = 1024;
     static constexpr int kMaxPredelaySamples = 32768;
     static constexpr float kStopFadeMs = 80.0f;
+    static constexpr float kKillFadeMs = 6.0f;   // per-trigger smooth tail kill
 
     // FDN delay-line lengths @ 44.1 kHz — coprime primes, ~octave spread.
     static constexpr int kFdnLengths44k[4] = { 743, 1093, 1361, 1697 };
@@ -55,11 +56,31 @@ public:
         wetHpfR_ = 1.0f - (tau_c * 30.0f / sampleRate);
     }
 
-    // Hard reset on fresh trigger — drains every stage.
+    // Smooth tail kill on fresh trigger. Instead of zeroing state at the
+    // moment killTail() is called (which clicks when wet level is non-zero),
+    // schedule a short linear fade-down — process() applies the ramp and
+    // zeroes state at the bottom. ~6 ms is short enough to feel like a hard
+    // stop but long enough to mask the discontinuity.
     void killTail() noexcept
     {
         stopFadeRemaining_ = 0;
         stopMuted_ = false;
+        if (killFadeRemaining_ == 0)
+        {
+            uint32_t fadeSamples = static_cast<uint32_t>(kKillFadeMs * 0.001f * sampleRate_);
+            if (fadeSamples < 1) fadeSamples = 1;
+            killFadeRemaining_ = fadeSamples;
+            killFadeTotal_     = fadeSamples;
+        }
+    }
+
+    // For prepareToPlay only — instant hard reset without a fade.
+    void hardReset() noexcept
+    {
+        stopFadeRemaining_ = 0;
+        stopMuted_ = false;
+        killFadeRemaining_ = 0;
+        killFadeTotal_     = 0;
         for (auto& ap : diffuser_) ap.reset();
         for (auto& line : fdn_) line.reset();
         wetLpfZ_ = 0.0f;
@@ -69,7 +90,7 @@ public:
 
     void fullReset() noexcept
     {
-        killTail();
+        hardReset();
         for (auto& s : predelay_) s = 0.0f;
         predelayPos_ = 0;
     }
@@ -182,6 +203,25 @@ public:
         wetHpfX1_ = hpfIn;
         wetHpfY1_ = hpfOut;
         float out = hpfOut;
+
+        // Per-trigger smooth tail kill — linear ramp down to 0 over the
+        // fade window. At the bottom we zero all FDN state so the next
+        // trigger starts from silence. Click-free hard stop.
+        if (killFadeRemaining_ > 0)
+        {
+            const float ramp = static_cast<float>(killFadeRemaining_)
+                             / static_cast<float>(killFadeTotal_);
+            out *= ramp;
+            --killFadeRemaining_;
+            if (killFadeRemaining_ == 0)
+            {
+                for (auto& ap : diffuser_) ap.reset();
+                for (auto& line : fdn_) line.reset();
+                wetLpfZ_  = 0.0f;
+                wetHpfX1_ = 0.0f;
+                wetHpfY1_ = 0.0f;
+            }
+        }
 
         // Transport-stop fade.
         if (stopFadeRemaining_ > 0)
@@ -333,6 +373,11 @@ private:
     uint32_t stopFadeRemaining_ = 0;
     uint32_t stopFadeTotal_ = 1;
     bool stopMuted_ = false;
+    // Per-trigger smooth tail kill — fade output to 0 over kKillFadeMs,
+    // zero state at the bottom. Prevents the click that hard-resetting
+    // mid-tail would otherwise cause.
+    uint32_t killFadeRemaining_ = 0;
+    uint32_t killFadeTotal_ = 1;
 };
 
 } // namespace bombo

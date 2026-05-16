@@ -31,7 +31,11 @@ namespace pid
     inline constexpr const char* noiseColor      = "noise_color";
     inline constexpr const char* driveAmount     = "drive_amount";
     inline constexpr const char* driveMode       = "drive_mode";
-    inline constexpr const char* driftAmount     = "drift_amount";
+    // VOICE A ↔ VOICE B balance. 0 = A only, 0.5 = both at unity (tent),
+    // 1 = B only. Replaces the per-sample LEVEL knob — now the sample
+    // contributes to the B layer at its baked-in amplitude and the user
+    // mixes A vs B as a whole via this knob.
+    inline constexpr const char* voiceBalance    = "voice_balance";
 
     // ── Rumble FX chain ─────────────────────────────────────────────
     // DRIVE (a separate stage from per-voice drive — sits on the rumble bus).
@@ -59,13 +63,25 @@ namespace pid
     inline constexpr const char* reverbMix       = "reverb_mix";
     // DUCK
     inline constexpr const char* duckAtk         = "duck_atk";
+    inline constexpr const char* duckHold        = "duck_hold";
     inline constexpr const char* duckRel         = "duck_rel";
     inline constexpr const char* duckDepth       = "duck_depth";
     // LIMITER
     inline constexpr const char* limiterOn       = "limiter_on";
     inline constexpr const char* limiterAmount   = "limiter_amount";
+    // TRANSPORT (standalone-only knobs the host doesn't drive)
+    // loopOn = auto-fire triggers at the BPM rate. In a DAW the host's BPM
+    // overrides the param value and triggers snap to the PPQ beat grid when
+    // the host is playing. In standalone we free-run from the param value.
+    inline constexpr const char* loopOn          = "loop_on";
+    inline constexpr const char* bpm             = "bpm";
     // SECTION MUTES — click the section title strip in the UI to toggle.
-    // Voice A/B aren't mutable (they're the source).
+    // Voice A mute silences the SUB layer; Voice B mute silences MID + click
+    // + noise + sample. DRIVE mute now also bypasses the per-voice V.AMT
+    // clipper (not just the rumble-bus B.AMT stage), so toggling the column
+    // silences the whole DRIVE column as users expect.
+    inline constexpr const char* voiceAMute      = "voice_a_mute";
+    inline constexpr const char* voiceBMute      = "voice_b_mute";
     inline constexpr const char* driveMute       = "drive_mute";
     inline constexpr const char* delayMute       = "delay_mute";
     inline constexpr const char* reverbMute      = "reverb_mute";
@@ -186,8 +202,8 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Drive Mode", juce::StringArray{"Off", "Tanh", "Diode", "Cubic"},
         VC_DIODE));
 
-    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::driftAmount, 1},
-        "Drift", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::voiceBalance, 1},
+        "Voice Balance", Range(0.0f, 1.0f, 0.001f), 0.50f, normFormat));
 
     // ── Rumble FX chain ─────────────────────────────────────────────
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::fxDriveAmount, 1},
@@ -235,6 +251,8 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckAtk, 1},
         "Duck Atk", skewRange(0.1f, 50.0f, 0.4f), 2.0f, msFormat));
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckHold, 1},
+        "Duck Hold", skewRange(0.0f, 200.0f, 0.4f), 0.0f, msFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckRel, 1},
         "Duck Rel", skewRange(10.0f, 500.0f, 0.4f), 220.0f, msFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckDepth, 1},
@@ -245,7 +263,26 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::limiterAmount, 1},
         "Limiter Amount", Range(0.0f, 1.0f, 0.001f), 0.5f, normFormat));
 
+    // Transport: loop toggle + BPM (integer, 60–300).
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::loopOn, 1}, "Loop On", false));
+    {
+        auto bpmFormat = FAttr()
+            .withStringFromValueFunction([](float v, int) {
+                return juce::String(static_cast<int>(v + 0.5f));
+            })
+            .withValueFromStringFunction([](const juce::String& s) {
+                return s.getFloatValue();
+            });
+        p.push_back(std::make_unique<Float>(juce::ParameterID{pid::bpm, 1},
+            "BPM", Range(60.0f, 300.0f, 1.0f), 120.0f, bpmFormat));
+    }
+
     // Section mutes — all default to off so existing presets sound the same.
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::voiceAMute, 1}, "Voice A Mute", false));
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::voiceBMute, 1}, "Voice B Mute", false));
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::driveMute,  1}, "Drive Mute",  false));
     p.push_back(std::make_unique<juce::AudioParameterBool>(
