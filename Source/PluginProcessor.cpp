@@ -300,35 +300,6 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     const bool loopNow = pLoopOn->get();
     lastLoopOn_ = loopNow;
 
-    // Universal deferred tail kill — fires one beat after the LAST trigger
-    // from ANY source (keyboard, MIDI from BeatStep, MIDI from DAW, the
-    // loop scheduler). Triggers re-arm it to a full beat from now; the
-    // last one in a stream lets the counter tick down and fires the kill,
-    // silencing the tail at the next-would-have-been-beat.
-    //
-    // This subsumes the old loop-off and T-only kill paths — both
-    // categories went through `scheduled++` so they're handled here.
-    oneShotTriggers_.exchange(0, std::memory_order_relaxed); // legacy drain
-    if (scheduled > 0 && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
-    {
-        const double samplesPerBeat =
-            (60.0 / static_cast<double>(effectiveBpm))
-            * static_cast<double>(currentSampleRate_);
-        pendingTailKillSamples_ = static_cast<int>(std::round(samplesPerBeat));
-    }
-
-    // Tick deferred tail kill. Coarse to per-block, which is fine — the
-    // imprecision is bounded by one buffer (~ a few ms) and inaudible.
-    if (pendingTailKillSamples_ >= 0)
-    {
-        pendingTailKillSamples_ -= numSamples;
-        if (pendingTailKillSamples_ <= 0)
-        {
-            chain_.killTail();
-            pendingTailKillSamples_ = -1;
-        }
-    }
-
     if (loopNow && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
     {
         const double samplesPerBeat =
@@ -381,6 +352,32 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         // Loop off: reset the free-running counter so it fires immediately
         // when the user re-enables (no skipped first beat).
         samplesUntilLoopFire_ = 0;
+    }
+
+    // Universal deferred tail kill — fires one beat after the LAST trigger
+    // from ANY source. Must run AFTER the loop scheduler so it sees all
+    // trigger pushes from this block (keyboard, MIDI, loop). Triggers
+    // re-arm to a full beat from now; the last in a stream lets the
+    // counter tick down and fires `chain_.killTail()` once.
+    //
+    // Subsumes the old loop-off and T-only kill paths — both categories
+    // route through `scheduled++` so they're handled uniformly here.
+    oneShotTriggers_.exchange(0, std::memory_order_relaxed); // legacy drain
+    if (scheduled > 0 && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
+    {
+        const double spb =
+            (60.0 / static_cast<double>(effectiveBpm))
+            * static_cast<double>(currentSampleRate_);
+        pendingTailKillSamples_ = static_cast<int>(std::round(spb));
+    }
+    if (pendingTailKillSamples_ >= 0)
+    {
+        pendingTailKillSamples_ -= numSamples;
+        if (pendingTailKillSamples_ <= 0)
+        {
+            chain_.killTail();
+            pendingTailKillSamples_ = -1;
+        }
     }
 
     // Snapshot params for any triggers this buffer fires. (Per-trigger
