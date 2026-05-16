@@ -10,6 +10,7 @@
 // Run:   ctest --test-dir build --output-on-failure  (or run the binary directly)
 
 #include <juce_core/juce_core.h>
+#include <juce_events/juce_events.h>
 
 #include "DSP/VoiceClip.h"
 #include "DSP/MasterBus.h"
@@ -551,9 +552,10 @@ public:
     }
 };
 
-#include "PaletteTests.cpp"
-
 // Static test instances — JUCE finds them via the UnitTest registry.
+// Palette/ThemeProvider tests live in tests/PaletteTests.cpp, which is
+// compiled as its own translation unit (see CMakeLists.txt) and registers
+// its own static UnitTest instances in an anonymous namespace.
 static VoiceClipTests   voiceClipTests;
 static MasterBusTests   masterBusTests;
 static AmpEnvelopeTests ampEnvelopeTests;
@@ -566,6 +568,10 @@ static FdnReverbTests   fdnReverbTests;
 int main()
 {
     juce::ConsoleApplication app;
+    // Force MessageManager creation on the main thread so the calling thread
+    // becomes the message thread. ThemeProvider methods assert this via
+    // JUCE_ASSERT_MESSAGE_THREAD in debug builds.
+    juce::MessageManager::getInstance();
     juce::UnitTestRunner runner;
     runner.setAssertOnFailure(false);
     runner.runAllTests();

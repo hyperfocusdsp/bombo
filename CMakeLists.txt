@@ -135,6 +135,7 @@ if(BOMBO_BUILD_TESTS)
         PRODUCT_NAME "Bombo_Tests")
     target_sources(Bombo_Tests PRIVATE
         tests/RunTests.cpp
+        tests/PaletteTests.cpp
         Source/GUI/Theme/ThemeProvider.cpp)
     target_include_directories(Bombo_Tests PRIVATE Source tests)
     target_compile_definitions(Bombo_Tests PRIVATE
