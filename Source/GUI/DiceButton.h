@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "Colours.h"
+#include "Theme/ThemedComponent.h"
 
 namespace bombo
 {
@@ -15,7 +16,8 @@ namespace bombo
 // Tooltip carries the playful "may cause undesirable sonic characteristics"
 // warning + an IG share CTA. Hover background tint goes amber.
 class DiceButton : public juce::Component,
-                   public juce::SettableTooltipClient
+                   public juce::SettableTooltipClient,
+                   public bombo::ThemedComponent
 {
 public:
     std::function<void()> onClick;
