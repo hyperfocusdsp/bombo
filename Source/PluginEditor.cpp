@@ -1,6 +1,8 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 
+#include "GUI/Theme/ThemeProvider.h"
+
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 // StandaloneFilterWindow.h uses AudioProcessorPlayer (juce_audio_utils)
@@ -33,6 +35,12 @@ BomboEditor::BomboEditor(BomboProcessor& p)
                 [&p]() { return p.hostBpm(); },
                 [&p]() { p.randomizeBombo(); })
 {
+    // Register the three bundled themes (BANDW/PHOSPHOR/NIGHTRUN) from
+    // BinaryData. Must run before any component setup so that col::xxx()
+    // accessors used during construction read JSON-loaded values.
+    // Idempotent across multiple plugin instances in the same process.
+    bombo::ThemeProvider::get().loadBundledThemes();
+
    #if JUCE_LINUX
     // Run exactly once per process. Inside a DAW host, the host's own X
     // window may not benefit, but the claim itself is harmless (idempotent
