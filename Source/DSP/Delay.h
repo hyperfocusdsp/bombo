@@ -73,11 +73,14 @@ public:
         lfoPhase_ = 0.0f;
     }
 
-    // Hard buffer flush — for clean-retrigger mode.
+    // Hard buffer flush — for clean-retrigger mode. Also clears the
+    // post-filter SVF state so it doesn't ring after the buffer is zeroed.
     void flush() noexcept
     {
         for (auto& s : buffer_) s = 0.0f;
         fbDampZ_ = 0.0f;
+        svfIc1_ = 0.0f;
+        svfIc2_ = 0.0f;
         stopFadeRemaining_ = 0;
         stopMuted_ = false;
     }
@@ -134,7 +137,11 @@ public:
         buffer_[writePos_] = input + fbDampZ_ * feedback_;
         writePos_ = (writePos_ + 1) % bufLen;
 
-        // Kill-fade V-ramp on the OUTPUT only (buffer keeps writing).
+        // Kill-fade V-ramp. The ramp fades the output down to 0 over the
+        // first half of kKillFadeMs, then back to 1 over the second half.
+        // At the zero crossing we flush the circular buffer so the second
+        // half plays back fresh-written input only — no residual tail.
+        // The V-ramp masks the buffer-zero click in silence.
         float out = wet;
         if (killFadeRemaining_ > 0)
         {
@@ -144,6 +151,17 @@ public:
             float ramp = std::abs((pos - half) / half);
             if (ramp > 1.0f) ramp = 1.0f;
             out = wet * ramp;
+            // At the V's bottom, hard-flush the buffer + filter state.
+            // Guard fires exactly once per kill cycle (when killFadeRemaining_
+            // crosses the midpoint).
+            const uint32_t mid = killFadeTotal_ / 2u;
+            if (killFadeRemaining_ == mid + 1u || (mid == 0u && killFadeRemaining_ == 1u))
+            {
+                for (auto& s : buffer_) s = 0.0f;
+                fbDampZ_ = 0.0f;
+                svfIc1_ = 0.0f;
+                svfIc2_ = 0.0f;
+            }
             --killFadeRemaining_;
         }
 

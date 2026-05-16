@@ -43,6 +43,7 @@ struct ChainParams
     float reverbMix        = 0.0f;
     // DUCKER
     float duckAttackMs  = 2.0f;
+    float duckHoldMs    = 0.0f;
     float duckReleaseMs = 250.0f;
     float duckDepth     = 0.0f;
     // LIMITER
@@ -132,6 +133,7 @@ public:
         reverb_.setPredelayMs(p.reverbPredelayMs);
 
         ducker_.setTimesMs(p.duckAttackMs, p.duckReleaseMs);
+        ducker_.setHoldMs(p.duckHoldMs);
 
         params_ = p;
     }

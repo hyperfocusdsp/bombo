@@ -1,10 +1,12 @@
 #pragma once
 
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <memory>
+
 #include "Oscillators.h"
 #include "Envelopes.h"
 #include "ClickGen.h"
 #include "NoiseGen.h"
-#include "Drift.h"
 #include "VoiceClip.h"
 
 namespace bombo
@@ -12,7 +14,8 @@ namespace bombo
 
 // Per-trigger snapshot of all knob state. Captured once at note-on so the
 // per-sample tick() reads stable values even if params update mid-decay.
-// SUB layer = fundamental (sustained); MID layer = body punch (short).
+// SUB layer = fundamental (sustained); MID layer = body punch (short);
+// SAMPLE layer = user-loaded punch buffer (≤ 200 ms, linear fade baked in).
 struct VoiceTrigger
 {
     int   waveform        = WAVE_SINE;
@@ -37,8 +40,20 @@ struct VoiceTrigger
     // Drive
     float driveAmount     = 0.30f;
     int   driveMode       = VC_DIODE;
-    // Jitter
-    float driftAmount     = 0.0f;
+    // Section mute snapshots — captured at note-on so they apply for the
+    // voice's lifetime. driveMute also bypasses the voice clipper so the
+    // whole DRIVE column quiets when toggled off, not just the rumble bus.
+    bool  voiceAMute      = false;
+    bool  voiceBMute      = false;
+    bool  driveMute       = false;
+    // Sample-slot layer (VOICE B). shared_ptr<const> is copied by the audio
+    // thread at trigger time — the refcount bump is allocator-free on
+    // libstdc++ x86_64. Null = no sample loaded; voice just skips the mix.
+    std::shared_ptr<const juce::AudioBuffer<float>> sampleBuf{};
+
+    // VOICE A ↔ VOICE B balance (tent). 0 = A only, 0.5 = both at unity,
+    // 1 = B only.
+    float voiceBalance    = 0.5f;
 };
 
 // 5 ms voice-steal fadeout. Long enough to avoid step discontinuity on a
@@ -78,28 +93,25 @@ public:
     void trigger(const VoiceTrigger& t) noexcept
     {
         trig_ = t;
-        driftSample_ = drift_.sampleEnvelope(t.driftAmount);
-        pitchJitter_ = drift_.pitchJitter(t.driftAmount);
         fadeoutGain_ = 1.0f;
         fadeoutStep_ = 0.0f;
+        samplePos_   = 0;
 
         constexpr float halfPi = 1.57079632679489661923f;
         osc_.trigger(halfPi);
         midOsc_.trigger(halfPi);
 
-        const float f0 = t.pitchStartHz * pitchJitter_;
+        const float f0 = t.pitchStartHz;
         const float f1 = t.pitchEndHz < 1.0f ? 1.0f : t.pitchEndHz;
         pitchEnv_.trigger(f0, f1, t.pitchEnvDecayMs / 1000.0f, t.pitchCurve);
 
-        const float m0 = t.midPitchStartHz * pitchJitter_;
+        const float m0 = t.midPitchStartHz;
         const float m1 = t.midPitchEndHz < 1.0f ? 1.0f : t.midPitchEndHz;
         midPitchEnv_.trigger(m0, m1, t.midDecayMs / 1000.0f, t.pitchCurve);
 
-        const float decay = t.ampDecayMs * driftSample_.decayScale;
-        ampEnv_.triggerFull(decay, t.ampAttackMs, t.driftAmount);
-
-        const float midDecay = t.midDecayMs * driftSample_.decayScale;
-        midAmpEnv_.triggerFull(midDecay, t.ampAttackMs, t.driftAmount);
+        // Pass 0 driftAmount — envelope quantisation is a no-op at 0.
+        ampEnv_.triggerFull(t.ampDecayMs, t.ampAttackMs, 0.0f);
+        midAmpEnv_.triggerFull(t.midDecayMs, t.ampAttackMs, 0.0f);
 
         // Only regenerate the click buffer when the center freq actually
         // moves — the trapezoidal SVF pass is O(decay_ms × SR), cheap but
@@ -137,10 +149,38 @@ public:
                              * trig_.noiseAmount
                              * midAmp;
 
-        const float raw = sub + mid + clickOut + noiseOut;
-        const float shaped = voiceClipApply(trig_.driveMode, trig_.driveAmount, raw);
+        // SAMPLE layer — shared_ptr held in the per-voice trig_ snapshot.
+        // Plays once from start to end; fade-out + amplitude shape are baked
+        // in at load time so we just read the buffer here.
+        float sampleOut = 0.0f;
+        if (trig_.sampleBuf)
+        {
+            const auto& b = *trig_.sampleBuf;
+            if (samplePos_ < b.getNumSamples())
+            {
+                sampleOut = b.getSample(0, samplePos_);
+                ++samplePos_;
+            }
+        }
 
-        const float out = shaped * driftSample_.ampScale * fadeoutGain_;
+        // Apply Voice A / Voice B section mutes + A↔B balance (tent gain).
+        // balance 0   → A only; 0.5 → both at unity; 1   → B only.
+        const float bal = trig_.voiceBalance;
+        const float aGain = bal <= 0.5f ? 1.0f : 1.0f - (bal - 0.5f) * 2.0f;
+        const float bGain = bal >= 0.5f ? 1.0f : bal * 2.0f;
+        const float subPart  = trig_.voiceAMute ? 0.0f : (sub * aGain);
+        const float bodyPart = trig_.voiceBMute
+            ? 0.0f
+            : ((mid + clickOut + noiseOut + sampleOut) * bGain);
+        const float raw = subPart + bodyPart;
+
+        // DRIVE column mute bypasses the per-voice clipper as well as the
+        // chain's B.AMT stage (RumbleChain already honors driveMute).
+        const float shaped = trig_.driveMute
+            ? raw
+            : voiceClipApply(trig_.driveMode, trig_.driveAmount, raw);
+
+        const float out = shaped * fadeoutGain_;
 
         if (fadeoutStep_ > 0.0f)
         {
@@ -164,11 +204,9 @@ private:
     AmpEnvelope    midAmpEnv_{};
     ClickGen       click_{};
     NoiseGen       noise_{};
-    Drift          drift_{};
 
     VoiceTrigger   trig_{};
-    DriftSample    driftSample_{};
-    float          pitchJitter_ = 1.0f;
+    int            samplePos_ = 0;
     float          sampleRate_ = 48000.0f;
     float          lastClickCenterHz_ = -1.0f;
     float          fadeoutGain_ = 1.0f;
