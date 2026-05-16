@@ -53,7 +53,14 @@ target_sources(Bombo
         Source/DSP/NoiseGen.h
         Source/DSP/Drift.h
         Source/DSP/VoiceClip.h
-        Source/DSP/BombVoice.h)
+        Source/DSP/BombVoice.h
+        Source/DSP/BiquadFilter.h
+        Source/DSP/Delay.h
+        Source/DSP/FdnReverb.h
+        Source/DSP/Ducker.h
+        Source/DSP/MultibandLimiter.h
+        Source/DSP/MasterBus.h
+        Source/DSP/RumbleChain.h)
 
 target_compile_definitions(Bombo
     PUBLIC

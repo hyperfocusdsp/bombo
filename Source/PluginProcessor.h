@@ -5,6 +5,7 @@
 
 #include "Parameters.h"
 #include "DSP/BombVoice.h"
+#include "DSP/RumbleChain.h"
 
 class BomboProcessor : public juce::AudioProcessor
 {
@@ -84,6 +85,9 @@ private:
     int activeVoice_ = 0;
     std::array<PendingHit, kPendingRingSize> pending_{};
     float currentSampleRate_ = 48000.0f;
+
+    bombo::RumbleChain chain_{ 48000.0f };
+    bombo::ChainParams chainParams_{}; // Phase 1b: defaults only; APVTS wiring lands in Phase 2.
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboProcessor)
 };
