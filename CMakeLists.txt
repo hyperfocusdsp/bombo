@@ -81,6 +81,11 @@ target_compile_definitions(Bombo
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0)
 
+# LTO is a big build-time RAM hog (lto1 can take >4GB on the
+# Standalone link with -flto). Default ON for release builds; flip
+# OFF on memory-limited boxes via -DBOMBO_LTO=OFF.
+option(BOMBO_LTO "Link with -flto (juce_recommended_lto_flags)" ON)
+
 target_link_libraries(Bombo
     PRIVATE
         BomboResources
@@ -94,8 +99,10 @@ target_link_libraries(Bombo
         juce::juce_data_structures
         juce::juce_events
     PUBLIC
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_lto_flags)
+        juce::juce_recommended_config_flags)
+if(BOMBO_LTO)
+    target_link_libraries(Bombo PUBLIC juce::juce_recommended_lto_flags)
+endif()
 
 # ── DSP unit tests ────────────────────────────────────────────────
 # JUCE UnitTestRunner. Builds a console exe that runs every registered
@@ -117,7 +124,9 @@ if(BOMBO_BUILD_TESTS)
             juce::juce_dsp
             juce::juce_audio_basics
         PUBLIC
-            juce::juce_recommended_config_flags
-            juce::juce_recommended_lto_flags)
+            juce::juce_recommended_config_flags)
+    if(BOMBO_LTO)
+        target_link_libraries(Bombo_Tests PUBLIC juce::juce_recommended_lto_flags)
+    endif()
     add_test(NAME bombo_unit_tests COMMAND Bombo_Tests)
 endif()
