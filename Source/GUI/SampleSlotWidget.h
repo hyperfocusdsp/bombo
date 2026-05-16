@@ -6,6 +6,7 @@
 
 #include "Colours.h"
 #include "Fonts.h"
+#include "Theme/ThemedComponent.h"
 
 namespace bombo
 {
@@ -21,6 +22,7 @@ namespace bombo
 // index-load, clear; and getters for the current folder list / index /
 // display name. The widget reads the callbacks once per refresh().
 class SampleSlotWidget : public juce::Component,
+                         public bombo::ThemedComponent,
                          private juce::Timer
 {
 public:

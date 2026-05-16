@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ScopeComponent.h"
+#include "Theme/ThemedComponent.h"
 
 namespace bombo
 {
@@ -27,7 +28,7 @@ class DiceButton;
 //                5-vertex polygon: rectangle on top, taper-to-a-point fin
 //                at the bottom. Gaps between fins show the graphite chassis
 //                through, forming the bomb-tail silhouette.
-class FaceplatePanel : public juce::Component
+class FaceplatePanel : public juce::Component, public bombo::ThemedComponent
 {
 public:
     // Folder-browse sample-slot callbacks. The widget itself is decoupled

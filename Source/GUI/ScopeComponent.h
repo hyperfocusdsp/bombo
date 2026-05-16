@@ -3,6 +3,7 @@
 #include <array>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "Theme/ThemedComponent.h"
 #include "WaveBuffer.h"
 
 namespace bombo
@@ -12,6 +13,7 @@ namespace bombo
 // paints a single-stroke polyline. The "SCOPE  POST" label sits in the
 // top-left corner of the panel, matching the pre-port UI.
 class ScopeComponent : public juce::Component,
+                       public bombo::ThemedComponent,
                        private juce::Timer
 {
 public:

@@ -4,6 +4,7 @@
 
 #include "Colours.h"
 #include "Fonts.h"
+#include "Theme/ThemeProvider.h"
 
 namespace bombo
 {
@@ -16,7 +17,7 @@ namespace bombo
 // Two-line value layout (number above, unit below) is preserved from the
 // pre-port UI: `slider.getTextFromValue` is split on the first space so
 // the param's `stringFromValueFunction` does the formatting.
-class BomboLookAndFeel : public juce::LookAndFeel_V4
+class BomboLookAndFeel : public juce::LookAndFeel_V4, public juce::ChangeListener
 {
 public:
     BomboLookAndFeel()
@@ -42,6 +43,19 @@ public:
         setColour(juce::ToggleButton::textColourId,        col::bone());
         setColour(juce::ToggleButton::tickColourId,        col::accentAmber());
         setColour(juce::ToggleButton::tickDisabledColourId, col::boneDim());
+
+        bombo::ThemeProvider::get().addChangeListener(this);
+    }
+
+    ~BomboLookAndFeel() override
+    {
+        bombo::ThemeProvider::get().removeChangeListener(this);
+    }
+
+    void changeListenerCallback(juce::ChangeBroadcaster*) override
+    {
+        // Hook for future themed-resource invalidation (tinted images, cached
+        // gradients). Per-component repaint is handled by ThemedComponent.
     }
 
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,

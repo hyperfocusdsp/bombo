@@ -5,6 +5,7 @@
 
 #include "Colours.h"
 #include "Fonts.h"
+#include "Theme/ThemedComponent.h"
 
 namespace bombo
 {
@@ -15,7 +16,7 @@ namespace bombo
 //
 // Visually a miniature of the standard knob look — same cap gradient and
 // indicator wedge style, just at a smaller size with an "A·B" cap label.
-class BalanceFader : public juce::Component
+class BalanceFader : public juce::Component, public bombo::ThemedComponent
 {
 public:
     BalanceFader(juce::AudioProcessorValueTreeState& apvts,
