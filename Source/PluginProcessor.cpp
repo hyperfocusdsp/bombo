@@ -31,7 +31,64 @@ void BomboProcessor::cacheParameterPointers()
     pDriveAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(driveAmount));
     pDriveMode     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(driveMode));
     pDriftAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(driftAmount));
+
+    pFxDriveAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(fxDriveAmount));
+    pFxDriveMode     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(fxDriveMode));
+    pFxDriveMix      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(fxDriveMix));
+    pFilterHp        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterHp));
+    pFilterHpQ       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterHpQ));
+    pFilterLp        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterLp));
+    pFilterLpQ       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterLpQ));
+    pFilterColor     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterColor));
+    pDelayTime       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayTime));
+    pDelayFeedback   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayFeedback));
+    pDelayDrift      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayDrift));
+    pDelayMorph      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMorph));
+    pDelayMix        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMix));
+    pReverbSize      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbSize));
+    pReverbDecay     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbDecay));
+    pReverbDamp      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbDamp));
+    pReverbDiffusion = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbDiffusion));
+    pReverbPredelay  = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbPredelay));
+    pReverbMix       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbMix));
+    pDuckAtk         = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckAtk));
+    pDuckRel         = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckRel));
+    pDuckDepth       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckDepth));
+    pLimiterOn       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(limiterOn));
+    pLimiterAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(limiterAmount));
+
     jassert(pMasterOut != nullptr && pWaveform != nullptr && pDriveMode != nullptr);
+    jassert(pLimiterOn != nullptr && pReverbMix != nullptr);
+}
+
+bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
+{
+    bombo::ChainParams p;
+    p.driveAmount     = pFxDriveAmount->get();
+    p.driveMode       = pFxDriveMode->getIndex();
+    p.driveMix        = pFxDriveMix->get();
+    p.hpHz            = pFilterHp->get();
+    p.hpQ             = pFilterHpQ->get();
+    p.lpHz            = pFilterLp->get();
+    p.lpQ             = pFilterLpQ->get();
+    p.filterColor     = pFilterColor->get();
+    p.delayMs         = pDelayTime->get();
+    p.delayFeedback   = pDelayFeedback->get();
+    p.delayDrift      = pDelayDrift->get();
+    p.delayMorph      = pDelayMorph->get();
+    p.delayMix        = pDelayMix->get();
+    p.reverbSize      = pReverbSize->get();
+    p.reverbDecay     = pReverbDecay->get();
+    p.reverbDamp      = pReverbDamp->get();
+    p.reverbDiffusion = pReverbDiffusion->get();
+    p.reverbPredelayMs = pReverbPredelay->get();
+    p.reverbMix       = pReverbMix->get();
+    p.duckAttackMs    = pDuckAtk->get();
+    p.duckReleaseMs   = pDuckRel->get();
+    p.duckDepth       = pDuckDepth->get();
+    p.limiterOn       = pLimiterOn->get();
+    p.limiterAmount   = pLimiterAmount->get();
+    return p;
 }
 
 bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
@@ -67,24 +124,7 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
 
     chain_.setSampleRate(currentSampleRate_);
     chain_.reset();
-
-    // Phase-1b chain defaults — audible rumble without UI control yet.
-    // APVTS wiring for these lands in Phase 2.
-    chainParams_ = bombo::ChainParams{};
-    chainParams_.delayMs = 380.0f;
-    chainParams_.delayFeedback = 0.55f;
-    chainParams_.delayDrift = 0.25f;
-    chainParams_.delayMorph = 0.4f;
-    chainParams_.delayMix = 0.25f;
-    chainParams_.reverbSize = 0.55f;
-    chainParams_.reverbDecay = 0.70f;
-    chainParams_.reverbDamp = 0.45f;
-    chainParams_.reverbDiffusion = 0.6f;
-    chainParams_.reverbPredelayMs = 30.0f;
-    chainParams_.reverbMix = 0.35f;
-    chainParams_.duckAttackMs = 2.0f;
-    chainParams_.duckReleaseMs = 220.0f;
-    chainParams_.duckDepth = 0.6f;
+    chainParams_ = buildChainParamsFromApvts();
     chain_.update(chainParams_);
 
     masterGainSmoothed.reset(sampleRate, 0.010);
@@ -177,6 +217,7 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     auto* left  = numChannels > 0 ? buffer.getWritePointer(0) : nullptr;
     auto* right = numChannels > 1 ? buffer.getWritePointer(1) : nullptr;
 
+    chainParams_ = buildChainParamsFromApvts();
     chain_.update(chainParams_);
 
     for (int i = 0; i < numSamples; ++i)
