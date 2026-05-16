@@ -6,6 +6,7 @@
 
 #include "Colours.h"
 #include "Fonts.h"
+#include "Theme/ThemedComponent.h"
 
 namespace bombo
 {
@@ -19,6 +20,7 @@ namespace bombo
 // expose BPM), the SliderAttachment-bound value is shown and drag
 // edits the param.
 class BpmDisplay : public juce::Component,
+                   public bombo::ThemedComponent,
                    private juce::Timer
 {
 public:

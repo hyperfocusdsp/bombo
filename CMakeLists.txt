@@ -61,6 +61,7 @@ target_sources(Bombo
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.h
         Source/GUI/Theme/ThemeLoader.cpp
+        Source/GUI/Theme/ThemedComponent.h
         Source/State/PersistentState.h
         Source/State/PersistentState.cpp
         Source/GUI/Fonts.h
