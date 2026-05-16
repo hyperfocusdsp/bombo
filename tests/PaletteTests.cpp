@@ -3,6 +3,7 @@
 // the tests via static UnitTest registration in the anonymous namespace
 // below — the linker keeps the static instances alive across TUs.
 #include "GUI/Theme/Palette.h"
+#include "GUI/Theme/ThemeLoader.h"
 #include "GUI/Theme/ThemeProvider.h"
 #include "State/PersistentState.h"
 
@@ -117,9 +118,57 @@ public:
     }
 };
 
+class ThemeLoaderTest : public juce::UnitTest
+{
+public:
+    ThemeLoaderTest() : juce::UnitTest("ThemeLoader: parses JSON to Palette") {}
+
+    void runTest() override
+    {
+        beginTest("valid JSON parses every palette field");
+        const char* json = R"({
+            "name": "test",
+            "displayName": "TEST",
+            "palette": {
+                "graphite":    "#FF010203",
+                "graphiteHi":  "#FF040506",
+                "ink":         "#FF070809",
+                "bone":        "#FF0A0B0C",
+                "boneDim":     "#FF0D0E0F",
+                "voice":       "#FF101112",
+                "drive":       "#FF131415",
+                "delayC":      "#FF161718",
+                "reverb":      "#FF191A1B",
+                "filterC":     "#FF1C1D1E",
+                "duck":        "#FF1F2021",
+                "knobCap":     "#FF222324",
+                "knobBevel":   "#FF252627",
+                "knobRubber":  "#FF28292A",
+                "accentAmber": "#FF2B2C2D"
+            }
+        })";
+
+        bombo::ThemeLoader::Result r = bombo::ThemeLoader::parse(json);
+        expect(r.ok, "parse succeeded");
+        expectEquals(juce::String(r.name), juce::String("test"), "name field");
+        expect(r.palette.graphite    == juce::Colour { 0xFF010203u }, "graphite");
+        expect(r.palette.bone        == juce::Colour { 0xFF0A0B0Cu }, "bone");
+        expect(r.palette.accentAmber == juce::Colour { 0xFF2B2C2Du }, "accentAmber");
+
+        beginTest("invalid JSON returns ok=false");
+        bombo::ThemeLoader::Result bad = bombo::ThemeLoader::parse("{not json");
+        expect(! bad.ok, "parse failed");
+
+        beginTest("missing palette field returns ok=false");
+        bombo::ThemeLoader::Result missing = bombo::ThemeLoader::parse("{\"name\":\"x\"}");
+        expect(! missing.ok, "parse failed when palette absent");
+    }
+};
+
 static PaletteDefaultsTest             paletteDefaultsTest;
 static ThemeProviderListenerTest       themeProviderListenerTest;
 static PersistentStateRoundTripTest    persistentStateRoundTripTest;
 static PersistentStateMissingFileTest  persistentStateMissingFileTest;
+static ThemeLoaderTest                 themeLoaderTest;
 
 } // anonymous namespace
