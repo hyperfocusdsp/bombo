@@ -5,6 +5,8 @@
 
 #include "GUI/BomboLookAndFeel.h"
 #include "GUI/FaceplatePanel.h"
+#include "GUI/Theme/ThemeProvider.h"
+#include "State/PersistentState.h"
 
 class BomboProcessor;
 
@@ -31,6 +33,13 @@ private:
     // resized() suppresses its setValue until then so the design-default
     // setSize fired from the ctor can't clobber the persisted value.
     bool initialSizeApplied_ = false;
+
+    // Temporary theme-switching UI (Plan A T7). Replaced by HeaderBar
+    // selector in Plan B. Declaration order matters: persistentState_
+    // must outlive themeSelector_'s onChange lambda, which captures
+    // `this` and writes to persistentState_.
+    bombo::PersistentState persistentState_;
+    juce::ComboBox themeSelector_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };
