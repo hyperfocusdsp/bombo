@@ -11,6 +11,7 @@ ThemeProvider& ThemeProvider::get()
 
 const Palette& ThemeProvider::current()
 {
+    JUCE_ASSERT_MESSAGE_THREAD;
     return get().active_;
 }
 
@@ -22,6 +23,7 @@ ThemeProvider::ThemeProvider()
 
 void ThemeProvider::registerPalette(const std::string& name, const Palette& palette)
 {
+    JUCE_ASSERT_MESSAGE_THREAD;
     if (registry_.find(name) == registry_.end())
         order_.push_back(name);
     registry_[name] = palette;
@@ -29,6 +31,7 @@ void ThemeProvider::registerPalette(const std::string& name, const Palette& pale
 
 void ThemeProvider::setActive(const std::string& name)
 {
+    JUCE_ASSERT_MESSAGE_THREAD;
     if (name == activeName_)
         return;
 
