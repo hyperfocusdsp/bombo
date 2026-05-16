@@ -53,6 +53,9 @@ target_sources(Bombo
         Source/X11CompositorClaim.cpp
         Source/Parameters.h
         Source/GUI/Colours.h
+        Source/GUI/Theme/Palette.h
+        Source/GUI/Theme/ThemeProvider.h
+        Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Fonts.h
         Source/GUI/Fonts.cpp
         Source/GUI/BalanceFader.h
@@ -130,8 +133,10 @@ if(BOMBO_BUILD_TESTS)
     enable_testing()
     juce_add_console_app(Bombo_Tests
         PRODUCT_NAME "Bombo_Tests")
-    target_sources(Bombo_Tests PRIVATE tests/RunTests.cpp)
-    target_include_directories(Bombo_Tests PRIVATE Source)
+    target_sources(Bombo_Tests PRIVATE
+        tests/RunTests.cpp
+        Source/GUI/Theme/ThemeProvider.cpp)
+    target_include_directories(Bombo_Tests PRIVATE Source tests)
     target_compile_definitions(Bombo_Tests PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0)
@@ -139,6 +144,7 @@ if(BOMBO_BUILD_TESTS)
         PRIVATE
             juce::juce_core
             juce::juce_events
+            juce::juce_graphics
             juce::juce_dsp
             juce::juce_audio_basics
         PUBLIC

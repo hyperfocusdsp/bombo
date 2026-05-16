@@ -551,6 +551,8 @@ public:
     }
 };
 
+#include "PaletteTests.cpp"
+
 // Static test instances — JUCE finds them via the UnitTest registry.
 static VoiceClipTests   voiceClipTests;
 static MasterBusTests   masterBusTests;
