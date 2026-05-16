@@ -8,9 +8,11 @@ BomboEditor::BomboEditor(BomboProcessor& p)
 {
     setLookAndFeel(&lnf);
     addAndMakeVisible(faceplate);
-    setSize(1320, 880);
+    // 1-row 7-column rack fits comfortably at this size; resizable so
+    // the user can dial it to their workflow.
+    setSize(1280, 720);
     setResizable(true, true);
-    setResizeLimits(1100, 740, 1600, 1080);
+    setResizeLimits(1080, 620, 1600, 960);
     setWantsKeyboardFocus(true);
 }
 

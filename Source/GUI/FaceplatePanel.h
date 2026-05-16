@@ -6,14 +6,12 @@
 #include <memory>
 #include <vector>
 
-#include "Colours.h"
-
 namespace bombo
 {
 
-// Top-level chassis. Lays out the 7 FX sections + voice rows + header on
-// a fixed 1320×950 grid matching the Rust Bombo dimensions. Section
-// colours from col:: drive the tick rings.
+// 7-column rack, one row. VOICE A · VOICE B · DRIVE · FILTER · DELAY ·
+// REVERB · DUCK. Each knob renders its value inside the cap so the
+// section column stays narrow.
 class FaceplatePanel : public juce::Component
 {
 public:
@@ -24,48 +22,42 @@ public:
     void resized() override;
 
 private:
-    struct Knob
+    enum class CtlKind { Knob, Choice, Toggle };
+
+    struct Control
     {
-        juce::Slider slider;
-        juce::Label  label;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-    };
-    struct ChoiceCtl
-    {
-        juce::ComboBox  combo;
-        juce::Label     label;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> attachment;
-    };
-    struct ToggleCtl
-    {
-        juce::ToggleButton button;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> attachment;
+        CtlKind kind = CtlKind::Knob;
+        // One of these is populated depending on `kind`.
+        std::unique_ptr<juce::Slider>           slider;
+        std::unique_ptr<juce::ComboBox>         combo;
+        std::unique_ptr<juce::ToggleButton>     button;
+        std::unique_ptr<juce::Label>            label;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>   sAtt;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> cAtt;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>   bAtt;
     };
 
     struct Section
     {
-        juce::String      name;
-        juce::Colour      accent;
-        juce::Rectangle<int> bounds;
-        // Children are owned by Section so they're added/removed as a unit.
-        std::vector<std::unique_ptr<Knob>>      knobs;
-        std::vector<std::unique_ptr<ChoiceCtl>> choices;
-        std::vector<std::unique_ptr<ToggleCtl>> toggles;
+        juce::String name;
+        juce::Colour accent;
+        juce::Rectangle<int> bounds;   // assigned in resized()
+        std::vector<std::unique_ptr<Control>> controls;
     };
 
-    Knob*      addKnob   (Section& s, juce::AudioProcessorValueTreeState& apvts,
-                          const juce::String& paramId, const juce::String& displayName);
-    ChoiceCtl* addChoice (Section& s, juce::AudioProcessorValueTreeState& apvts,
-                          const juce::String& paramId, const juce::String& displayName);
-    ToggleCtl* addToggle (Section& s, juce::AudioProcessorValueTreeState& apvts,
-                          const juce::String& paramId, const juce::String& displayName);
-    void       layoutSection(Section& s);
+    Control* addKnob   (Section& s, const juce::String& paramId, const juce::String& displayName);
+    Control* addChoice (Section& s, const juce::String& paramId, const juce::String& displayName);
+    Control* addToggle (Section& s, const juce::String& paramId, const juce::String& displayName);
+    void     layoutSection(Section& s);
+
+    void paintHeader(juce::Graphics& g, juce::Rectangle<int> area);
+    void paintSectionFrame(juce::Graphics& g, const Section& s);
+    void paintFinBand(juce::Graphics& g, juce::Rectangle<int> area);
 
     juce::AudioProcessorValueTreeState& apvts_;
     std::vector<Section> sections_;
-    std::vector<std::unique_ptr<Knob>>      headerKnobs_;
-    std::vector<std::unique_ptr<ToggleCtl>> headerToggles_;
-    Knob* masterOutKnob_ = nullptr;  // hero (header right side).
+    // Header-band controls: master OUT + LIM toggle + LIM AMT.
+    std::vector<std::unique_ptr<Control>> header_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FaceplatePanel)
 };
