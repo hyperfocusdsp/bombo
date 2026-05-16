@@ -63,8 +63,6 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         persistentState_.setActiveTheme(name);
     };
 
-    addAndMakeVisible(themeSelector_);
-
    #if JUCE_LINUX
     // Run exactly once per process. Inside a DAW host, the host's own X
     // window may not benefit, but the claim itself is harmless (idempotent
@@ -76,6 +74,11 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     setOpaque(false);
     setLookAndFeel(&lnf);
     addAndMakeVisible(faceplate);
+    // Selector added AFTER faceplate so it paints on TOP of the chassis
+    // (faceplate fills the full editor surface; without this order the
+    // ComboBox is occluded). Temporary in T7; HeaderBar in Plan B owns
+    // the proper layout.
+    addAndMakeVisible(themeSelector_);
 
     // Design-size coordinates the faceplate paints in. Resizing applies
     // an AffineTransform::scale so every knob, label, column, fin, and
