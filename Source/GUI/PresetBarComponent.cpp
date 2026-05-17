@@ -29,8 +29,9 @@ PresetBarComponent::PresetBarComponent(PresetBank& bank,
 
     addAndMakeVisible(name_);
     name_.setJustificationType(juce::Justification::centred);
-    name_.setColour(juce::Label::textColourId, col::bone());
-    name_.setFont(bombo::fonts::value(13.0f));
+    name_.setColour(juce::Label::textColourId,        col::accentAmber());
+    name_.setColour(juce::Label::backgroundColourId,  juce::Colours::transparentBlack);
+    name_.setFont(bombo::fonts::value(15.0f).boldened());
     name_.setInterceptsMouseClicks(false, false);  // bar handles its own clicks
 
     addChildComponent(nameEditor_);
@@ -56,13 +57,20 @@ void PresetBarComponent::refresh()
     juce::String text;
     if (idx >= 0 && n > 0)
     {
+        // currentDisplayName() returns std::string with UTF-8 bytes —
+        // wrap with CharPointer_UTF8 so any accented chars in preset
+        // names round-trip cleanly (same pattern as the popup menu).
         text = juce::String(idx + 1) + " / " + juce::String(n)
              + "   "
-             + juce::String(bank_.currentDisplayName());
+             + juce::String(juce::CharPointer_UTF8(bank_.currentDisplayName().c_str()));
     }
     else
     {
-        text = juce::String("— ") + juce::String(n) + " presets";
+        // U+2014 em-dash literal forced through CharPointer_UTF8 so
+        // narrow-string decoding on Linux/Windows doesn't render it
+        // as the latin-1 mojibake sequence 'â€"'.
+        text = juce::String(juce::CharPointer_UTF8("— "))
+             + juce::String(n) + " presets";
     }
     name_.setText(text, juce::dontSendNotification);
 }

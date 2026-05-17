@@ -607,14 +607,18 @@ void FaceplatePanel::resized()
     }
 
     // Preset bar — moved INTO the former yellow-cartouche-band footprint
-    // 2026-05-17. The PresetBarComponent paints its own backdrop +
-    // chevrons, so it visually replaces the cartouche. bandRect_ stays
-    // around as the layout anchor + F2 drag handle, and the layout
-    // override id ("presetBar") still works for fine-tuning.
+    // 2026-05-17. bandRect_ provides the vertical Y/height (so the bar
+    // sits exactly where the cartouche used to), but horizontally we
+    // span the full chassis interior so the chevrons + ≡ menu have
+    // room to breathe (the cartouche width was sized for centred text,
+    // ~130 actual px, which overflowed the preset bar buttons).
     int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
     if (presetBar_ != nullptr)
     {
-        const juce::Rectangle<int> barDefault = bandRect_.toNearestInt();
+        const juce::Rectangle<int> barDefault(chassisL + 16,
+                                              static_cast<int>(bandRect_.getY()),
+                                              (chassisR - chassisL) - 32,
+                                              static_cast<int>(bandRect_.getHeight()));
         presetBarBounds_ = layout_.boundsOr("presetBar", barDefault);
         presetBar_->setBounds(presetBarBounds_);
         macroTop = presetBarBounds_.getBottom() + 8;
@@ -927,11 +931,13 @@ void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
     //   6 = OUT     (centre, master gain APVTS-bound)
     if (noseInterior.isEmpty()) return;
 
-    constexpr int kSatSize   = 38;     // satellite knob diameter
-    constexpr int kHeroSize  = 70;     // OUT hero diameter
+    constexpr int kSatSize   = 36;     // satellite knob diameter
+    constexpr int kHeroSize  = 64;     // OUT hero diameter
     constexpr int kLabelH    = 12;
     constexpr int kLabelGap  = 2;
-    constexpr int kRingGap   = 14;     // gap between OUT edge and satellite edge
+    constexpr int kRingGap   = 22;     // gap between OUT edge and satellite edge
+                                       // (enough for OUT's own label to live
+                                       // between OUT and the bottom satellite)
 
     // Ring radius from centre of OUT to centre of each satellite. Edge-
     // to-edge gap is kRingGap so the cluster reads as a tight assembly
