@@ -80,6 +80,22 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // the proper layout.
     addAndMakeVisible(themeSelector_);
 
+    // BBS overlay — added LAST so it paints above everything (faceplate,
+    // selector). Stays invisible until activation. The callbacks persist
+    // the unlock state on first show and the last-seen screen on dismiss.
+    addChildComponent(bbs_);
+    bbs_.onShown = [this]
+    {
+        if (! persistentState_.getBbsUnlocked())
+            persistentState_.setBbsUnlocked(true);
+    };
+    bbs_.onDismissed = [this]
+    {
+        // Last-screen tracking lives on BBSComponent once 1d ships;
+        // for now the dismiss callback exists so the wiring is in place.
+        (void) this;
+    };
+
     // Design-size coordinates the faceplate paints in. Resizing applies
     // an AffineTransform::scale so every knob, label, column, fin, and
     // band scales together — no per-child re-layout, no overflow.
@@ -220,6 +236,11 @@ void BomboEditor::resized()
     // Temporary theme selector — will be replaced by HeaderBar in Plan B.
     themeSelector_.setBounds(getWidth() - 110, 4, 100, 22);
 
+    // BBS overlay always sized to the full editor — independent of the
+    // faceplate's scaled transform. Phase 2's chassis reshape just changes
+    // getLocalBounds(); the overlay's resized() will re-fit automatically.
+    bbs_.setBounds(getLocalBounds());
+
    #if JucePlugin_Build_Standalone
     // Persist the editor width so the next launch reopens at this scale.
     // Skip until initialSizeApplied_ — the ctor's design-default setSize
@@ -241,6 +262,17 @@ void BomboEditor::visibilityChanged()
 
 bool BomboEditor::keyPressed(const juce::KeyPress& key)
 {
+    // Dev-only BBS shortcut — replaced in Phase 2 by long-press on the
+    // central nose detonator (the Archie fuze). Ctrl+Shift+B is unlikely
+    // to clash with DAW-host shortcuts (most use plain Ctrl+B or Cmd+B
+    // for bus/bypass actions; the Shift variant is rarely bound).
+    if (key.getModifiers().isCtrlDown() && key.getModifiers().isShiftDown()
+        && juce::CharacterFunctions::toLowerCase(key.getTextCharacter()) == 'b')
+    {
+        if (! bbs_.isVisible()) bbs_.show();
+        return true;
+    }
+
     // Transport-style keybinds:
     //   Space / Return → toggle LOOP (start = first kick + auto-fire at BPM,
     //                                  stop = deferred tail kill at next beat).

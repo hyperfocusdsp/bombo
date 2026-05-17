@@ -5,6 +5,7 @@
 
 #include "GUI/BomboLookAndFeel.h"
 #include "GUI/FaceplatePanel.h"
+#include "GUI/BBS/BBSComponent.h"
 #include "GUI/Theme/ThemeProvider.h"
 #include "State/PersistentState.h"
 
@@ -40,6 +41,12 @@ private:
     // `this` and writes to persistentState_.
     bombo::PersistentState persistentState_;
     juce::ComboBox themeSelector_;
+
+    // BBS hidden terminal overlay. Sibling of `faceplate`, sized to the
+    // full editor bounds, invisible by default. Phase 2 wires the nose
+    // detonator long-press → bbs_.show(); for now Ctrl+Shift+B in
+    // keyPressed() shows it for development.
+    bombo::BBSComponent bbs_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };

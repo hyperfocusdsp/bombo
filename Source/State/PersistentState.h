@@ -32,6 +32,16 @@ public:
     juce::String getActiveTheme() const;
     void         setActiveTheme(const juce::String& name);
 
+    // BBS hidden-terminal state. unlocked = user has triggered the BBS
+    // detonator at least once. lastScreen = the screen-state enum value
+    // they were on when they last dismissed it, so re-entry lands where
+    // they left off. Defaults are: not unlocked, last screen = 0 (login).
+    bool getBbsUnlocked() const;
+    void setBbsUnlocked(bool unlocked);
+
+    int  getBbsLastScreen() const;
+    void setBbsLastScreen(int screenEnum);
+
 private:
     std::unique_ptr<juce::PropertiesFile> props_;
 

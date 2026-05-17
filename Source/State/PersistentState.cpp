@@ -55,4 +55,26 @@ void PersistentState::setActiveTheme(const juce::String& name)
     props_->saveIfNeeded();
 }
 
+bool PersistentState::getBbsUnlocked() const
+{
+    return props_->getBoolValue("bbs.unlocked", false);
+}
+
+void PersistentState::setBbsUnlocked(bool unlocked)
+{
+    props_->setValue("bbs.unlocked", unlocked);
+    props_->saveIfNeeded();
+}
+
+int PersistentState::getBbsLastScreen() const
+{
+    return props_->getIntValue("bbs.lastScreen", 0);
+}
+
+void PersistentState::setBbsLastScreen(int screenEnum)
+{
+    props_->setValue("bbs.lastScreen", screenEnum);
+    props_->saveIfNeeded();
+}
+
 } // namespace bombo

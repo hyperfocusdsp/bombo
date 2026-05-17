@@ -76,6 +76,8 @@ target_sources(Bombo
         Source/GUI/WaveBuffer.h
         Source/GUI/ScopeComponent.h
         Source/GUI/ScopeComponent.cpp
+        Source/GUI/BBS/BBSComponent.h
+        Source/GUI/BBS/BBSComponent.cpp
         Source/DSP/Oscillators.h
         Source/DSP/Envelopes.h
         Source/DSP/ClickGen.h
@@ -146,6 +148,7 @@ if(BOMBO_BUILD_TESTS)
         tests/PaletteTests.cpp
         tests/VoiceStealingTests.cpp
         tests/StateRoundTripTests.cpp
+        tests/BbsPersistenceTests.cpp
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.cpp)
