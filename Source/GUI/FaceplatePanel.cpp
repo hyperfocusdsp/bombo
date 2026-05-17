@@ -608,19 +608,14 @@ void FaceplatePanel::resized()
         scope_.setBounds(scopeBounds_);
     }
 
-    // Preset bar — moved INTO the former yellow-cartouche-band footprint
-    // 2026-05-17. bandRect_ provides the vertical Y/height (so the bar
-    // sits exactly where the cartouche used to), but horizontally we
-    // span the full chassis interior so the chevrons + ≡ menu have
-    // room to breathe (the cartouche width was sized for centred text,
-    // ~130 actual px, which overflowed the preset bar buttons).
+    // Preset bar = the cartouche footprint, full stop. No extending
+    // past the band edges into chassis-graphite territory (looked like
+    // a grey overlap on top of the bomb). Buttons must fit INSIDE the
+    // band rect — see PresetBarComponent::resized for the slim sizing.
     int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
     if (presetBar_ != nullptr)
     {
-        const juce::Rectangle<int> barDefault(chassisL + 16,
-                                              static_cast<int>(bandRect_.getY()),
-                                              (chassisR - chassisL) - 32,
-                                              static_cast<int>(bandRect_.getHeight()));
+        const juce::Rectangle<int> barDefault = bandRect_.toNearestInt();
         presetBarBounds_ = layout_.boundsOr("presetBar", barDefault);
         presetBar_->setBounds(presetBarBounds_);
         macroTop = presetBarBounds_.getBottom() + 8;
