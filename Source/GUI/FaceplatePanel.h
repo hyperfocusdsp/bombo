@@ -129,6 +129,7 @@ private:
     void paintCapAndFins (juce::Graphics& g);
     void paintRedRegion  (juce::Graphics& g);
     void paintBand       (juce::Graphics& g);
+    void paintScopeFrame (juce::Graphics& g);
     void paintHeader     (juce::Graphics& g, juce::Rectangle<int> area);
     void paintSection    (juce::Graphics& g, const Section& s);
 
