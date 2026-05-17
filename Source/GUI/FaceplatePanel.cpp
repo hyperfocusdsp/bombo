@@ -520,12 +520,10 @@ void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
                area.withTrimmedLeft(20).removeFromLeft(160),
                juce::Justification::centredLeft);
 
-    // Subtitle.
-    g.setColour(col::boneDim());
-    g.setFont(fonts::label(10.5f));
-    g.drawText("half kick  \xE2\x80\xA2  half BBS",
-               area.withTrimmedLeft(180).withWidth(280),
-               juce::Justification::centredLeft);
+    // Subtitle removed 2026-05-17 — was clashing with the right-side pill
+    // chain (LIM/LOOP/BPM/BALANCE/DICE). The BOMBO-TEC · PEACE EDITION ·
+    // 1992 · FOSS cartouche on the yellow band already tells the lore
+    // story; the header subtitle was redundant.
 
     // Hairline at bottom edge.
     g.setColour(col::ink().withAlpha(0.7f));
@@ -662,27 +660,45 @@ void FaceplatePanel::resized()
     chassisApexY_       = chassisApexY;
 
     // ── Bands inside the chassis rect ───────────────────────────────
-    headerBounds_ = { chassisL, chassisT, chassisR - chassisL, kHeaderH };
+    // Header + scope share a single width = fin-tip outer extent. This
+    // gives the entire "rear assembly" (header → scope → fins) a single
+    // unified outer rectangle. Olive body shows on the left + right of
+    // the header → freed pixels available for future fin-area UI (user
+    // direction 2026-05-17: "we can get to use the free space in the
+    // fins and nose for new features").
+    const bombo::BombShape::Params bp{};
+    const float finTipTotalRefW = bp.bodyBulgeW + 2.0f * bp.finOutX;
+    const float scaleX          = static_cast<float>(w) / bombo::BombShape::kRefW;
+    const int   finTipW         = static_cast<int>(finTipTotalRefW * scaleX);
+    const int   finTipX         = (w - finTipW) / 2;
+    headerBounds_ = { finTipX, chassisT, finTipW, kHeaderH };
 
-    // Scope strip — width matches the fin tip outer extent so the scope
-    // + fins read as one continuous "rear assembly" unit. Inset by the
-    // scope's red U-frame border (paintScopeFrame draws it).
+    // Scope strip inside its red U-frame, same finTipW as the header.
     constexpr int kScopeBorder = 3;
     const int scopeTop = chassisT + kHeaderH;
-    {
-        const bombo::BombShape::Params bp{};
-        const float finTipTotalRefW = bp.bodyBulgeW + 2.0f * bp.finOutX;
-        const float scaleX = static_cast<float>(w) / bombo::BombShape::kRefW;
-        const int scopeFrameW = static_cast<int>(finTipTotalRefW * scaleX);
-        const int scopeFrameX = (w - scopeFrameW) / 2;
-        scopeBounds_ = { scopeFrameX + kScopeBorder,
-                         scopeTop + 8,
-                         scopeFrameW - 2 * kScopeBorder,
-                         kScopeH - 16 };
-    }
+    scopeBounds_ = { finTipX + kScopeBorder,
+                     scopeTop + 8,
+                     finTipW - 2 * kScopeBorder,
+                     kScopeH - 16 };
     scope_.setBounds(scopeBounds_);
 
-    const int macroTop = scopeTop + kScopeH;
+    // Macro + rack vertical centering inside the body interior (2026-05-17).
+    // Body interior = bandRect_.getBottom() (top boundary) → redRegionTopY_
+    // (bottom boundary). Macro sits below the band; rack sits below macros
+    // with kRackTopGap (which also hosts the balance fader). Center the
+    // macro+rack stack inside the interior with a few px of olive frame.
+    const int bodyInteriorTop = static_cast<int>(bandRect_.getBottom()) + 8;
+    const int bodyInteriorBot = static_cast<int>(redRegionTopY_) - 12;
+    const int interiorH       = bodyInteriorBot - bodyInteriorTop;
+    // Rack target height — computed below using maxControls; here we just
+    // need to know macro + gap + rack approximate total to center the stack.
+    int maxControlsTmp = 0;
+    for (const auto& s : sections_)
+        maxControlsTmp = juce::jmax(maxControlsTmp, static_cast<int>(s.controls.size()));
+    const int rackHTarget   = kColTitleH + maxControlsTmp * kRowH + 4;
+    const int stackH        = kMacroH + kRackTopGap + rackHTarget;
+    const int stackTopY     = bodyInteriorTop + juce::jmax(0, (interiorH - stackH) / 2);
+    const int macroTop      = stackTopY;
     layoutMacros({ chassisL, macroTop, chassisR - chassisL, kMacroH });
 
     // ── Rack columns ────────────────────────────────────────────────

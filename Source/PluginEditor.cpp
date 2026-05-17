@@ -249,10 +249,12 @@ void BomboEditor::resized()
     const int boundsH = static_cast<int>(std::ceil(static_cast<float>(getHeight()) / scale));
     faceplate.setBounds(0, 0, boundsW, boundsH);
 
-    // Temporary theme selector — will be replaced by HeaderBar in Plan B.
-    themeSelector_.setBounds(getWidth() - 110, 4, 100, 22);
-    // BBS dev button — sits just left of the theme selector.
-    bbsButton_.setBounds(getWidth() - 158, 4, 44, 22);
+    // Temporary theme selector + BBS dev button — moved 2026-05-17 to the
+    // BOTTOM-right of the editor so they don't overlap the faceplate's
+    // header pills. Both go away when Phase 2's HeaderBar (Plan B) and
+    // NoseDetonator (Phase 2f) ship.
+    themeSelector_.setBounds(getWidth() - 110, getHeight() - 26, 100, 22);
+    bbsButton_.setBounds(getWidth() - 158, getHeight() - 26, 44, 22);
 
     // BBS overlay always sized to the full editor — independent of the
     // faceplate's scaled transform. Phase 2's chassis reshape just changes
