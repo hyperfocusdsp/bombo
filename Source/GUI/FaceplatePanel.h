@@ -126,7 +126,9 @@ private:
 
     void paintBackground (juce::Graphics& g);
     void paintChassis    (juce::Graphics& g);
-    void paintChassisTail(juce::Graphics& g);
+    void paintCapAndFins (juce::Graphics& g);
+    void paintRedRegion  (juce::Graphics& g);
+    void paintBand       (juce::Graphics& g);
     void paintHeader     (juce::Graphics& g, juce::Rectangle<int> area);
     void paintSection    (juce::Graphics& g, const Section& s);
 
@@ -140,14 +142,20 @@ private:
     // FX rack — 7 columns left to right.
     std::vector<Section> sections_;
 
-    // Single chassis shape: rounded-top rectangle that tapers to a
-    // bottom-centre apex (the bomb-tail silhouette). Outside this path
-    // the panel paints a darker backdrop so the JUCE resize-corner sits
-    // on visible empty space in the bottom-right.
-    juce::Path           chassisPath_;
-    juce::Rectangle<int> chassisRectArea_;   // top rectangular portion (excludes tail)
-    int                  chassisRectBottomY_ = 0;
-    int                  chassisApexY_       = 0;
+    // Mini-Nuke chassis silhouette (R4B-CLASSIC, locked 2026-05-17).
+    // chassisPath_ is the unified body egg-shape from rear-cap area to
+    // the rounded nose tip — ONE continuous path (no body/nose seam).
+    // cap + fin paths are separate so they can render BEHIND the body,
+    // with the body's outline hiding their attachment edges.
+    juce::Path             chassisPath_;
+    juce::Path             capPath_;
+    juce::Path             finPathL_;
+    juce::Path             finPathR_;
+    juce::Rectangle<float> bandRect_{};
+    float                  redRegionTopY_ = 0.0f;
+    juce::Rectangle<int>   chassisRectArea_;   // inscribed UI region for child widgets
+    int                    chassisRectBottomY_ = 0;
+    int                    chassisApexY_       = 0;
 
     // Header pills.
     std::unique_ptr<juce::ToggleButton> limPill_;

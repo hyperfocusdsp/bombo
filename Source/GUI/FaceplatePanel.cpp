@@ -1,6 +1,7 @@
 #include "FaceplatePanel.h"
 
 #include "BalanceFader.h"
+#include "BombShape.h"
 #include "BpmDisplay.h"
 #include "Colours.h"
 #include "DiceButton.h"
@@ -361,10 +362,14 @@ FaceplatePanel::makePlaceholderKnob(const juce::String& displayName,
 void FaceplatePanel::paint(juce::Graphics& g)
 {
     paintBackground(g);
+    // Cap + fins drawn BEHIND body so the body's outline hides the seam
+    // where they attach. Matches tools/bombshape_gen.py rendering order.
+    paintCapAndFins(g);
     paintChassis(g);
+    paintRedRegion(g);
+    paintBand(g);
     paintHeader(g, headerBounds_);
     for (const auto& s : sections_) paintSection(g, s);
-    paintChassisTail(g);
 }
 
 void FaceplatePanel::paintBackground(juce::Graphics& g)
@@ -381,7 +386,9 @@ void FaceplatePanel::paintChassis(juce::Graphics& g)
 {
     if (chassisPath_.isEmpty()) return;
 
-    // Chassis fill: vertical gradient so the bomb body has a hint of depth.
+    // Body fill — olive green for the VAULT theme treatment (Phase 2 lock
+    // 2026-05-17). For other themes the col::graphite gradient still reads
+    // as the body color; the Mini-Nuke read is theme-specific.
     juce::ColourGradient grad(col::graphiteHi(),
                               static_cast<float>(getWidth()) * 0.5f,
                               static_cast<float>(chassisRectArea_.getY()),
@@ -394,31 +401,74 @@ void FaceplatePanel::paintChassis(juce::Graphics& g)
     g.fillPath(chassisPath_);
 }
 
-void FaceplatePanel::paintChassisTail(juce::Graphics& g)
+void FaceplatePanel::paintCapAndFins(juce::Graphics& g)
+{
+    if (capPath_.isEmpty()) return;
+    // Cap + fins use a darker shade so they read as separate hardware
+    // pieces behind the body. Body's outline (drawn next) hides the seam.
+    g.setColour(col::ink().interpolatedWith(col::graphite(), 0.3f));
+    g.fillPath(capPath_);
+    // Red fins — matches the Mini-Nuke ref. Falls back to accent if no
+    // explicit red is defined for the current theme.
+    g.setColour(col::accentAmber().withRotatedHue(0.95f).withSaturation(0.7f));
+    g.fillPath(finPathL_);
+    g.fillPath(finPathR_);
+}
+
+void FaceplatePanel::paintRedRegion(juce::Graphics& g)
 {
     if (chassisPath_.isEmpty()) return;
-
-    // Below the rack, paint a faint horizontal gradient using the column
-    // accents so the tail reads as a continuation of the rack signal
-    // chain, not as dead chassis space. Clipped by the chassis path so
-    // the gradient terminates at the V edge.
-    const float x0 = static_cast<float>(chassisRectArea_.getX());
-    const float x1 = static_cast<float>(chassisRectArea_.getRight());
-    const float y0 = static_cast<float>(chassisRectBottomY_);
-    const float y1 = static_cast<float>(chassisApexY_);
-
-    juce::ColourGradient grad(col::drive().withAlpha(0.18f),  x0, 0.0f,
-                              col::duck ().withAlpha(0.18f),  x1, 0.0f,
-                              false);
-    grad.addColour(0.18, col::voice  ().withAlpha(0.18f));
-    grad.addColour(0.36, col::delayC ().withAlpha(0.18f));
-    grad.addColour(0.52, col::reverb ().withAlpha(0.18f));
-    grad.addColour(0.70, col::filterC().withAlpha(0.18f));
-
+    // Red paint region clipped to the body silhouette — gives the
+    // chunky-bomb red nose without ANY seam in the outline. The ring
+    // line at y=redRegionTopY_ is a designed marker (not an outline).
     g.saveState();
     g.reduceClipRegion(chassisPath_);
-    g.setGradientFill(grad);
-    g.fillRect(juce::Rectangle<float>(x0, y0, x1 - x0, y1 - y0));
+
+    // VAULT theme red — derived from the amber accent for now (theme-
+    // safe fallback). The dedicated noseRed slot lands with Phase 2e.
+    const juce::Colour noseRed = col::accentAmber()
+                                    .withRotatedHue(0.95f)
+                                    .withSaturation(0.78f)
+                                    .withMultipliedBrightness(0.85f);
+    g.setColour(noseRed);
+    g.fillRect(juce::Rectangle<float>(0.0f,
+                                      redRegionTopY_,
+                                      static_cast<float>(getWidth()),
+                                      static_cast<float>(getHeight()) - redRegionTopY_));
+
+    // Boundary ring line — thin dark stroke right at the paint split.
+    // Inside the silhouette only (we're still clipped to chassisPath_).
+    g.setColour(col::ink().withAlpha(0.6f));
+    g.drawLine(0.0f, redRegionTopY_,
+               static_cast<float>(getWidth()), redRegionTopY_, 1.5f);
+
+    g.restoreState();
+}
+
+void FaceplatePanel::paintBand(juce::Graphics& g)
+{
+    if (bandRect_.isEmpty()) return;
+    // Yellow hazard band (VAULT theme cartouche). Uses the existing amber
+    // accent for now — a dedicated bandYellow slot will land with Phase 2e.
+    g.saveState();
+    g.reduceClipRegion(chassisPath_);
+    g.setColour(col::accentAmber());
+    g.fillRect(bandRect_);
+    // Cartouche text — BOMBO-TEC + PEACE EDITION serial. Stencil-aware
+    // monospace from bombo::fonts::value. Two lines, centered in the band.
+    const float bx = bandRect_.getX();
+    const float by = bandRect_.getY();
+    const float bw = bandRect_.getWidth();
+    const float bh = bandRect_.getHeight();
+    g.setColour(col::ink());
+    g.setFont(bombo::fonts::value(bh * 0.32f));
+    g.drawText("BOMBO-TEC",
+               juce::Rectangle<float>(bx, by + bh * 0.10f, bw, bh * 0.42f),
+               juce::Justification::centred, false);
+    g.setFont(bombo::fonts::value(bh * 0.18f));
+    g.drawText("PEACE EDITION · 1992 · FOSS",
+               juce::Rectangle<float>(bx, by + bh * 0.55f, bw, bh * 0.40f),
+               juce::Justification::centred, false);
     g.restoreState();
 }
 
@@ -562,25 +612,23 @@ void FaceplatePanel::resized()
     chassisRectBottomY_ = chassisRectBot;
     chassisApexY_       = chassisApexY;
 
-    // Build the chassis path: rounded top, straight sides, V tail.
+    // Build the chassis path via the parametric Mini-Nuke silhouette
+    // generator (locked R4B-CLASSIC 2026-05-17). The path is a single
+    // continuous egg-shape from rear-cap area down through the bulge to
+    // the rounded nose tip — no seam between body and "nose"; the red
+    // region (drawn in paintRedRegion) is a clipped paint inside the
+    // same silhouette. Body, cap, and fin paths are owned by FaceplatePanel
+    // as members so paint() can reference them per-stage.
     {
-        const float xL = static_cast<float>(chassisL);
-        const float xR = static_cast<float>(chassisR);
-        const float yT = static_cast<float>(chassisT);
-        const float yB = static_cast<float>(chassisRectBot);
-        const float yA = static_cast<float>(chassisApexY);
-        const float xC = (xL + xR) * 0.5f;
-        const float r  = static_cast<float>(kChassisCornerR);
-
-        chassisPath_.clear();
-        chassisPath_.startNewSubPath(xL, yT + r);
-        chassisPath_.quadraticTo(xL, yT, xL + r, yT);
-        chassisPath_.lineTo(xR - r, yT);
-        chassisPath_.quadraticTo(xR, yT, xR, yT + r);
-        chassisPath_.lineTo(xR, yB);
-        chassisPath_.lineTo(xC, yA);
-        chassisPath_.lineTo(xL, yB);
-        chassisPath_.closeSubPath();
+        const juce::Rectangle<float> boundsF(0.0f, 0.0f,
+                                             static_cast<float>(w),
+                                             static_cast<float>(h));
+        chassisPath_ = bombo::BombShape::buildBombPath(boundsF);
+        capPath_     = bombo::BombShape::buildCapPath(boundsF);
+        finPathL_    = bombo::BombShape::buildFinPath(boundsF, -1);
+        finPathR_    = bombo::BombShape::buildFinPath(boundsF, +1);
+        bandRect_    = bombo::BombShape::bandRect(boundsF);
+        redRegionTopY_ = bombo::BombShape::redRegionTopYInBounds(boundsF);
     }
 
     // ── Bands inside the chassis rect ───────────────────────────────
