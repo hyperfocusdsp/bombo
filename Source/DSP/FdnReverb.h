@@ -19,7 +19,11 @@ public:
     static constexpr int kMaxAllpassSamples = 1024;
     static constexpr int kMaxPredelaySamples = 32768;
     static constexpr float kStopFadeMs = 80.0f;
-    static constexpr float kKillFadeMs = 6.0f;   // per-trigger smooth tail kill
+    // Bumped 6 → 30 ms (2026-05-17) so the per-trigger and per-loop
+    // tail kill is audibly click-free at high feedback / large size.
+    // FDN tails sustain longer than the Delay buffer, so a longer
+    // smooth ramp is essential here.
+    static constexpr float kKillFadeMs = 30.0f;
 
     // FDN delay-line lengths @ 44.1 kHz — coprime primes, ~octave spread.
     static constexpr int kFdnLengths44k[4] = { 743, 1093, 1361, 1697 };

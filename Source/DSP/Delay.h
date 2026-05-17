@@ -14,7 +14,12 @@ class Delay
 {
 public:
     static constexpr int kMaxSamples = 200000;
-    static constexpr float kKillFadeMs = 5.0f;
+    // kKillFadeMs bumped 5 → 30 ms 2026-05-17: the 5 ms ramp was
+    // short enough that high-feedback tails clicked at the cut point.
+    // 30 ms lets the V-ramp land near zero regardless of where in the
+    // delay cycle the kill arrives, eliminating the audible click on
+    // loop-tail-chop AND on space-to-stop scenarios.
+    static constexpr float kKillFadeMs = 30.0f;
     static constexpr float kStopFadeMs = 80.0f;
 
     explicit Delay(float sampleRate = 48000.0f)
