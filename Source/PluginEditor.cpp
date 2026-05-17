@@ -96,6 +96,14 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         (void) this;
     };
 
+    // Dev affordance — small button next to the theme selector to open
+    // the BBS overlay. Replaced in Phase 2 by long-press on the central
+    // nose detonator (the Archie fuze).
+    bbsButton_.setButtonText("BBS");
+    bbsButton_.setTooltip("Open the hidden 1992 BBS terminal (Phase 2 will move this to the nose detonator)");
+    bbsButton_.onClick = [this] { bbs_.show(); };
+    addAndMakeVisible(bbsButton_);
+
     // Design-size coordinates the faceplate paints in. Resizing applies
     // an AffineTransform::scale so every knob, label, column, fin, and
     // band scales together — no per-child re-layout, no overflow.
@@ -235,6 +243,8 @@ void BomboEditor::resized()
 
     // Temporary theme selector — will be replaced by HeaderBar in Plan B.
     themeSelector_.setBounds(getWidth() - 110, 4, 100, 22);
+    // BBS dev button — sits just left of the theme selector.
+    bbsButton_.setBounds(getWidth() - 158, 4, 44, 22);
 
     // BBS overlay always sized to the full editor — independent of the
     // faceplate's scaled transform. Phase 2's chassis reshape just changes
@@ -263,11 +273,11 @@ void BomboEditor::visibilityChanged()
 bool BomboEditor::keyPressed(const juce::KeyPress& key)
 {
     // Dev-only BBS shortcut — replaced in Phase 2 by long-press on the
-    // central nose detonator (the Archie fuze). Ctrl+Shift+B is unlikely
-    // to clash with DAW-host shortcuts (most use plain Ctrl+B or Cmd+B
-    // for bus/bypass actions; the Shift variant is rarely bound).
-    if (key.getModifiers().isCtrlDown() && key.getModifiers().isShiftDown()
-        && juce::CharacterFunctions::toLowerCase(key.getTextCharacter()) == 'b')
+    // central nose detonator (the Archie fuze). Use getKeyCode() rather
+    // than getTextCharacter(): under Ctrl modifiers the text character
+    // becomes a control byte (Ctrl+B = STX = 0x02), not 'b'.
+    const auto mods = key.getModifiers();
+    if (mods.isCtrlDown() && mods.isShiftDown() && key.getKeyCode() == 'B')
     {
         if (! bbs_.isVisible()) bbs_.show();
         return true;
