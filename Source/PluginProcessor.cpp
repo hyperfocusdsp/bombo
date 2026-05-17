@@ -259,6 +259,12 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     // playing, triggers snap to the integer PPQ grid (so they ride the
     // host's beat phase); otherwise we free-run from samplesUntilLoopFire_.
     const bool loopNow = pLoopOn->get();
+    // Edge-detect: catch the moment the user turns loop OFF so we can
+    // schedule an immediate tail-kill (within ~1 block) rather than
+    // waiting a full beat for the universal deferred timer. With long
+    // delay times + high feedback, waiting a full beat lets the natural
+    // delay decay ring out audibly before the kill fires.
+    const bool loopJustTurnedOff = (lastLoopOn_ && ! loopNow);
     lastLoopOn_ = loopNow;
 
     if (loopNow && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
@@ -331,6 +337,18 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             * static_cast<double>(currentSampleRate_);
         pendingTailKillSamples_ = static_cast<int>(std::round(spb));
     }
+    // Loop just turned off — short-circuit any pending timer and arm
+    // the kill for the END of THIS block (so the delay+reverb buffers
+    // fade + flush right away, not a full beat later). Without this
+    // override, long delay times at high feedback keep audibly ringing
+    // for the entire remainder of the beat window. THIS BEHAVIOUR MUST
+    // BE PRESERVED — user has reported the regression more than once
+    // (2026-05-17).
+    if (loopJustTurnedOff)
+        pendingTailKillSamples_ = juce::jmin(pendingTailKillSamples_ < 0
+                                                 ? numSamples
+                                                 : pendingTailKillSamples_,
+                                             numSamples);
     if (pendingTailKillSamples_ >= 0)
     {
         pendingTailKillSamples_ -= numSamples;

@@ -113,17 +113,21 @@ void PresetBarComponent::resized()
     auto area = getLocalBounds().reduced(3, 2);
     if (area.isEmpty()) return;
 
-    const int h        = area.getHeight();
-    const int chevronW = juce::jmax(20, h + 2);
-    const int menuW    = juce::jmax(24, h + 4);
+    // Buttons get fixed, slim widths — the preset NAME is the
+    // hero of this strip, not the chevrons. Earlier sizing used
+    // (height + 2) which made the chevrons huge square slabs and
+    // squeezed the name down to nothing.
+    constexpr int kChevronW = 26;
+    constexpr int kMenuW    = 28;
+    constexpr int kGap      = 4;
 
-    prev_.setBounds(area.removeFromLeft(chevronW));
+    prev_.setBounds(area.removeFromLeft(kChevronW));
     area.removeFromLeft(2);
-    next_.setBounds(area.removeFromLeft(chevronW));
-    area.removeFromLeft(4);
+    next_.setBounds(area.removeFromLeft(kChevronW));
+    area.removeFromLeft(kGap);
 
-    menu_.setBounds(area.removeFromRight(menuW));
-    area.removeFromRight(2);
+    menu_.setBounds(area.removeFromRight(kMenuW));
+    area.removeFromRight(kGap);
 
     name_.setBounds(area);
     nameEditor_.setBounds(area);

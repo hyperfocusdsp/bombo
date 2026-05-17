@@ -624,15 +624,19 @@ void FaceplatePanel::resized()
         macroTop = presetBarBounds_.getBottom() + 8;
     }
     // Macros now live in the bomb's nose (red region) rather than in a
-    // horizontal strip above the rack. noseInteriorDefault is the
-    // bounding box; layoutMacrosInNose() centres the 3+2+2 stack inside
-    // it. F2 layout-edit can override the bounding box via "macroRow".
-    const int kNoseBottomPad = 8;   // headroom above the rounded tip
-    const juce::Rectangle<int> noseInteriorDefault(chassisL,
-                                                   static_cast<int>(redRegionTopY_) + 6,
+    // horizontal strip above the rack. The nose interior runs from the
+    // red-region top down to the chassis tip — NOT down to panel height
+    // (which would include space below the rounded silhouette tip and
+    // let the cluster's bottom satellite spill outside the bomb).
+    const bombo::BombShape::Params bsParams{};
+    const float tipYActual = bsParams.tipY * (static_cast<float>(h) / bombo::BombShape::kRefH);
+    const int noseTopPad     = 8;
+    const int noseBottomPad  = 6;
+    const int noseTop = static_cast<int>(redRegionTopY_) + noseTopPad;
+    const int noseBot = static_cast<int>(tipYActual) - noseBottomPad;
+    const juce::Rectangle<int> noseInteriorDefault(chassisL, noseTop,
                                                    chassisR - chassisL,
-                                                   h - static_cast<int>(redRegionTopY_)
-                                                       - 6 - kNoseBottomPad);
+                                                   juce::jmax(40, noseBot - noseTop));
     juce::Rectangle<int> noseInterior = layout_.boundsOr("macroRow", noseInteriorDefault);
     layoutMacrosInNose(noseInterior);
     macroBoundsTracked_ = noseInterior;
@@ -931,13 +935,16 @@ void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
     //   6 = OUT     (centre, master gain APVTS-bound)
     if (noseInterior.isEmpty()) return;
 
-    constexpr int kSatSize   = 36;     // satellite knob diameter
-    constexpr int kHeroSize  = 64;     // OUT hero diameter
+    // Sizes tuned to fit inside the actual bomb silhouette (not just the
+    // rectangular nose bounding box). The teardrop tapers steeply below
+    // the body-bottom line, so the cluster has to be modest.
+    constexpr int kSatSize   = 26;     // satellite knob diameter
+    constexpr int kHeroSize  = 46;     // OUT hero diameter
     constexpr int kLabelH    = 12;
     constexpr int kLabelGap  = 2;
-    constexpr int kRingGap   = 22;     // gap between OUT edge and satellite edge
-                                       // (enough for OUT's own label to live
-                                       // between OUT and the bottom satellite)
+    constexpr int kRingGap   = 14;     // gap between OUT edge and satellite edge
+                                       // (leaves room for OUT's label between
+                                       // OUT and the bottom satellite).
 
     // Ring radius from centre of OUT to centre of each satellite. Edge-
     // to-edge gap is kRingGap so the cluster reads as a tight assembly
@@ -951,18 +958,14 @@ void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
     const int clusterH = 2 * radius + kSatSize + kLabelGap + kLabelH;
 
     const int cx = noseInterior.getCentreX();
-    // Anchor the cluster well above vertical centre — the nose tapers
-    // wider at the top, so an upper-third placement lets the cluster
-    // breathe (no satellite-label flirting with the rounded tip) and
-    // positions OUT where the eye naturally lands when scanning down
-    // from the rack.
-    const int topMinCy = noseInterior.getY() + radius + kSatSize / 2 + 6;
-    const int botMaxCy = noseInterior.getBottom()
-                       - (radius + kSatSize / 2 + kLabelGap + kLabelH + 4);
-    // 35 % from the top of the nose interior (golden-ratio-ish anchor).
-    const int targetCy = noseInterior.getY()
-                       + static_cast<int>(noseInterior.getHeight() * 0.42f);
-    const int cy = juce::jlimit(topMinCy, botMaxCy, targetCy);
+    // Centre the cluster vertically inside the actual nose interior so
+    // the top satellite stays well below the red-region boundary and
+    // the bottom satellite + its label finish above the chassis tip.
+    const int topSatHalf  = radius + kSatSize / 2;
+    const int botSatHalf  = radius + kSatSize / 2 + kLabelGap + kLabelH;
+    const int verticalSpan = topSatHalf + botSatHalf;
+    const int slack        = juce::jmax(0, noseInterior.getHeight() - verticalSpan);
+    const int cy = noseInterior.getY() + topSatHalf + slack / 2;
 
     auto setKnob = [&](int macroIdx, int knobCx, int knobCy, int knobSize, bool wantLabel)
     {
