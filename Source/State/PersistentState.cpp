@@ -10,7 +10,17 @@ juce::PropertiesFile::Options defaultOptions()
     juce::PropertiesFile::Options o;
     o.applicationName         = "Bombo";
     o.filenameSuffix          = ".settings";
+    // JUCE's Linux PropertiesFile path logic uses `~` (not `~/.config`)
+    // as the base dir, so folderName must include `.config/` explicitly
+    // to follow XDG. On macOS/Windows JUCE roots in the platform's
+    // user-app-data dir anyway, so a leading `.config/` is harmless
+    // there (it just adds an inner folder). Keep "Bombo" on those
+    // platforms via the conditional.
+   #if JUCE_LINUX || JUCE_BSD || JUCE_ANDROID
+    o.folderName              = ".config/Bombo";
+   #else
     o.folderName              = "Bombo";
+   #endif
     o.osxLibrarySubFolder     = "Application Support";
     o.storageFormat           = juce::PropertiesFile::storeAsXML;
     o.commonToAllUsers        = false;
