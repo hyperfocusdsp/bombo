@@ -158,9 +158,14 @@ public:
         fbGain_ += (fbGainTarget_ - fbGain_) * (1.0f - smooth);
         wetLpfCoef_ += (wetLpfTargetCoef_ - wetLpfCoef_) * (1.0f - smooth);
 
-        // Predelay.
+        // Predelay. Bug fix 2026-05-17: during the kill-fade window, write
+        // ZERO instead of `input` so the predelay buffer doesn't capture
+        // any voice-fadeout tail or chain-feedback content that arrives
+        // while killTail is running. Otherwise that captured content
+        // emerges from the predelay readout AFTER the kill-fade closes
+        // and re-spins the FDN tail — same root cause as the Delay fix.
         const int pdLen = static_cast<int>(predelay_.size());
-        predelay_[predelayPos_] = input;
+        predelay_[predelayPos_] = (killFadeRemaining_ > 0) ? 0.0f : input;
         const int pdRead = (predelayPos_ + pdLen - predelaySamples_) % pdLen;
         const float predelayed = predelay_[pdRead];
         predelayPos_ = (predelayPos_ + 1) % pdLen;
