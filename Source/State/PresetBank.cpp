@@ -6,24 +6,22 @@
 #include <set>
 #include <string>
 
+#include "../ParameterIds.h"
+
 namespace bombo
 {
 
 namespace
 {
 
+// Built once from the single source of truth in ParameterIds.h.
 const std::set<std::string>& excludedIds()
 {
-    static const std::set<std::string> ids = {
-        "master_out",
-        "bpm",
-        "loop_on",
-        "limiter_on",
-        "voice_a_mute", "voice_b_mute",
-        "drive_mute",   "delay_mute",
-        "reverb_mute",  "filter_mute",
-        "duck_mute",
-    };
+    static const std::set<std::string> ids = [] {
+        std::set<std::string> s;
+        for (const char* id : kExcludedFromPresets) s.emplace(id);
+        return s;
+    }();
     return ids;
 }
 
