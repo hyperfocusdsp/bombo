@@ -387,6 +387,18 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         pendingTailKillSamples_ -= numSamples;
         if (pendingTailKillSamples_ <= 0)
         {
+            // User-reported 2026-05-17: "in any scenario, regardless of
+            // trig method, the tail should cut - and without introducing
+            // any clicking at any point." chain_.killTail() fades the FX
+            // wet over 6 ms but leaves the dry voice's natural decay
+            // running — so the kick body continued past the kill point
+            // while the wet dropped out, reading as "tail dies before
+            // next trig." Fix: also startFadeout() on every active voice
+            // so the dry body fades over its own 5 ms steal-fadeout
+            // alongside the wet, giving a tight clean tail cut.
+            for (auto& v : voices_)
+                if (v.isActive())
+                    v.startFadeout(currentSampleRate_);
             chain_.killTail();
             pendingTailKillSamples_ = -1;
         }
