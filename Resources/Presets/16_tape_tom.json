@@ -1,0 +1,15 @@
+{
+  "name": "TAPE TOM",
+  "displayName": "Tape Tom",
+  "params": {
+    "waveform": 1,
+    "pitch_start": 110.0, "pitch_end": 55.0, "pitch_decay": 140.0, "pitch_curve": 2.2,
+    "amp_decay": 700.0,
+    "click_amount": 0.20, "click_center": 3500.0,
+    "noise_amount": 0.40, "noise_color": 0.60,
+    "drive_amount": 0.40, "drive_mode": 2,
+    "fx_drive_amount": 0.20, "fx_drive_mode": 1,
+    "filter_lp": 3000.0, "filter_color": 0.25,
+    "delay_time": 240.0, "delay_mix": 0.15, "delay_drift": 0.30
+  }
+}

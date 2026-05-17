@@ -31,6 +31,17 @@ struct Palette
 
     // Accent
     juce::Colour accentAmber;
+
+    // Mini-Nuke chassis (R4B-CLASSIC silhouette, Phase 2e — locked 2026-05-17).
+    // The bomb body is painted as a vertical gradient from bodyHi (top) to
+    // bodyLo (apex); cap is the dark rear-cap behind the body; noseRed is the
+    // clipped paint region for the nose AND the rear fins; bandYellow is the
+    // BOMBO-TEC hazard cartouche.
+    juce::Colour bodyHi;
+    juce::Colour bodyLo;
+    juce::Colour cap;
+    juce::Colour noseRed;
+    juce::Colour bandYellow;
 };
 
 // Hard-coded BANDW palette = exact values from pre-refactor Colours.h.
@@ -53,6 +64,14 @@ inline Palette bandwPalette()
     p.knobBevel  = juce::Colour { 0xFF606066u };
     p.knobRubber = juce::Colour { 0xFF151517u };
     p.accentAmber= juce::Colour { 0xFFFFB800u };
+    // BANDW chassis fallback — graphite gradient + drive-orange "red" + amber band.
+    // Mini-Nuke silhouette painted in monochrome graphite; the chassis is the
+    // VAULT theme's home, BANDW is the legacy two-tone look.
+    p.bodyHi     = juce::Colour { 0xFF1A1C1Fu };
+    p.bodyLo     = juce::Colour { 0xFF141517u };
+    p.cap        = juce::Colour { 0xFF0A0B0Du };
+    p.noseRed    = juce::Colour { 0xFFD27845u };
+    p.bandYellow = juce::Colour { 0xFFFFB800u };
     return p;
 }
 

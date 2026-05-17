@@ -36,7 +36,19 @@ bool fillPalette(const juce::var& pal, Palette& out, std::string& err)
         return true;
     };
 
-    return take("graphite",    out.graphite)
+    // Optional fallbacks for the Phase 2e Mini-Nuke chassis fields. Themes
+    // authored before 2026-05-17 (bandw/phosphor/nightrun) may omit these;
+    // they get sensible derivations from the rest of the palette so a legacy
+    // JSON keeps parsing without manual edits.
+    auto takeOr = [&](const char* key, juce::Colour& dest, juce::Colour fallback)
+    {
+        if (! pal.hasProperty(key)) { dest = fallback; return; }
+        auto s = pal[key].toString();
+        if (! parseHexColour(s, dest)) dest = fallback;
+    };
+
+    const bool baseOk =
+           take("graphite",    out.graphite)
         && take("graphiteHi",  out.graphiteHi)
         && take("ink",         out.ink)
         && take("bone",        out.bone)
@@ -51,6 +63,15 @@ bool fillPalette(const juce::var& pal, Palette& out, std::string& err)
         && take("knobBevel",   out.knobBevel)
         && take("knobRubber",  out.knobRubber)
         && take("accentAmber", out.accentAmber);
+
+    if (! baseOk) return false;
+
+    takeOr("bodyHi",     out.bodyHi,     out.graphiteHi);
+    takeOr("bodyLo",     out.bodyLo,     out.graphite);
+    takeOr("cap",        out.cap,        out.ink);
+    takeOr("noseRed",    out.noseRed,    out.drive);
+    takeOr("bandYellow", out.bandYellow, out.accentAmber);
+    return true;
 }
 } // anonymous namespace
 

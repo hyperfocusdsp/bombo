@@ -31,4 +31,11 @@ inline juce::Colour knobRubber()  { return bombo::ThemeProvider::current().knobR
 
 inline juce::Colour accentAmber() { return bombo::ThemeProvider::current().accentAmber; }
 
+// Mini-Nuke chassis surfaces (Phase 2e).
+inline juce::Colour bodyHi()      { return bombo::ThemeProvider::current().bodyHi; }
+inline juce::Colour bodyLo()      { return bombo::ThemeProvider::current().bodyLo; }
+inline juce::Colour cap()         { return bombo::ThemeProvider::current().cap; }
+inline juce::Colour noseRed()     { return bombo::ThemeProvider::current().noseRed; }
+inline juce::Colour bandYellow()  { return bombo::ThemeProvider::current().bandYellow; }
+
 } // namespace bombo::col

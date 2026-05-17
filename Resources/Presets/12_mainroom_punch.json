@@ -1,0 +1,14 @@
+{
+  "name": "MAINROOM PUNCH",
+  "displayName": "Mainroom Punch",
+  "params": {
+    "pitch_start": 180.0, "pitch_end": 60.0, "pitch_decay": 55.0, "pitch_curve": 3.5,
+    "amp_decay": 650.0,
+    "click_amount": 0.50, "click_center": 5500.0,
+    "noise_amount": 0.20, "noise_color": 0.30,
+    "drive_amount": 0.60, "drive_mode": 1,
+    "fx_drive_amount": 0.25, "fx_drive_mode": 1,
+    "reverb_size": 0.55, "reverb_mix": 0.18,
+    "duck_depth": 0.60
+  }
+}

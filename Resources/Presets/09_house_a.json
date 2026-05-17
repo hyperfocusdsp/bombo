@@ -1,0 +1,13 @@
+{
+  "name": "HOUSE-A",
+  "displayName": "House-A",
+  "params": {
+    "pitch_start": 130.0, "pitch_end": 60.0, "pitch_decay": 80.0, "pitch_curve": 3.0,
+    "amp_decay": 450.0,
+    "click_amount": 0.35, "click_center": 4800.0,
+    "noise_amount": 0.20, "noise_color": 0.35,
+    "drive_amount": 0.20, "drive_mode": 1,
+    "reverb_size": 0.40, "reverb_mix": 0.20,
+    "duck_depth": 0.50
+  }
+}
