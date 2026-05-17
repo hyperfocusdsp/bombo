@@ -47,8 +47,10 @@ constexpr int kColTitleH    = 18;      // was 20
 constexpr int kColAccentH   = 3;
 constexpr int kModuleIdH    = 12;      // was 14
 constexpr int kInnerPadX    = 1;       // was 3 — eliminates inter-column gap
-constexpr int kRowH         = 78;      // grew from 64 → 78 after macro row left
-                                       // for the nose; bigger rack knobs.
+constexpr int kRowH         = 68;      // tight rows after squaring knobs: knob
+                                       // box scales with min(kColW, rowH-label-1)
+                                       // so bumping kColW + kRowH together gives
+                                       // bigger rack knobs without the old gap.
 constexpr int kKnobLabelH   = 13;
 constexpr int kNCols        = 7;
 } // namespace
@@ -648,7 +650,7 @@ void FaceplatePanel::resized()
     // body olive showing through on the sides — NOT a wall-to-wall rack
     // chewing the full chassis width. The total rack is centered
     // horizontally inside the chassis interior.
-    constexpr int kColW      = 44;
+    constexpr int kColW      = 54;
     const int totalGap       = (kNCols - 1) * kColGap;
     const int totalUsed      = kColW * kNCols + totalGap;
     const int colW           = kColW;
@@ -723,6 +725,11 @@ void FaceplatePanel::layoutSection(Section& s)
     // Uniform row height across all sections — every knob the same size.
     const int rowH = kRowH;
 
+    // Per-row layout: SQUARE knob (knobW × knobW) with the label flush
+    // beneath it. The 2026-05-17 layout had a 63 px-tall non-square knob
+    // box; the rotary visual rendered as 44 px circle anyway, so 19 px
+    // of empty colour-strip was wasted between the knob bottom and the
+    // label. Squaring it up and tightening saves ~20 px per row.
     int y = inner.getY();
     for (auto& cp : s.controls)
     {
@@ -730,26 +737,20 @@ void FaceplatePanel::layoutSection(Section& s)
         const auto cell = juce::Rectangle<int>(inner.getX(), y,
                                                inner.getWidth(), rowH);
 
+        const int labelH  = juce::jmin(kKnobLabelH, rowH / 4);
+        const int knobBox = juce::jmin(cell.getWidth(), rowH - labelH - 1);
+        const int knobX   = cell.getX() + (cell.getWidth() - knobBox) / 2;
+
         if (c.kind == CtlKind::Knob)
         {
-            const int labelH = juce::jmin(kKnobLabelH, rowH / 4);
-            const int knobH = cell.getHeight() - labelH - 2;
-            const int knobW = juce::jmin(cell.getWidth(), knobH);
-            const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
-            c.slider->setBounds(knobX, cell.getY(), knobW, knobH);
-            c.label->setBounds(cell.getX(), cell.getY() + knobH,
+            c.slider->setBounds(knobX, cell.getY(), knobBox, knobBox);
+            c.label->setBounds(cell.getX(), cell.getY() + knobBox,
                                cell.getWidth(), labelH);
         }
         else if (c.kind == CtlKind::SampleSlot)
         {
-            // The slot is a knob now (see SampleSlotWidget). Lay it out
-            // identically to a knob cell: square widget + label below.
-            const int labelH = juce::jmin(kKnobLabelH, rowH / 4);
-            const int knobH = cell.getHeight() - labelH - 2;
-            const int knobW = juce::jmin(cell.getWidth(), knobH);
-            const int knobX = cell.getX() + (cell.getWidth() - knobW) / 2;
-            c.sampleSlot->setBounds(knobX, cell.getY(), knobW, knobH);
-            c.label->setBounds(cell.getX(), cell.getY() + knobH,
+            c.sampleSlot->setBounds(knobX, cell.getY(), knobBox, knobBox);
+            c.label->setBounds(cell.getX(), cell.getY() + knobBox,
                                cell.getWidth(), labelH);
         }
         else
