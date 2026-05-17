@@ -92,6 +92,51 @@ public:
                 expect(! v.isActive(), "voice inactive after fadeout");
         }
 
+        beginTest("ALL prior voices fade out within steal window — no stragglers");
+        {
+            // Regression for the user-reported 2026-05-17 "voice A continues
+            // its release past the next trig" bug. With 4 voices and long
+            // decays, the old stealVoice logic only faded current + next,
+            // leaving 2 intermediate voices ringing through new triggers.
+            // Now every new trigger must drive ALL prior voices to silence
+            // within kVoiceFadeoutMs + a small safety margin.
+            constexpr int N = 4;
+            std::vector<bombo::BombVoice> pool;
+            pool.reserve(N);
+            for (int i = 0; i < N; ++i) pool.emplace_back(sr);
+
+            const bombo::VoiceTrigger t;       // default — long 700 ms decay
+
+            // Fire each pool voice in sequence, 100 ms apart — fills the pool.
+            constexpr int gap = static_cast<int>(0.1f * 48000.0f);
+            for (int i = 0; i < N; ++i)
+            {
+                pool[i].trigger(t);
+                for (int s = 0; s < gap; ++s)
+                    for (auto& v : pool) v.tick();
+            }
+            // All 4 should still be active (decays are way > 400 ms).
+            int activeBefore = 0;
+            for (const auto& v : pool) if (v.isActive()) ++activeBefore;
+            expect(activeBefore == N, "all 4 voices active before steal");
+
+            // Simulate the new stealVoice + new trigger: fade EVERY active
+            // voice, then trigger pool[0] fresh.
+            for (auto& v : pool) if (v.isActive()) v.startFadeout(sr);
+            pool[0].trigger(t);  // fresh voice in slot 0
+
+            // Run past the fadeout window with a small safety margin.
+            const int settle = static_cast<int>(bombo::kVoiceFadeoutMs * 0.001f * sr) + 32;
+            for (int i = 0; i < settle; ++i)
+                for (auto& v : pool) v.tick();
+
+            // Only the newly-triggered voice should still be active.
+            int activeAfter = 0;
+            for (int i = 0; i < N; ++i) if (pool[i].isActive()) ++activeAfter;
+            expect(activeAfter == 1, "exactly one voice active after fadeout window");
+            expect(pool[0].isActive(), "the newly-triggered voice is the active one");
+        }
+
         beginTest("voice steal mid-decay: fadeout produces no audible click");
         {
             // A single voice, fully ringing — the 5 ms linear fadeout must
