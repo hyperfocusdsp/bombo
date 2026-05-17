@@ -104,6 +104,12 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     bbsButton_.onClick = [this] { bbs_.show(); };
     addAndMakeVisible(bbsButton_);
 
+    // Layout-edit overlay — ported from squelch_pro. F2 / Ctrl+Shift+E
+    // toggles. Sits between faceplate and bbs_ in z-order so it doesn't
+    // bleed through the BBS overlay.
+    layoutEditor_ = std::make_unique<bombo::LayoutEditOverlay>(faceplate);
+    addChildComponent(*layoutEditor_);
+
     // Design-size coordinates the faceplate paints in. Resizing applies
     // an AffineTransform::scale so every knob, label, column, fin, and
     // band scales together — no per-child re-layout, no overflow.
@@ -261,6 +267,15 @@ void BomboEditor::resized()
     // getLocalBounds(); the overlay's resized() will re-fit automatically.
     bbs_.setBounds(getLocalBounds());
 
+    // Layout editor overlay shares the FACEPLATE's transformed bounds so
+    // its mouse events land in faceplate-design coords (same as the
+    // editable element rects in getEditableElements()).
+    if (layoutEditor_)
+    {
+        layoutEditor_->setBounds(faceplate.getBounds());
+        layoutEditor_->setTransform(faceplate.getTransform());
+    }
+
    #if JucePlugin_Build_Standalone
     // Persist the editor width so the next launch reopens at this scale.
     // Skip until initialSizeApplied_ — the ctor's design-default setSize
@@ -282,11 +297,37 @@ void BomboEditor::visibilityChanged()
 
 bool BomboEditor::keyPressed(const juce::KeyPress& key)
 {
+    const auto mods = key.getModifiers();
+
+    // ── Layout-edit mode toggle (F2 or Ctrl+Shift+E) ────────────────
+    // Ports squelch_pro's UX: enter edit mode, drag/resize widgets,
+    // Layout.json persists. Exit with the same key or Esc-via-overlay.
+    const bool isF2     = (key.getKeyCode() == juce::KeyPress::F2Key);
+    const bool isCtrlShiftE = mods.isCtrlDown() && mods.isShiftDown()
+                              && key.getKeyCode() == 'E';
+    if (isF2 || isCtrlShiftE)
+    {
+        if (layoutEditor_)
+        {
+            const bool turningOn = ! layoutEditor_->isEditMode();
+            layoutEditor_->setEditMode(turningOn);
+            if (turningOn)
+                layoutEditor_->toFront(true);
+            grabKeyboardFocus();
+        }
+        return true;
+    }
+
+    // Forward edit-mode hotkeys (Esc/L/Ctrl+Z/arrows/etc.) to the overlay.
+    if (layoutEditor_ && layoutEditor_->isEditMode())
+    {
+        if (layoutEditor_->handleKey(key)) return true;
+    }
+
     // Dev-only BBS shortcut — replaced in Phase 2 by long-press on the
     // central nose detonator (the Archie fuze). Use getKeyCode() rather
     // than getTextCharacter(): under Ctrl modifiers the text character
     // becomes a control byte (Ctrl+B = STX = 0x02), not 'b'.
-    const auto mods = key.getModifiers();
     if (mods.isCtrlDown() && mods.isShiftDown() && key.getKeyCode() == 'B')
     {
         if (! bbs_.isVisible()) bbs_.show();

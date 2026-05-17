@@ -5,6 +5,7 @@
 
 #include "GUI/BomboLookAndFeel.h"
 #include "GUI/FaceplatePanel.h"
+#include "GUI/LayoutEditOverlay.h"
 #include "GUI/BBS/BBSComponent.h"
 #include "GUI/Theme/ThemeProvider.h"
 #include "State/PersistentState.h"
@@ -48,6 +49,12 @@ private:
     // keyPressed() OR clicking bbsButton_ shows it for development.
     bombo::BBSComponent bbs_;
     juce::TextButton    bbsButton_;
+
+    // Layout-edit overlay (ported from squelch_pro 2026-05-17). Toggled
+    // by F2 or Ctrl+Shift+E in keyPressed. Sits BETWEEN faceplate and
+    // bbs_ in z-order so layout-edit drags don't show through the BBS
+    // overlay when both are active.
+    std::unique_ptr<bombo::LayoutEditOverlay> layoutEditor_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };

@@ -80,6 +80,10 @@ target_sources(Bombo
         Source/GUI/BBS/BBSComponent.cpp
         Source/GUI/BombShape.h
         Source/GUI/BombShape.cpp
+        Source/GUI/LayoutManager.h
+        Source/GUI/LayoutManager.cpp
+        Source/GUI/LayoutEditOverlay.h
+        Source/GUI/LayoutEditOverlay.cpp
         Source/DSP/Oscillators.h
         Source/DSP/Envelopes.h
         Source/DSP/ClickGen.h

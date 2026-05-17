@@ -615,6 +615,32 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
 }
 
 // ────────────────────────────────────────────────────────────────────
+//  Layout-editor element source
+// ────────────────────────────────────────────────────────────────────
+
+std::vector<LayoutElem> FaceplatePanel::getEditableElements() const
+{
+    // Major draggable blocks for the LayoutEditOverlay. Per-knob editing
+    // is a follow-up; for now the user can drag/resize whole sections,
+    // the macro row, scope strip, band, and balance fader.
+    std::vector<LayoutElem> out;
+    out.reserve(2 + sections_.size() + 2);
+
+    out.push_back({ "macroRow",      macroBoundsTracked_, false, "macro_row"   });
+    out.push_back({ "scopeStrip",    scopeBounds_,        false, "scope_strip" });
+    out.push_back({ "band",          bandBoundsTracked_,  false, "band"        });
+    if (balanceFader_ != nullptr)
+        out.push_back({ "balanceFader", balanceFader_->getBounds(), false, "rotary_knob" });
+
+    for (size_t i = 0; i < sections_.size(); ++i)
+    {
+        out.push_back({ "section." + sections_[i].name.replaceCharacter(' ', '_').toLowerCase(),
+                        sections_[i].rectBounds, false, "section_column" });
+    }
+    return out;
+}
+
+// ────────────────────────────────────────────────────────────────────
 //  Layout
 // ────────────────────────────────────────────────────────────────────
 
@@ -688,8 +714,14 @@ void FaceplatePanel::resized()
     // low." Pulling the whole stack up so the rack sits in the upper-
     // mid of the body, with olive frame between rack bottom and the
     // red-region boundary.
-    const int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
-    layoutMacros({ chassisL, macroTop, chassisR - chassisL, kMacroH });
+    // Default macro row bounds — overridable via LayoutManager.
+    int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
+    juce::Rectangle<int> macroDefault(chassisL, macroTop,
+                                      chassisR - chassisL, kMacroH);
+    juce::Rectangle<int> macroFinal = layout_.boundsOr("macroRow", macroDefault);
+    macroBoundsTracked_ = macroFinal;
+    bandBoundsTracked_  = bandRect_.toNearestInt();
+    layoutMacros(macroFinal);
 
     // ── Rack columns ────────────────────────────────────────────────
     // Explicit column width (locked 2026-05-17 per user feedback): each
@@ -721,7 +753,11 @@ void FaceplatePanel::resized()
     {
         auto& s = sections_[i];
         const int x = leftMargin + i * (colW + kColGap);
-        s.rectBounds = { x, rectTop, colW, rectH };
+        // Default section bounds — overridable via LayoutManager.
+        juce::Rectangle<int> defaultBounds(x, rectTop, colW, rectH);
+        const juce::String secId = "section."
+            + s.name.replaceCharacter(' ', '_').toLowerCase();
+        s.rectBounds = layout_.boundsOr(secId, defaultBounds);
         s.titleBounds = { s.rectBounds.getX(),
                           s.rectBounds.getY(),
                           s.rectBounds.getWidth(),
