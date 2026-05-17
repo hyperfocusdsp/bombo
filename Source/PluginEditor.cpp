@@ -107,11 +107,14 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // Design-size coordinates the faceplate paints in. Resizing applies
     // an AffineTransform::scale so every knob, label, column, fin, and
     // band scales together — no per-child re-layout, no overflow.
-    constexpr double kDesignW    = 820.0;
-    constexpr double kDesignH    = 920.0;
+    // Locked 2026-05-17: 9:16 (= 0.5625) for IG-Reels native screenshotting
+    // (see memory project_bombo_ig_reels_aspect_constraint.md and the
+    // sprint plan at ~/.claude/plans/fyi-i-am-far-vectorized-sloth.md).
+    constexpr double kDesignW    = 600.0;
+    constexpr double kDesignH    = 1066.0;
     constexpr double kAspect     = kDesignW / kDesignH;
-    constexpr int    kMinWidth   = 600;
-    constexpr int    kMaxWidth   = 1400;
+    constexpr int    kMinWidth   = 360;
+    constexpr int    kMaxWidth   = 900;
 
     setSize(static_cast<int>(kDesignW), static_cast<int>(kDesignH));
     setResizable(true, true);
@@ -141,11 +144,17 @@ BomboEditor::BomboEditor(BomboProcessor& p)
             // First preference: a width remembered from a previous launch.
             // JUCE's StandalonePluginHolder owns a PropertiesFile; we store
             // editor width there in BomboEditor::resized().
+            //
+            // NOTE: settings key versioned -v2 after the 9:16 aspect lock
+            // landed (2026-05-17) — pre-v2 widths were stored against the
+            // old 820×920 (aspect 0.89) and would land the window comically
+            // tall under the new constrainer. Ignore them — fall through to
+            // fit-to-display on first launch post-update.
             if (auto* holder = juce::StandalonePluginHolder::getInstance())
             {
                 if (auto* props = holder->settings.get())
                 {
-                    const int saved = props->getIntValue("bombo-editor-width", -1);
+                    const int saved = props->getIntValue("bombo-editor-width-v2", -1);
                     if (saved >= kMinWidth && saved <= kMaxWidth) w = saved;
                 }
             }
@@ -223,16 +232,15 @@ void BomboEditor::paint(juce::Graphics& g)
 
 void BomboEditor::resized()
 {
-    // Faceplate paints in fixed 820×920 design coordinates and we apply a
-    // uniform scale transform so every child scales together. The
-    // constrainer keeps width/height locked to design aspect, so both
-    // scale factors come out equal in practice — `jmin` covers the
-    // rounding-gap case. Bounds are set to `editor / scale` (rounded up)
-    // so the transformed faceplate fully covers the editor, even when
-    // the scale isn't an exact integer ratio — kills the thin right-edge
-    // strip that previously appeared at off-design sizes.
-    constexpr float kDesignW = 820.0f;
-    constexpr float kDesignH = 920.0f;
+    // Faceplate paints in fixed 600×1066 design coordinates (9:16 IG-Reels
+    // native, locked 2026-05-17) and we apply a uniform scale transform so
+    // every child scales together. The constrainer keeps width/height
+    // locked to design aspect, so both scale factors come out equal in
+    // practice — `jmin` covers the rounding-gap case. Bounds are set to
+    // `editor / scale` (rounded up) so the transformed faceplate fully
+    // covers the editor, even when the scale isn't an exact integer ratio.
+    constexpr float kDesignW = 600.0f;
+    constexpr float kDesignH = 1066.0f;
     const float scale = juce::jmin(static_cast<float>(getWidth())  / kDesignW,
                                    static_cast<float>(getHeight()) / kDesignH);
     if (scale <= 0.0f) return;
@@ -261,7 +269,7 @@ void BomboEditor::resized()
     if (initialSizeApplied_)
         if (auto* holder = juce::StandalonePluginHolder::getInstance())
             if (auto* props = holder->settings.get())
-                props->setValue("bombo-editor-width", getWidth());
+                props->setValue("bombo-editor-width-v2", getWidth());
    #endif
 }
 
