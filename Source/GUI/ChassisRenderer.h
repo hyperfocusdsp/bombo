@@ -16,7 +16,6 @@ namespace bombo::chassisRenderer
         juce::Rectangle<int>   chassisRectArea; // inscribed UI region
         int                    chassisApexY;    // gradient anchor
         float                  redRegionTopY;   // y-split: graphite above, red below
-        juce::Rectangle<float> bandRect;        // yellow cartouche band
         int                    panelWidth;
         int                    panelHeight;
     };
@@ -38,8 +37,4 @@ namespace bombo::chassisRenderer
     // Red nose region: a rectangle fill clipped to chassisPath, with a
     // thin dark ring line at redRegionTopY marking the paint split.
     void drawRedRegion(juce::Graphics& g, const Ctx& ctx);
-
-    // Yellow BOMBO-TEC / PEACE EDITION cartouche band, clipped to the
-    // chassis silhouette.
-    void drawBand(juce::Graphics& g, const Ctx& ctx);
 }

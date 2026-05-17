@@ -123,7 +123,11 @@ private:
 
     void layoutSection(Section& s);
     void layoutHeader (juce::Rectangle<int> area);
-    void layoutMacros (juce::Rectangle<int> area);
+    // Place the 7 macros inside the bomb's nose region (the red-painted
+    // tapered area below redRegionTopY_). OUT sits as the hero (larger)
+    // at the top-center, flanked by macros 0 + 1; macros 2/3 below;
+    // macros 4/5 at the narrowest tip row.
+    void layoutMacrosInNose(juce::Rectangle<int> noseInterior);
 
     // Macro fan-out — each macro slider's onValueChange routes the
     // current normalised position into a curated set of underlying
