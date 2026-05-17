@@ -441,6 +441,41 @@ public:
             expect(e < 1e-3f);
         }
 
+        beginTest("killTail clears predelay — no rebuild from stale content");
+        {
+            // Regression for the user-reported 2026-05-17 "20-second
+            // ringing after one trigger" bug. predelay was NOT being
+            // zeroed at the kill-fade's zero crossing, so cached input
+            // kept feeding the (just-reset) FDN, which rebuilt a new
+            // tail from stale content. With predelay set to a long
+            // value (~400 ms) and a sustained input then killTail, the
+            // output must reach silence within the kill-fade window AND
+            // STAY silent through the predelay's full readout duration.
+            const float sr = 48000.0f;
+            bombo::FdnReverb r(sr);
+            r.setParams(0.85f, 0.3f);
+            r.setSize(0.5f);
+            r.setDiffusion(0.5f);
+            r.setPredelayMs(400.0f);   // long predelay — exposes the bug
+            r.hardReset();
+            // Pump sustained input into predelay + FDN for 500 ms so both
+            // are well-populated when killTail fires.
+            for (int i = 0; i < static_cast<int>(0.5f * sr); ++i)
+                r.process(0.4f);
+            r.killTail();
+            // Run past the kill-fade + the entire predelay duration.
+            // After this window, output must be at-or-near silence.
+            const int waitSamples = static_cast<int>(0.05f * sr)        // kill-fade
+                                  + static_cast<int>(0.45f * sr);       // predelay drain
+            for (int i = 0; i < waitSamples; ++i) r.process(0.0f);
+            // Probe a 200 ms window — any residual tail from un-cleared
+            // predelay would show up here as the FDN rebuilds.
+            float peak = 0.0f;
+            for (int i = 0; i < static_cast<int>(0.2f * sr); ++i)
+                peak = std::max(peak, std::abs(r.process(0.0f)));
+            expect(peak < 1e-3f, "no residual reverb tail after killTail + predelay drain");
+        }
+
         beginTest("killTail fades smoothly to silence (no click)");
         {
             const float sr = 48000.0f;

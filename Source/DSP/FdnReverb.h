@@ -205,8 +205,16 @@ public:
         float out = hpfOut;
 
         // Per-trigger smooth tail kill — linear ramp down to 0 over the
-        // fade window. At the bottom we zero all FDN state so the next
-        // trigger starts from silence. Click-free hard stop.
+        // fade window. At the bottom we zero ALL state via fullReset()
+        // so the next trigger starts from silence. Click-free hard stop.
+        //
+        // Bug fix 2026-05-17: previously only diffuser + FDN lines + LPF
+        // + HPF were zeroed, leaving the predelay buffer holding up to
+        // 500 ms of stale kick audio. After the fade window closed, the
+        // predelay readout kept feeding the (just-reset) FDN, which then
+        // rebuilt a new "tail" from that stale content. User reported
+        // hearing a ~20 s residual ring after a single trigger — that
+        // was the FDN re-spinning up off the un-cleared predelay.
         if (killFadeRemaining_ > 0)
         {
             const float ramp = static_cast<float>(killFadeRemaining_)
@@ -214,13 +222,7 @@ public:
             out *= ramp;
             --killFadeRemaining_;
             if (killFadeRemaining_ == 0)
-            {
-                for (auto& ap : diffuser_) ap.reset();
-                for (auto& line : fdn_) line.reset();
-                wetLpfZ_  = 0.0f;
-                wetHpfX1_ = 0.0f;
-                wetHpfY1_ = 0.0f;
-            }
+                fullReset();   // includes predelay zero
         }
 
         // Transport-stop fade.
