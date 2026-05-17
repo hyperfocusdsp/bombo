@@ -148,7 +148,8 @@ private:
     // paint() composes them in order; paintScopeFrame and paintSection stay
     // here because they reach into FaceplatePanel state (scopeBounds_, sections_).
     void paintScopeFrame (juce::Graphics& g);
-    void paintSection    (juce::Graphics& g, const Section& s);
+    void paintSection    (juce::Graphics& g, const Section& s,
+                          bool roundLeft, bool roundRight);
 
     juce::AudioProcessorValueTreeState& apvts_;
 
