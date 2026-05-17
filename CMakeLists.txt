@@ -116,6 +116,8 @@ target_sources(Bombo
         Source/DSP/SampleSlot.h
         Source/DSP/VoiceClip.h
         Source/DSP/BombVoice.h
+        Source/DSP/VoiceManager.h
+        Source/DSP/VoiceManager.cpp
         Source/DSP/BiquadFilter.h
         Source/DSP/Delay.h
         Source/DSP/FdnReverb.h
@@ -184,7 +186,8 @@ if(BOMBO_BUILD_TESTS)
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.cpp
-        Source/GUI/BombShape.cpp)
+        Source/GUI/BombShape.cpp
+        Source/DSP/VoiceManager.cpp)
     target_include_directories(Bombo_Tests PRIVATE Source tests)
     target_compile_definitions(Bombo_Tests PRIVATE
         JUCE_WEB_BROWSER=0

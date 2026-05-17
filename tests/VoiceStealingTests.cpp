@@ -9,6 +9,7 @@
 // Compiled as its own translation unit (see CMakeLists.txt).
 
 #include "DSP/BombVoice.h"
+#include "DSP/VoiceManager.h"
 
 #include <juce_core/juce_core.h>
 #include <juce_events/juce_events.h>
@@ -177,6 +178,70 @@ public:
             // the fadeout was effectively a hard cut.
             expect(maxJump < preLevel * 0.5f,
                    "fadeout slope bounded — no hard-cut click");
+        }
+
+        beginTest("VoiceManager: pushPending + tickPending fire at correct offsets");
+        {
+            // Construct a VoiceManager standalone — no processor, no APVTS,
+            // no host. This is the win from extracting it (2026-05-17):
+            // the audio-side state machine is unit-testable in isolation.
+            bombo::VoiceManager vm;
+            vm.prepare(sr);
+
+            // Schedule three hits at samples 0, 5, 23 inside a hypothetical
+            // 32-sample buffer. Tick the manager 32 times and count firings.
+            vm.pushPending(0);
+            vm.pushPending(5);
+            vm.pushPending(23);
+
+            int fired = 0;
+            int firedAt0 = 0, firedAt5 = 0, firedAt23 = 0;
+            for (int i = 0; i < 32; ++i)
+            {
+                const int n = vm.tickPending();
+                fired += n;
+                if (i == 0)  firedAt0  = n;
+                if (i == 5)  firedAt5  = n;
+                if (i == 23) firedAt23 = n;
+            }
+            expect(fired == 3,    "three scheduled hits all fired exactly once");
+            expect(firedAt0 == 1, "sample-0 hit fires at sample 0");
+            expect(firedAt5 == 1, "sample-5 hit fires at sample 5");
+            expect(firedAt23 == 1, "sample-23 hit fires at sample 23");
+        }
+
+        beginTest("VoiceManager: stealAndAdvance fades active voices + rotates cursor");
+        {
+            bombo::VoiceManager vm;
+            vm.prepare(sr);
+            const int startIdx = vm.activeIndex();
+
+            const bombo::VoiceTrigger t;
+            vm.trigger(t);  // active slot now ringing
+            expect(vm.anyActive(), "voice active after trigger");
+
+            vm.stealAndAdvance();
+            expect(vm.activeIndex() == (startIdx + 1) % bombo::VoiceManager::kNumVoices,
+                   "cursor advanced one slot mod pool size");
+
+            // Run the fadeout to completion; the previously-active voice
+            // must hit silence within the fadeout window.
+            const int settle = static_cast<int>(bombo::kVoiceFadeoutMs * 0.001f * sr) + 32;
+            for (int i = 0; i < settle; ++i) (void) vm.renderSample();
+            expect(! vm.anyActive(), "all voices silent after fadeout completes");
+        }
+
+        beginTest("VoiceManager: fadeoutAllActive does NOT advance the cursor");
+        {
+            bombo::VoiceManager vm;
+            vm.prepare(sr);
+            const int startIdx = vm.activeIndex();
+
+            const bombo::VoiceTrigger t;
+            vm.trigger(t);
+            vm.fadeoutAllActive();
+            expect(vm.activeIndex() == startIdx,
+                   "fadeoutAllActive leaves cursor in place (tail-kill path)");
         }
     }
 };
