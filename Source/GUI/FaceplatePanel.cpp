@@ -399,13 +399,17 @@ void FaceplatePanel::paint(juce::Graphics& g)
     headerRenderer::draw(g, headerBounds_, chassisPath_);
     paintScopeFrame(g);    // red U-border around scope, drawn under scope component
 
-    // Rack painting is clipped to the bomb silhouette so VOICE A's
-    // outer-left and DUCK's outer-right corners can never overhang the
-    // chassis edge — no matter how the section bounds are tuned or
-    // dragged. The per-column rounded corners (paintSection's
-    // roundLeft/roundRight) shape the transition; the clip enforces it.
+    // Rack painting is hard-clipped to the chassis silhouette via an
+    // alpha-image mask (pre-rasterised in resized()). Path-based clips
+    // were leaking at the curves — VOICE A / DUCK outer corners poked
+    // through the bone outline. The image-mask form is pixel-perfect.
+    // The per-column rounded corners (paintSection's roundLeft/
+    // roundRight) shape the visible edge; the mask enforces it.
     juce::Graphics::ScopedSaveState save(g);
-    g.reduceClipRegion(chassisPath_);
+    if (chassisMask_.isValid())
+        g.reduceClipRegion(chassisMask_, juce::AffineTransform());
+    else
+        g.reduceClipRegion(chassisPath_);
     const int lastIdx = static_cast<int>(sections_.size()) - 1;
     for (int i = 0; i < static_cast<int>(sections_.size()); ++i)
     {
@@ -587,6 +591,16 @@ void FaceplatePanel::resized()
                                          static_cast<float>(w),
                                          static_cast<float>(h));
     chassisPath_   = bombo::BombShape::buildBombPath(boundsF);
+
+    // Rasterise the chassis silhouette once into an alpha image. paint()
+    // uses this as the rack clip — pixel-accurate, no curve seams.
+    chassisMask_ = juce::Image(juce::Image::ARGB, juce::jmax(1, w), juce::jmax(1, h), true);
+    {
+        juce::Graphics maskG(chassisMask_);
+        maskG.setColour(juce::Colours::white);
+        maskG.fillPath(chassisPath_);
+    }
+
     capPath_       = bombo::BombShape::buildCapPath(boundsF);
     finPathL_      = bombo::BombShape::buildFinPath(boundsF, -1);
     finPathR_      = bombo::BombShape::buildFinPath(boundsF, +1);
