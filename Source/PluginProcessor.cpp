@@ -220,11 +220,21 @@ int BomboProcessor::tickPending() noexcept
 
 void BomboProcessor::stealVoice() noexcept
 {
-    if (!voices_[activeVoice_].isActive()) return;
-    voices_[activeVoice_].startFadeout(currentSampleRate_);
+    // Kick drum is conceptually monophonic — the voice pool exists ONLY
+    // so the 5 ms steal fadeout has room to complete before the new note
+    // takes over. User-reported 2026-05-17: with the old logic (fade
+    // current + next only), intermediate voices in a 4-slot round-robin
+    // pool kept ringing through new triggers. Long ampDecay (default
+    // 700 ms) made this audible as "voice A continues its release past
+    // the next trig."
+    //
+    // Fix: on every new trigger, start a 5 ms fadeout on EVERY still-
+    // active voice in the pool, then advance activeVoice_ to a fresh slot
+    // (its fadeoutGain_ gets reset to 1.0 by trigger() right after).
+    for (auto& v : voices_)
+        if (v.isActive())
+            v.startFadeout(currentSampleRate_);
     activeVoice_ = (activeVoice_ + 1) % kNumVoices;
-    if (voices_[activeVoice_].isActive())
-        voices_[activeVoice_].startFadeout(currentSampleRate_);
 }
 
 bool BomboProcessor::anyVoiceActive() const noexcept
