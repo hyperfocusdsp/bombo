@@ -45,7 +45,7 @@ void BomboProcessor::cacheParameterPointers()
     pFilterColor     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterColor));
     pDelayTime       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayTime));
     pDelayFeedback   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayFeedback));
-    pDelayDrift      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayDrift));
+    pDelayTimeMode   = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(delayTimeMode));
     pDelayMorph      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMorph));
     pDelayMix        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMix));
     pReverbSize      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbSize));
@@ -88,7 +88,11 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.filterColor     = pFilterColor->get();
     p.delayMs         = pDelayTime->get();
     p.delayFeedback   = pDelayFeedback->get();
-    p.delayDrift      = pDelayDrift->get();
+    p.delayTimeMode   = pDelayTimeMode->getIndex();
+    // RumbleChain computes the effective ms from (mode, hostBpm, delayMs).
+    // hostBpm 0 means "no host BPM" → fall back to the BPM param.
+    p.hostBpm         = hostBpmAtomic_.load(std::memory_order_relaxed);
+    if (p.hostBpm < 1.0f && pBpm != nullptr) p.hostBpm = pBpm->get();
     p.delayMorph      = pDelayMorph->get();
     p.delayMix        = pDelayMix->get();
     p.reverbSize      = pReverbSize->get();
@@ -563,7 +567,8 @@ void BomboProcessor::randomizeBombo()
     // ── DELAY ───────────────────────────────────────────────────────
     setPlain (delayTime,     rng( 50.0f, 500.0f));
     setNorm  (delayFeedback, rng(  0.2f,   0.65f));
-    setNorm  (delayDrift,    rng(  0.0f,   0.55f));
+    // 60% chance free, 40% chance a musically-tame sync mode (1/4..1/8T).
+    setChoice(delayTimeMode, (rng(0.0f, 1.0f) < 0.6f) ? 0 : (4 + (int) (rng(0.0f, 6.0f))));
     setNorm  (delayMorph,    rng(  0.15f,  0.85f));
     setNorm  (delayMix,      rng(  0.0f,   0.35f));
 
