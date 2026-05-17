@@ -8,7 +8,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 
 #include "ParameterIds.h"
-#include "DSP/BombVoice.h"
+#include "DSP/VoiceManager.h"
 #include "DSP/RumbleChain.h"
 #include "GUI/WaveBuffer.h"
 #include "State/PresetBank.h"
@@ -16,9 +16,6 @@
 class BomboProcessor : public juce::AudioProcessor
 {
 public:
-    static constexpr int kNumVoices = 4;
-    static constexpr int kPendingRingSize = 8;
-
     BomboProcessor();
     ~BomboProcessor() override = default;
 
@@ -48,7 +45,7 @@ public:
 
     // Editor-side trigger bridge (Space / T keys, on-screen buttons).
     // Atomic so the audio thread can swap(0) without a lock. Capped at
-    // kNumVoices per buffer in processBlock.
+    // VoiceManager::kNumVoices per buffer in processBlock.
     void triggerFromKeyboard() noexcept { keyboardTriggers_.fetch_add(1, std::memory_order_relaxed); }
     // T-style one-shot — fires a kick AND schedules a deferred tail kill
     // at the next would-be beat, so we get "hit → one tail → silence".
@@ -107,18 +104,8 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
 private:
-    struct PendingHit
-    {
-        int samplesUntil = 0;
-        bool live = false;
-    };
-
     void cacheParameterPointers();
     bombo::VoiceTrigger buildTriggerFromParams() const noexcept;
-    void pushPending(int samplesUntil) noexcept;
-    int  tickPending() noexcept;  // returns count of hits fired this sample
-    void stealVoice() noexcept;
-    bool anyVoiceActive() const noexcept;
 
     juce::UndoManager undoManager;
 
@@ -184,9 +171,7 @@ private:
 
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> masterGainSmoothed;
 
-    std::array<bombo::BombVoice, kNumVoices> voices_;
-    int activeVoice_ = 0;
-    std::array<PendingHit, kPendingRingSize> pending_{};
+    bombo::VoiceManager voiceMgr_;
     float currentSampleRate_ = 48000.0f;
 
     bombo::RumbleChain chain_{ 48000.0f };
