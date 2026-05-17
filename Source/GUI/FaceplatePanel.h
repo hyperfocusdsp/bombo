@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "LayoutManager.h"   // LayoutElem + LayoutManager
 #include "ScopeComponent.h"
 #include "Theme/ThemedComponent.h"
 
@@ -61,6 +62,13 @@ public:
     void resized() override;
     void mouseDown(const juce::MouseEvent&) override;
     void mouseMove(const juce::MouseEvent&) override;
+
+    // Layout-edit hooks (Phase 2 — ported from an earlier project 2026-05-17).
+    // BomboEditor owns the LayoutEditOverlay; FaceplatePanel exposes the
+    // editable element list + a reference to its LayoutManager so the
+    // overlay can mutate + persist bounds.
+    std::vector<LayoutElem> getEditableElements() const;
+    LayoutManager& getLayoutManager() noexcept { return layout_; }
 
 private:
     enum class CtlKind { Knob, Choice, Toggle, SampleSlot };
@@ -157,6 +165,17 @@ private:
     juce::Rectangle<int>   chassisRectArea_;   // inscribed UI region for child widgets
     int                    chassisRectBottomY_ = 0;
     int                    chassisApexY_       = 0;
+
+    // Layout manifest — JSON-loaded overrides for major UI block bounds.
+    // resized() consults layout_.boundsOr(id, default) for each editable
+    // block before applying. See Source/GUI/LayoutEditOverlay.* for the
+    // drag-to-edit UI; BomboEditor owns the overlay component.
+    LayoutManager layout_;
+
+    // Macro/rack/section bounds tracked here so getEditableElements() can
+    // expose them to LayoutEditOverlay without recomputing.
+    juce::Rectangle<int> macroBoundsTracked_{};
+    juce::Rectangle<int> bandBoundsTracked_{};
 
     // Header pills.
     std::unique_ptr<juce::ToggleButton> limPill_;
