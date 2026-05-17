@@ -31,7 +31,12 @@ struct ChainParams
     // DELAY
     float delayMs       = 250.0f;
     float delayFeedback = 0.0f;
-    float delayDrift    = 0.0f;
+    // delayTimeMode: 0 = Free, otherwise index into the note-value list
+    // declared in createParameterLayout (1=1/2, 2=1/2., 3=1/2T, etc).
+    // hostBpm is the effective BPM (host's value if available, else the
+    // BPM param) — fed in from PluginProcessor::buildChainParamsFromApvts.
+    int   delayTimeMode = 0;
+    float hostBpm       = 120.0f;
     float delayMorph    = 0.5f;
     float delayMix      = 0.0f;
     // REVERB
@@ -122,9 +127,29 @@ public:
         }
         lpFilter_.setDrive(p.filterColor);
 
-        delay_.setTimeMs(p.delayMs);
+        // Tempo-sync mode: when delayTimeMode != 0 the effective delay
+        // length is computed from host BPM × note-value, overriding the
+        // user-set TIME knob. Index 0 means free-running on the TIME
+        // knob value (ms). Note-value beat ratios match the StringArray
+        // declared in Parameters.h (1/2, 1/2., 1/2T, 1/4, 1/4., 1/4T,
+        // 1/8, 1/8., 1/8T, 1/16, 1/16., 1/16T, 1/32).
+        const float effectiveMs = [&]() noexcept -> float
+        {
+            if (p.delayTimeMode <= 0 || p.hostBpm < 1.0f) return p.delayMs;
+            constexpr float beats[] = {
+                /*idx 1*/  2.0f,  3.0f,  4.0f / 3.0f,        // 1/2, 1/2., 1/2T
+                /*idx 4*/  1.0f,  1.5f,  2.0f / 3.0f,        // 1/4, 1/4., 1/4T
+                /*idx 7*/  0.5f,  0.75f, 1.0f / 3.0f,        // 1/8, 1/8., 1/8T
+                /*idx 10*/ 0.25f, 0.375f, 1.0f / 6.0f,       // 1/16, 1/16., 1/16T
+                /*idx 13*/ 0.125f                            // 1/32
+            };
+            const int   i  = juce::jlimit(0, 12, p.delayTimeMode - 1);
+            const float ms = beats[i] * (60000.0f / p.hostBpm);
+            return juce::jlimit(1.0f, 5000.0f, ms);
+        }();
+        delay_.setTimeMs(effectiveMs);
         delay_.setFeedback(p.delayFeedback);
-        delay_.setDrift(p.delayDrift);
+        delay_.setDrift(0.0f);   // drift retired — kept as no-op for now
         delay_.setFilterMorph(p.delayMorph);
 
         reverb_.setParams(p.reverbDecay, p.reverbDamp);
