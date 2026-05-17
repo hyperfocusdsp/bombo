@@ -134,7 +134,16 @@ public:
         // Feedback-loop LP damping.
         fbDampZ_ = wet * (1.0f - fbDampCoef_) + fbDampZ_ * fbDampCoef_;
         if (std::fpclassify(fbDampZ_) == FP_SUBNORMAL) fbDampZ_ = 0.0f;
-        buffer_[writePos_] = input + fbDampZ_ * feedback_;
+        // Bug fix 2026-05-17: during the kill-fade window, write ZERO to
+        // the buffer — not input + fb. Otherwise any audio arriving during
+        // the fade (the voice's 5 ms startFadeout tail, or pre-flush wet
+        // looping through fbDampZ_) gets captured into the delay buffer,
+        // then plays back at the delay-cycle period AFTER the fade ends.
+        // With max feedback (≈1.0), that capture rings out indefinitely
+        // — user reported this as a faint, never-dying delay tail.
+        buffer_[writePos_] = (killFadeRemaining_ > 0)
+                                ? 0.0f
+                                : input + fbDampZ_ * feedback_;
         writePos_ = (writePos_ + 1) % bufLen;
 
         // Kill-fade V-ramp. The ramp fades the output down to 0 over the

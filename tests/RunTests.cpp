@@ -562,6 +562,39 @@ public:
             expect(postPeak < 1e-3f);
         }
 
+        beginTest("killTail @ max feedback — no residual ring during fade input");
+        {
+            // Regression for the user-reported 2026-05-17 "delay tail
+            // very slightly keeps moving... even with max feedback" bug.
+            // Root cause: buffer continued writing input+feedback during
+            // the kill-fade window, so the voice-tail's last few ms got
+            // captured and rang out at the delay-cycle period.
+            const float sr = 48000.0f;
+            bombo::Delay d(sr);
+            d.setTimeMs(120.0f);
+            d.setFeedback(0.98f);       // near-max feedback — worst case
+            d.setFilterMorph(0.0f);
+            // Populate buffer with sustained input so feedback is active.
+            for (int i = 0; i < static_cast<int>(0.4f * sr); ++i)
+                d.process(0.4f);
+            // Trigger kill, then feed non-zero input ONLY during the
+            // exact kill-fade window — simulates the voice's startFadeout
+            // overlapping with the chain killTail. After that, input is
+            // silent. With the bug, the fade-window input gets written
+            // into the buffer and rings out at the delay-cycle period;
+            // with the fix, those writes are suppressed and the post-
+            // fade output is silent.
+            d.killTail();
+            const int fadeSamples = static_cast<int>(bombo::Delay::kKillFadeMs * 0.001f * sr);
+            for (int i = 0; i < fadeSamples; ++i) d.process(0.3f);
+            // Input is now silent. Run past 5× delay period (= 600 ms).
+            for (int i = 0; i < static_cast<int>(0.6f * sr); ++i) d.process(0.0f);
+            float peak = 0.0f;
+            for (int i = 0; i < static_cast<int>(0.2f * sr); ++i)
+                peak = std::max(peak, std::abs(d.process(0.0f)));
+            expect(peak < 1e-3f, "no residual delay ring with max feedback after killTail");
+        }
+
         beginTest("killTail handles rapid successive kills without state leak");
         {
             const float sr = 48000.0f;
