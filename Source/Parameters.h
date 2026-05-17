@@ -153,8 +153,17 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Delay Time", skewRange(1.0f, 1000.0f, 0.4f), 380.0f, msFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayFeedback, 1},
         "Delay Fbk", Range(0.0f, 0.92f, 0.001f), 0.55f, normFormat));
-    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayDrift, 1},
-        "Delay Drift", Range(0.0f, 1.0f, 0.001f), 0.25f, normFormat));
+    // Tempo-sync mode (replaced the old `delay_drift` Float 2026-05-17).
+    // FREE = TIME knob value (ms) applies directly. Anything else snaps
+    // the effective delay length to host BPM * note value.
+    p.push_back(std::make_unique<Choice>(juce::ParameterID{pid::delayTimeMode, 1},
+        "Delay Time Mode",
+        juce::StringArray{ "Free", "1/2", "1/2.", "1/2T",
+                           "1/4", "1/4.", "1/4T",
+                           "1/8", "1/8.", "1/8T",
+                           "1/16", "1/16.", "1/16T",
+                           "1/32" },
+        0));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMorph, 1},
         "Delay Tone", Range(0.0f, 1.0f, 0.001f), 0.4f, normFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMix, 1},

@@ -54,7 +54,11 @@ namespace pid
     inline constexpr const char* filterColor     = "filter_color";
     inline constexpr const char* delayTime       = "delay_time";
     inline constexpr const char* delayFeedback   = "delay_feedback";
-    inline constexpr const char* delayDrift      = "delay_drift";
+    // Replaced the old `delay_drift` Float (LFO drift was musically
+    // pointless) with a tempo-sync mode Choice 2026-05-17. When != Free
+    // the DSP computes effective delay ms from host BPM + chosen note
+    // value; the TIME knob value is ignored.
+    inline constexpr const char* delayTimeMode   = "delay_time_mode";
     inline constexpr const char* delayMorph      = "delay_morph";
     inline constexpr const char* delayMix        = "delay_mix";
     inline constexpr const char* reverbSize      = "reverb_size";

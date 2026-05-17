@@ -125,7 +125,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.accent = col::delayC(); s.labelOnBg = col::ink();
         addKnob(s, pid::delayTime,     "TIME",  s.labelOnBg);
         addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg);
-        addKnob(s, pid::delayDrift,    "DRIFT", s.labelOnBg);
+        addChoice(s, pid::delayTimeMode, "SYNC", s.labelOnBg);
         addKnob(s, pid::delayMorph,    "TONE",  s.labelOnBg);
         addKnob(s, pid::delayMix,      "MIX",   s.labelOnBg);
         sections_.push_back(std::move(s));
