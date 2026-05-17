@@ -78,6 +78,12 @@ namespace pid
     // the param value and triggers snap to PPQ.
     inline constexpr const char* loopOn          = "loop_on";
     inline constexpr const char* bpm             = "bpm";
+    // Auto tail-kill between triggers (default ON) — when ON, the FX bus
+    // (delay + reverb) dies one beat after the last trigger so each new
+    // trig starts on a clean slate AND loop-off immediately cuts the
+    // tail. When OFF the deferred kill is skipped so long delay/reverb
+    // tails ring naturally after one-shot edge cases.
+    inline constexpr const char* tailKillOn      = "tail_kill_on";
     // SECTION MUTES — click the section title strip in the UI to toggle.
     // Voice A mute silences the SUB layer; Voice B mute silences MID +
     // click + noise + sample. DRIVE mute bypasses both the per-voice

@@ -198,6 +198,8 @@ private:
     // Header pills.
     std::unique_ptr<juce::ToggleButton> limPill_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> limAtt_;
+    std::unique_ptr<juce::ToggleButton> tailPill_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tailAtt_;
     std::unique_ptr<juce::ToggleButton> loopBtn_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> loopAtt_;
     std::unique_ptr<BpmDisplay>         bpmDisplay_;
