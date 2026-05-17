@@ -369,7 +369,33 @@ void FaceplatePanel::paint(juce::Graphics& g)
     paintRedRegion(g);
     paintBand(g);
     paintHeader(g, headerBounds_);
+    paintScopeFrame(g);    // red U-border around scope, drawn under scope component
     for (const auto& s : sections_) paintSection(g, s);
+}
+
+void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
+{
+    if (scopeBounds_.isEmpty()) return;
+
+    // VAULT red — matches the fin + nose color so the scope reads as
+    // attached to the fin assembly. U-shape: top + left + right borders
+    // ONLY (no bottom — the bottom opens into the macro row, completing
+    // the "rear cap continues into the chassis" visual).
+    constexpr juce::uint32 kVaultRed = 0xFFB43F32;
+    constexpr int kBorder = 3;
+    g.setColour(juce::Colour(kVaultRed));
+
+    const int x  = scopeBounds_.getX() - kBorder;
+    const int y  = scopeBounds_.getY() - kBorder;
+    const int w  = scopeBounds_.getWidth()  + 2 * kBorder;
+    const int hF = scopeBounds_.getHeight() + kBorder;  // covers top + sides, not bottom
+
+    // Top edge
+    g.fillRect(x, y, w, kBorder);
+    // Left edge
+    g.fillRect(x, y, kBorder, hF);
+    // Right edge
+    g.fillRect(x + w - kBorder, y, kBorder, hF);
 }
 
 void FaceplatePanel::paintBackground(juce::Graphics& g)
@@ -634,9 +660,22 @@ void FaceplatePanel::resized()
     // ── Bands inside the chassis rect ───────────────────────────────
     headerBounds_ = { chassisL, chassisT, chassisR - chassisL, kHeaderH };
 
+    // Scope strip — width matches the fin tip outer extent so the scope
+    // + fins read as one continuous "rear assembly" unit. Inset by the
+    // scope's red U-frame border (paintScopeFrame draws it).
+    constexpr int kScopeBorder = 3;
     const int scopeTop = chassisT + kHeaderH;
-    scopeBounds_  = { chassisL + 8, scopeTop + 8,
-                      (chassisR - chassisL) - 16, kScopeH - 16 };
+    {
+        const bombo::BombShape::Params bp{};
+        const float finTipTotalRefW = bp.bodyBulgeW + 2.0f * bp.finOutX;
+        const float scaleX = static_cast<float>(w) / bombo::BombShape::kRefW;
+        const int scopeFrameW = static_cast<int>(finTipTotalRefW * scaleX);
+        const int scopeFrameX = (w - scopeFrameW) / 2;
+        scopeBounds_ = { scopeFrameX + kScopeBorder,
+                         scopeTop + 8,
+                         scopeFrameW - 2 * kScopeBorder,
+                         kScopeH - 16 };
+    }
     scope_.setBounds(scopeBounds_);
 
     const int macroTop = scopeTop + kScopeH;
