@@ -60,6 +60,7 @@ void BomboProcessor::cacheParameterPointers()
     pDuckDepth       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckDepth));
     pLimiterOn       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(limiterOn));
     pLimiterAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(limiterAmount));
+    pTailKillOn      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(tailKillOn));
     pLoopOn          = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(loopOn));
     pBpm             = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(bpm));
     pVoiceAMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceAMute));
@@ -334,7 +335,13 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     // Subsumes the old loop-off and T-only kill paths — both categories
     // route through `scheduled++` so they're handled uniformly here.
     oneShotTriggers_.exchange(0, std::memory_order_relaxed); // legacy drain
-    if (scheduled > 0 && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
+
+    // The whole deferred tail-kill machinery is opt-in via the
+    // pTailKillOn toggle (default ON). When OFF, no killing happens —
+    // long delay + reverb tails ring naturally past the last trig.
+    const bool tailKillEnabled = (pTailKillOn != nullptr) && pTailKillOn->get();
+
+    if (tailKillEnabled && scheduled > 0 && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
     {
         const double spb =
             (60.0 / static_cast<double>(effectiveBpm))
@@ -347,12 +354,17 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     // override, long delay times at high feedback keep audibly ringing
     // for the entire remainder of the beat window. THIS BEHAVIOUR MUST
     // BE PRESERVED — user has reported the regression more than once
-    // (2026-05-17).
-    if (loopJustTurnedOff)
+    // (2026-05-17). Also gated by the tail-kill toggle.
+    if (tailKillEnabled && loopJustTurnedOff)
         pendingTailKillSamples_ = juce::jmin(pendingTailKillSamples_ < 0
                                                  ? numSamples
                                                  : pendingTailKillSamples_,
                                              numSamples);
+    // When the toggle goes from ON → OFF mid-stream, cancel any kill
+    // that was already pending so it doesn't fire after the user has
+    // asked the tail to keep ringing.
+    if (! tailKillEnabled)
+        pendingTailKillSamples_ = -1;
     if (pendingTailKillSamples_ >= 0)
     {
         pendingTailKillSamples_ -= numSamples;

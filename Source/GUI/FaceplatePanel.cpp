@@ -193,6 +193,17 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         apvts_, pid::limiterOn, *limPill_);
     addAndMakeVisible(*limPill_);
 
+    // ── Tail-kill toggle (small "TAIL" pill) ────────────────────────
+    // ON (default) = trim delay+reverb tails between trigs and on loop
+    // off. OFF = let tails ring naturally past the last trig.
+    tailPill_ = std::make_unique<juce::ToggleButton>("TAIL");
+    tailPill_->setColour(juce::ToggleButton::textColourId, col::bone());
+    tailPill_->setWantsKeyboardFocus(false);
+    tailPill_->setMouseClickGrabsKeyboardFocus(false);
+    tailAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        apvts_, pid::tailKillOn, *tailPill_);
+    addAndMakeVisible(*tailPill_);
+
     // ── Loop toggle (small "↻" pill) ────────────────────────────────
     loopBtn_ = std::make_unique<juce::ToggleButton>("LOOP");
     loopBtn_->setColour(juce::ToggleButton::textColourId, col::bone());
@@ -816,6 +827,7 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
 {
     constexpr int kPillH    = 22;
     constexpr int kLimW     = 50;
+    constexpr int kTailW    = 50;
     constexpr int kLoopW    = 60;
     constexpr int kBpmW     = 78;
     constexpr int kDiceW    = 22; // square
@@ -825,13 +837,14 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     const int y = (area.getHeight() - kPillH) / 2 + area.getY();
     int xCursor = area.getRight() - 14;
 
-    // Right-to-left: BPM, loop, LIM, DICE. (SYNTH/FX tab nub removed
-    // 2026-05-17 — layout is single-page, all controls always visible.
-    // Balance fader lives above VOICE A/B strips, not in the header.)
+    // Right-to-left: BPM, loop, TAIL, LIM, DICE. TAIL sits next to LIM
+    // because both are "post-FX behaviour" toggles, visually grouped.
     if (bpmDisplay_) bpmDisplay_->setBounds(xCursor - kBpmW, y, kBpmW, kPillH);
     xCursor -= kBpmW + kPad;
     if (loopBtn_)    loopBtn_   ->setBounds(xCursor - kLoopW, y, kLoopW, kPillH);
     xCursor -= kLoopW + kPad;
+    if (tailPill_)   tailPill_  ->setBounds(xCursor - kTailW, y, kTailW, kPillH);
+    xCursor -= kTailW + kPadSmall;
     if (limPill_)    limPill_   ->setBounds(xCursor - kLimW,  y, kLimW,  kPillH);
     xCursor -= kLimW + kPadSmall;
     if (diceButton_) diceButton_->setBounds(xCursor - kDiceW, y, kDiceW, kPillH);

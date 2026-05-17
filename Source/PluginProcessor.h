@@ -157,6 +157,7 @@ private:
     juce::AudioParameterFloat*  pDuckDepth = nullptr;
     juce::AudioParameterBool*   pLimiterOn = nullptr;
     juce::AudioParameterFloat*  pLimiterAmount = nullptr;
+    juce::AudioParameterBool*   pTailKillOn = nullptr;
     juce::AudioParameterBool*   pLoopOn = nullptr;
     juce::AudioParameterFloat*  pBpm = nullptr;
     juce::AudioParameterBool*   pVoiceAMute = nullptr;
