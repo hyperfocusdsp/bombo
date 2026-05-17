@@ -91,6 +91,10 @@ target_sources(Bombo
         Source/GUI/DiceButton.h
         Source/GUI/FaceplatePanel.h
         Source/GUI/FaceplatePanel.cpp
+        Source/GUI/HeaderRenderer.h
+        Source/GUI/HeaderRenderer.cpp
+        Source/GUI/ChassisRenderer.h
+        Source/GUI/ChassisRenderer.cpp
         Source/GUI/SampleSlotWidget.h
         Source/GUI/WaveBuffer.h
         Source/GUI/ScopeComponent.h

@@ -139,13 +139,11 @@ private:
     bool isMuted(const Section& s) const noexcept;
     void toggleMute(const Section& s);
 
-    void paintBackground (juce::Graphics& g);
-    void paintChassis    (juce::Graphics& g);
-    void paintCapAndFins (juce::Graphics& g);
-    void paintRedRegion  (juce::Graphics& g);
-    void paintBand       (juce::Graphics& g);
+    // The chassis/cap/fins/red-region/band/header are rendered by stateless
+    // free-function renderers in ChassisRenderer.{h,cpp} + HeaderRenderer.{h,cpp}.
+    // paint() composes them in order; paintScopeFrame and paintSection stay
+    // here because they reach into FaceplatePanel state (scopeBounds_, sections_).
     void paintScopeFrame (juce::Graphics& g);
-    void paintHeader     (juce::Graphics& g, juce::Rectangle<int> area);
     void paintSection    (juce::Graphics& g, const Section& s);
 
     juce::AudioProcessorValueTreeState& apvts_;

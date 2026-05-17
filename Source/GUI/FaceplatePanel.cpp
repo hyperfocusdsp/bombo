@@ -3,9 +3,11 @@
 #include "BalanceFader.h"
 #include "BombShape.h"
 #include "BpmDisplay.h"
+#include "ChassisRenderer.h"
 #include "Colours.h"
 #include "DiceButton.h"
 #include "Fonts.h"
+#include "HeaderRenderer.h"
 #include "SampleSlotWidget.h"
 #include "WaveBuffer.h"
 #include "../Parameters.h"
@@ -373,14 +375,22 @@ FaceplatePanel::makePlaceholderKnob(const juce::String& displayName,
 
 void FaceplatePanel::paint(juce::Graphics& g)
 {
-    paintBackground(g);
-    // Cap + fins drawn BEHIND body so the body's outline hides the seam
-    // where they attach. Matches tools/bombshape_gen.py rendering order.
-    paintCapAndFins(g);
-    paintChassis(g);
-    paintRedRegion(g);
-    paintBand(g);
-    paintHeader(g, headerBounds_);
+    // Chassis + nose + band painted via the stateless ChassisRenderer
+    // (extracted 2026-05-17). Paint order is load-bearing: cap+fins must
+    // sit BEHIND the body so the body silhouette hides their attachment
+    // edges (matches tools/bombshape_gen.py).
+    const chassisRenderer::Ctx ctx{
+        chassisPath_, capPath_, finPathL_, finPathR_,
+        chassisRectArea_, chassisApexY_, redRegionTopY_, bandRect_,
+        getWidth(), getHeight()
+    };
+    chassisRenderer::drawBackground(g);
+    chassisRenderer::drawCapAndFins(g, ctx);
+    chassisRenderer::drawChassis(g, ctx);
+    chassisRenderer::drawRedRegion(g, ctx);
+    chassisRenderer::drawBand(g, ctx);
+
+    headerRenderer::draw(g, headerBounds_, chassisPath_);
     paintScopeFrame(g);    // red U-border around scope, drawn under scope component
     for (const auto& s : sections_) paintSection(g, s);
 }
@@ -406,125 +416,6 @@ void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
     g.fillRect(x, y, kBorder, hF);
     // Right edge
     g.fillRect(x + w - kBorder, y, kBorder, hF);
-}
-
-void FaceplatePanel::paintBackground(juce::Graphics& g)
-{
-    // Clear to transparent. paintChassis() fills the bomb-shaped chassisPath_
-    // with the graphite gradient, covering everything inside the V. The two
-    // corner wedges outside the path stay alpha=0 so the OS compositor shows
-    // through them — giving the window a genuine bomb silhouette in standalone.
-    // In plugin mode the host container background shows instead (usually dark).
-    g.fillAll(juce::Colours::transparentBlack);
-}
-
-void FaceplatePanel::paintChassis(juce::Graphics& g)
-{
-    if (chassisPath_.isEmpty()) return;
-
-    // Body gradient: bodyHi (top) → bodyLo (apex). VAULT is the designed
-    // home theme; other themes derive bodyHi/bodyLo from graphiteHi/graphite
-    // via the ThemeLoader fallback so the chassis still renders coherently.
-    juce::ColourGradient grad(col::bodyHi(),
-                              static_cast<float>(getWidth()) * 0.5f,
-                              static_cast<float>(chassisRectArea_.getY()),
-                              col::bodyLo(),
-                              static_cast<float>(getWidth()) * 0.5f,
-                              static_cast<float>(chassisApexY_),
-                              false);
-    grad.addColour(0.78, col::bodyLo());
-    g.setGradientFill(grad);
-    g.fillPath(chassisPath_);
-}
-
-void FaceplatePanel::paintCapAndFins(juce::Graphics& g)
-{
-    if (capPath_.isEmpty()) return;
-    // Cap sits behind the body (recessed rear); fins use the same red
-    // as the nose paint region (Mini-Nuke convention).
-    g.setColour(col::cap());
-    g.fillPath(capPath_);
-    g.setColour(col::noseRed());
-    g.fillPath(finPathL_);
-    g.fillPath(finPathR_);
-}
-
-void FaceplatePanel::paintRedRegion(juce::Graphics& g)
-{
-    if (chassisPath_.isEmpty()) return;
-    // Red paint region clipped to the body silhouette — gives the
-    // chunky-bomb red nose without ANY seam in the outline. The ring
-    // line at y=redRegionTopY_ is a designed marker (not an outline).
-    g.saveState();
-    g.reduceClipRegion(chassisPath_);
-
-    g.setColour(col::noseRed());
-    g.fillRect(juce::Rectangle<float>(0.0f,
-                                      redRegionTopY_,
-                                      static_cast<float>(getWidth()),
-                                      static_cast<float>(getHeight()) - redRegionTopY_));
-
-    // Boundary ring line — thin dark stroke right at the paint split.
-    // Inside the silhouette only (we're still clipped to chassisPath_).
-    g.setColour(col::ink().withAlpha(0.6f));
-    g.drawLine(0.0f, redRegionTopY_,
-               static_cast<float>(getWidth()), redRegionTopY_, 1.5f);
-
-    g.restoreState();
-}
-
-void FaceplatePanel::paintBand(juce::Graphics& g)
-{
-    if (bandRect_.isEmpty()) return;
-    g.saveState();
-    g.reduceClipRegion(chassisPath_);
-    g.setColour(col::bandYellow());
-    g.fillRect(bandRect_);
-    // Cartouche text — BOMBO-TEC + PEACE EDITION serial. Stencil-aware
-    // monospace from bombo::fonts::value. Two lines, centered in the band.
-    const float bx = bandRect_.getX();
-    const float by = bandRect_.getY();
-    const float bw = bandRect_.getWidth();
-    const float bh = bandRect_.getHeight();
-    g.setColour(col::ink());
-    g.setFont(bombo::fonts::value(bh * 0.32f));
-    g.drawText("BOMBO-TEC",
-               juce::Rectangle<float>(bx, by + bh * 0.10f, bw, bh * 0.42f),
-               juce::Justification::centred, false);
-    g.setFont(bombo::fonts::value(bh * 0.18f));
-    g.drawText("PEACE EDITION · 1992 · FOSS",
-               juce::Rectangle<float>(bx, by + bh * 0.55f, bw, bh * 0.40f),
-               juce::Justification::centred, false);
-    g.restoreState();
-}
-
-void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
-{
-    // Header band — slightly lighter strip at the chassis top. Clipped to
-    // the chassis path so the rounded corners stay crisp.
-    g.saveState();
-    g.reduceClipRegion(chassisPath_);
-    g.setColour(col::graphiteHi());
-    g.fillRect(area);
-    g.restoreState();
-
-    // BOMBO logo.
-    g.setColour(col::bone());
-    g.setFont(fonts::title(26.0f));
-    g.drawText("BOMBO",
-               area.withTrimmedLeft(20).removeFromLeft(160),
-               juce::Justification::centredLeft);
-
-    // Subtitle removed 2026-05-17 — was clashing with the right-side pill
-    // chain (LIM/LOOP/BPM/BALANCE/DICE). The BOMBO-TEC · PEACE EDITION ·
-    // 1992 · FOSS cartouche on the yellow band already tells the lore
-    // story; the header subtitle was redundant.
-
-    // Hairline at bottom edge.
-    g.setColour(col::ink().withAlpha(0.7f));
-    g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
-
-    // BPM display + Loop toggle are real components; they paint themselves.
 }
 
 void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
