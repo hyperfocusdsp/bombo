@@ -648,13 +648,16 @@ void FaceplatePanel::resized()
     layoutMacros({ chassisL, macroTop, chassisR - chassisL, kMacroH });
 
     // ── Rack columns ────────────────────────────────────────────────
-    const int rackOuterLeft  = chassisL + kRackPadX;
-    const int rackOuterRight = chassisR - kRackPadX;
-    const int rackInnerW     = rackOuterRight - rackOuterLeft;
+    // Explicit column width (locked 2026-05-17 per user feedback): each
+    // section is ~44 px wide so the rack reads as a compact strip with
+    // body olive showing through on the sides — NOT a wall-to-wall rack
+    // chewing the full chassis width. The total rack is centered
+    // horizontally inside the chassis interior.
+    constexpr int kColW      = 44;
     const int totalGap       = (kNCols - 1) * kColGap;
-    const int colW           = (rackInnerW - totalGap) / kNCols;
-    const int totalUsed      = colW * kNCols + totalGap;
-    const int leftMargin     = rackOuterLeft + (rackInnerW - totalUsed) / 2;
+    const int totalUsed      = kColW * kNCols + totalGap;
+    const int colW           = kColW;
+    const int leftMargin     = chassisL + (chassisR - chassisL - totalUsed) / 2;
 
     const int rectTop = macroTop + kMacroH + kRackTopGap;
     const int rectBot = chassisRectBot - kRackBotGap;
@@ -744,7 +747,7 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     constexpr int kLoopW  = 60;
     constexpr int kBpmW   = 78;
     constexpr int kDiceW  = 22; // square
-    constexpr int kBalW   = 28; // square (A↔B balance knob, relocated 2026-05-17)
+    constexpr int kBalW   = 40; // square (A↔B balance knob, relocated 2026-05-17 — bigger for legibility)
     constexpr int kTabW   = 64;
     constexpr int kPad    = 8;
     constexpr int kPadSmall = 4;
@@ -752,26 +755,26 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     const int y = (area.getHeight() - kPillH) / 2 + area.getY();
     int xCursor = area.getRight() - 14;
 
-    // Right-to-left: tabs, BPM, loop, LIM, DICE, BALANCE.
+    // Right-to-left: tabs, BPM, BALANCE, loop, LIM, DICE.
+    // BALANCE sits immediately LEFT of BPM — most prominent center-header
+    // position. Bigger than the pills so the A↔B disc reads at a glance.
     insertFxTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
     xCursor -= kTabW + 1;
     synthTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
     xCursor -= kTabW + kPad;
     if (bpmDisplay_) bpmDisplay_->setBounds(xCursor - kBpmW, y, kBpmW, kPillH);
     xCursor -= kBpmW + kPad;
+    if (balanceFader_)
+    {
+        const int balY = area.getY() + (area.getHeight() - kBalW) / 2;
+        balanceFader_->setBounds(xCursor - kBalW, balY, kBalW, kBalW);
+        xCursor -= kBalW + kPad;
+    }
     if (loopBtn_)    loopBtn_   ->setBounds(xCursor - kLoopW, y, kLoopW, kPillH);
     xCursor -= kLoopW + kPad;
     if (limPill_)    limPill_   ->setBounds(xCursor - kLimW,  y, kLimW,  kPillH);
     xCursor -= kLimW + kPadSmall;
     if (diceButton_) diceButton_->setBounds(xCursor - kDiceW, y, kDiceW, kPillH);
-    xCursor -= kDiceW + kPadSmall;
-    if (balanceFader_)
-    {
-        // Sized slightly bigger than the dice so the A↔B disc is legible.
-        // Vertically centered on the same row as the other header pills.
-        const int balY = area.getY() + (area.getHeight() - kBalW) / 2;
-        balanceFader_->setBounds(xCursor - kBalW, balY, kBalW, kBalW);
-    }
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -909,14 +912,13 @@ void FaceplatePanel::wireMacroFanOut()
 
 void FaceplatePanel::layoutMacros(juce::Rectangle<int> area)
 {
-    // Aligns 1:1 with the FX columns below (same gap / colW math).
-    const int rackOuterLeft  = area.getX() + kRackPadX;
-    const int rackOuterRight = area.getRight() - kRackPadX;
-    const int rackInnerW     = rackOuterRight - rackOuterLeft;
+    // Aligns 1:1 with the FX columns below (matching kColW). Both rows
+    // share the same total-rack width and centering math.
+    constexpr int kColW      = 44;
     const int totalGap       = (kNCols - 1) * kColGap;
-    const int colW           = (rackInnerW - totalGap) / kNCols;
-    const int totalUsed      = colW * kNCols + totalGap;
-    const int leftMargin     = rackOuterLeft + (rackInnerW - totalUsed) / 2;
+    const int totalUsed      = kColW * kNCols + totalGap;
+    const int colW           = kColW;
+    const int leftMargin     = area.getX() + (area.getWidth() - totalUsed) / 2;
 
     const int knobH = kMacroKnobSize;
     const int labelH = kKnobLabelH;
