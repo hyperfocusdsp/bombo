@@ -10,7 +10,9 @@ compile_commands.json
 
 # Runtime artefacts
 Resources/Layout.png
-Resources/Layout.json
 Resources/untitled.drawdio.json
+# Note: Resources/Layout.json is NOW tracked (baked-in default layout
+# 2026-05-17). Per-machine F2 edits override it at runtime via
+# LayoutManager.boundsOr() but the committed file is the shared default.
 
 .superpowers/
