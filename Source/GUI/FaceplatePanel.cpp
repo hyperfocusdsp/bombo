@@ -399,9 +399,13 @@ void FaceplatePanel::paint(juce::Graphics& g)
     headerRenderer::draw(g, headerBounds_, chassisPath_);
     paintScopeFrame(g);    // red U-border around scope, drawn under scope component
 
-    // Outer-column rounding: VOICE A (idx 0) rounds its top-LEFT + bot-LEFT
-    // corners; DUCK (last idx) rounds top-RIGHT + bot-RIGHT. Interior
-    // columns stay square so the body-colour separators butt cleanly.
+    // Rack painting is clipped to the bomb silhouette so VOICE A's
+    // outer-left and DUCK's outer-right corners can never overhang the
+    // chassis edge — no matter how the section bounds are tuned or
+    // dragged. The per-column rounded corners (paintSection's
+    // roundLeft/roundRight) shape the transition; the clip enforces it.
+    juce::Graphics::ScopedSaveState save(g);
+    g.reduceClipRegion(chassisPath_);
     const int lastIdx = static_cast<int>(sections_.size()) - 1;
     for (int i = 0; i < static_cast<int>(sections_.size()); ++i)
     {
@@ -456,7 +460,7 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
         ? s.accent.withSaturation(0.20f).withBrightness(s.accent.getBrightness() * 0.55f)
         : s.accent;
 
-    constexpr float kCorner = 14.0f;
+    constexpr float kCorner = 24.0f;
     auto buildShape = [&](float yTop, float h)
     {
         juce::Path p;
