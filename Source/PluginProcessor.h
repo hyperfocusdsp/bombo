@@ -11,6 +11,7 @@
 #include "DSP/BombVoice.h"
 #include "DSP/RumbleChain.h"
 #include "GUI/WaveBuffer.h"
+#include "State/PresetBank.h"
 
 class BomboProcessor : public juce::AudioProcessor
 {
@@ -97,6 +98,11 @@ public:
     // Post-master scope feed. Editor pulls from this at 30 Hz to draw the
     // hero scope strip. Producer side is RT-safe.
     const bombo::WaveBuffer& waveBuffer() const noexcept { return waveBuffer_; }
+
+    // Factory preset bank. Editor wires this into FaceplatePanel so the
+    // preset bar can step through bundled presets. State (current index)
+    // lives on the processor side so it survives editor close/reopen.
+    bombo::PresetBank& presetBank() noexcept { return presetBank_; }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -222,6 +228,7 @@ private:
     bool pendingRestoreIsFolder_ = false;
 
     bombo::WaveBuffer waveBuffer_{};
+    bombo::PresetBank presetBank_{};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboProcessor)
 };

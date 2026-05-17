@@ -1,0 +1,13 @@
+{
+  "name": "CONCRETE",
+  "displayName": "Concrete",
+  "params": {
+    "pitch_start": 160.0, "pitch_end": 60.0, "pitch_decay": 45.0, "pitch_curve": 4.0,
+    "amp_attack": 0.2, "amp_decay": 280.0,
+    "click_amount": 0.60, "click_center": 6000.0,
+    "noise_amount": 0.25, "noise_color": 0.50,
+    "drive_amount": 0.45, "drive_mode": 2,
+    "mid_pitch_start": 400.0, "mid_pitch_end": 100.0, "mid_decay": 60.0, "mid_level": 0.85,
+    "duck_depth": 0.75
+  }
+}

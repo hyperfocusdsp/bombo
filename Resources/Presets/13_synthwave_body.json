@@ -1,0 +1,15 @@
+{
+  "name": "SYNTHWAVE BODY",
+  "displayName": "Synthwave Body",
+  "params": {
+    "waveform": 1,
+    "pitch_start": 120.0, "pitch_end": 50.0, "pitch_decay": 100.0, "pitch_curve": 2.5,
+    "amp_decay": 800.0,
+    "click_amount": 0.20, "click_center": 4500.0,
+    "noise_amount": 0.20, "noise_color": 0.25,
+    "drive_amount": 0.25,
+    "filter_color": 0.40,
+    "reverb_size": 0.65, "reverb_decay": 0.70, "reverb_mix": 0.30,
+    "delay_time": 350.0, "delay_mix": 0.18, "delay_morph": 0.50
+  }
+}

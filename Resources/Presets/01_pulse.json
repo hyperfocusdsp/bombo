@@ -1,0 +1,15 @@
+{
+  "name": "PULSE",
+  "displayName": "Pulse",
+  "params": {
+    "pitch_start": 145.0, "pitch_end": 50.0, "pitch_decay": 60.0, "pitch_curve": 3.5,
+    "sub_hpf": 30.0,
+    "amp_attack": 0.4, "amp_decay": 380.0,
+    "click_amount": 0.45, "click_center": 5500.0,
+    "noise_amount": 0.15, "noise_color": 0.30,
+    "drive_amount": 0.25, "drive_mode": 1,
+    "reverb_size": 0.30, "reverb_mix": 0.12,
+    "delay_mix": 0.0,
+    "duck_depth": 0.50
+  }
+}

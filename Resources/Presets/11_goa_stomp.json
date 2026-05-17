@@ -1,0 +1,13 @@
+{
+  "name": "GOA STOMP",
+  "displayName": "Goa Stomp",
+  "params": {
+    "pitch_start": 130.0, "pitch_end": 60.0, "pitch_decay": 50.0, "pitch_curve": 4.0,
+    "sub_hpf": 35.0,
+    "amp_decay": 400.0,
+    "mid_pitch_start": 350.0, "mid_pitch_end": 90.0, "mid_decay": 100.0, "mid_level": 0.80,
+    "click_amount": 0.40,
+    "drive_amount": 0.55, "drive_mode": 3,
+    "duck_depth": 0.55
+  }
+}

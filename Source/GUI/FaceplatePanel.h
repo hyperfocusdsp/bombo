@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "LayoutManager.h"   // LayoutElem + LayoutManager
+#include "PresetBarComponent.h"
 #include "ScopeComponent.h"
 #include "Theme/ThemedComponent.h"
 
@@ -16,6 +17,7 @@ namespace bombo
 {
 
 class WaveBuffer;
+class PresetBank;
 class SampleSlotWidget;
 class BpmDisplay;
 class BalanceFader;
@@ -54,6 +56,11 @@ public:
                    SampleSlotCallbacks sampleSlotCb = {},
                    HostBpmFn hostBpmFn = {},
                    RandomizeFn randomizeCb = {});
+
+    // Wire the factory preset bank. Constructs the PresetBarComponent and
+    // adds it to the panel. Call once after construction; safe to call
+    // before the first resized().
+    void setPresetBank(PresetBank& bank);
     // Defined out-of-line in .cpp so the forward-declared SampleSlotWidget
     // is complete by the time unique_ptr destructors instantiate.
     ~FaceplatePanel() override;
@@ -192,6 +199,10 @@ private:
     // Scope.
     ScopeComponent scope_;
     juce::Rectangle<int> scopeBounds_;
+
+    // Factory preset bar (Phase 3). nullptr until setPresetBank is called.
+    std::unique_ptr<PresetBarComponent> presetBar_;
+    juce::Rectangle<int> presetBarBounds_;
 
     // Macro row — 7 controls, aligned 1:1 with FX columns. The seventh
     // (rightmost) is bound to master OUT and tinted amber as the hero.

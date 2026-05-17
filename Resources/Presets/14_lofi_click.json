@@ -1,0 +1,15 @@
+{
+  "name": "LO-FI CLICK",
+  "displayName": "Lo-fi Click",
+  "params": {
+    "waveform": 3,
+    "pitch_start": 140.0, "pitch_end": 55.0, "pitch_decay": 70.0,
+    "amp_decay": 400.0,
+    "click_amount": 0.70, "click_center": 4000.0,
+    "noise_amount": 0.50, "noise_color": 0.80,
+    "drive_amount": 0.55, "drive_mode": 2,
+    "fx_drive_amount": 0.30, "fx_drive_mode": 2,
+    "filter_lp": 4500.0,
+    "mid_level": 0.60
+  }
+}
