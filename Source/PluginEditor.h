@@ -45,8 +45,9 @@ private:
     // BBS hidden terminal overlay. Sibling of `faceplate`, sized to the
     // full editor bounds, invisible by default. Phase 2 wires the nose
     // detonator long-press → bbs_.show(); for now Ctrl+Shift+B in
-    // keyPressed() shows it for development.
+    // keyPressed() OR clicking bbsButton_ shows it for development.
     bombo::BBSComponent bbs_;
+    juce::TextButton    bbsButton_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };
