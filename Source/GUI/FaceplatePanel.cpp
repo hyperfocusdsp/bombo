@@ -45,7 +45,7 @@ constexpr int kColTitleH    = 18;      // was 20
 constexpr int kColAccentH   = 3;
 constexpr int kModuleIdH    = 12;      // was 14
 constexpr int kInnerPadX    = 1;       // was 3 — eliminates inter-column gap
-constexpr int kRowH         = 58;      // was 72 — ~20% knob shrink
+constexpr int kRowH         = 64;      // was 72 → 58 → 64 (round 3 tune: fill more body)
 constexpr int kKnobLabelH   = 13;
 constexpr int kNCols        = 7;
 

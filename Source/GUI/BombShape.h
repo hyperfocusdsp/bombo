@@ -40,9 +40,11 @@ struct Params
     // Red paint region (clipped to body silhouette)
     float redRegionTopY  = 462.0f;
 
-    // Yellow hazard band
-    float bandTopY       = 106.0f;
-    float bandBotY       = 150.0f;
+    // Yellow hazard band. Moved up 2026-05-17 (was 106-150) so the
+    // macro+rack stack below it pulls higher into the body interior.
+    // Band still inside the body silhouette (body_top = 92 ref).
+    float bandTopY       = 92.0f;
+    float bandBotY       = 130.0f;
     float bandInsetX     = 8.0f;
 
     // Side fins (square_chamfered style)
