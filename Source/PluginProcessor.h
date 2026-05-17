@@ -10,6 +10,7 @@
 #include "ParameterIds.h"
 #include "DSP/VoiceManager.h"
 #include "DSP/RumbleChain.h"
+#include "DSP/StereoFinalizer.h"
 #include "GUI/WaveBuffer.h"
 #include "State/PresetBank.h"
 
@@ -176,6 +177,7 @@ private:
     float currentSampleRate_ = 48000.0f;
 
     bombo::RumbleChain chain_{ 48000.0f };
+    bombo::StereoFinalizer stereoFin_;
     bombo::ChainParams chainParams_{}; // Phase 1b: defaults only; APVTS wiring lands in Phase 2.
 
     std::atomic<int> keyboardTriggers_{0};

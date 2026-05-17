@@ -119,6 +119,7 @@ target_sources(Bombo
         Source/DSP/VoiceManager.h
         Source/DSP/VoiceManager.cpp
         Source/DSP/BiquadFilter.h
+        Source/DSP/StereoFinalizer.h
         Source/DSP/Delay.h
         Source/DSP/FdnReverb.h
         Source/DSP/Ducker.h

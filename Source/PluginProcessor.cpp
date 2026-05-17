@@ -179,6 +179,8 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
 
     chain_.setSampleRate(currentSampleRate_);
     chain_.reset();
+    stereoFin_.prepare(currentSampleRate_);
+    stereoFin_.reset();
     chainParams_ = buildChainParamsFromApvts();
     chain_.update(chainParams_);
 
@@ -412,13 +414,20 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         const float g = masterGainSmoothed.getNextValue();
         const float out = wet * g;
 
-        if (left)  left[i]  = out;
-        if (right) right[i] = out;
+        // Hidden EDM finalizer: sub-mono < 120 Hz, slight Haas-width
+        // on the upper band. Always on, no UI exposure. See
+        // StereoFinalizer.h for the rationale.
+        float oL = out, oR = out;
+        stereoFin_.process(out, oL, oR);
+
+        if (left)  left[i]  = oL;
+        if (right) right[i] = oR;
 
         // Feed the scope ring after master gain so what users see matches
-        // what they hear. push() decimates internally; cost is one cmp+inc
-        // per sample plus a relaxed/release atomic store every kDecim'th.
-        waveBuffer_.push(out);
+        // what they hear. The scope sees the L channel (sub-mono content
+        // is identical between channels; upper-band Haas is sub-perceptual
+        // for the visual representation).
+        waveBuffer_.push(oL);
     }
 }
 
