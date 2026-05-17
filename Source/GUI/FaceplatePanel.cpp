@@ -399,14 +399,15 @@ void FaceplatePanel::paint(juce::Graphics& g)
     headerRenderer::draw(g, headerBounds_, chassisPath_);
     paintScopeFrame(g);    // red U-border around scope, drawn under scope component
 
-    // Clip section painting to the chassis silhouette so VOICE A's outer
-    // left corners and DUCK's outer right corners follow the bomb's
-    // curvature instead of overhanging the body outline. Rack-internal
-    // columns are unaffected; only the outermost columns visibly clip.
+    // Outer-column rounding: VOICE A (idx 0) rounds its top-LEFT + bot-LEFT
+    // corners; DUCK (last idx) rounds top-RIGHT + bot-RIGHT. Interior
+    // columns stay square so the body-colour separators butt cleanly.
+    const int lastIdx = static_cast<int>(sections_.size()) - 1;
+    for (int i = 0; i < static_cast<int>(sections_.size()); ++i)
     {
-        juce::Graphics::ScopedSaveState save(g);
-        g.reduceClipRegion(chassisPath_);
-        for (const auto& s : sections_) paintSection(g, s);
+        const bool roundLeft  = (i == 0);
+        const bool roundRight = (i == lastIdx);
+        paintSection(g, sections_[i], roundLeft, roundRight);
     }
 }
 
@@ -433,7 +434,8 @@ void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
     g.fillRect(x + w - kBorder, y, kBorder, hF);
 }
 
-void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
+void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
+                                  bool roundLeft, bool roundRight)
 {
     if (s.rectBounds.isEmpty()) return;
 
@@ -446,11 +448,35 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
     // and RIGHT of the entire rack strip; the rack reads as a band of
     // industrial sticker labels glued onto the bomb. Muted columns
     // desaturate to communicate bypass without losing column identity.
+    //
+    // Outer columns get their outer corners rounded (2026-05-17) so
+    // VOICE A's outer-left + DUCK's outer-right curves blend into the
+    // bomb silhouette instead of poking square corners through it.
     const auto bodyColour = muted
         ? s.accent.withSaturation(0.20f).withBrightness(s.accent.getBrightness() * 0.55f)
         : s.accent;
+
+    constexpr float kCorner = 14.0f;
+    auto buildShape = [&](float yTop, float h)
+    {
+        juce::Path p;
+        p.addRoundedRectangle(rb.getX(), yTop,
+                              rb.getWidth(), h,
+                              kCorner, kCorner,
+                              roundLeft,  roundRight,   // top-left, top-right
+                              roundLeft,  roundRight);  // bot-left, bot-right
+        return p;
+    };
+
+    // Clip everything else (gloss + accent strip + title bar) to the
+    // same rounded body shape so the outer-column rounded corners stay
+    // crisp.
+    juce::Graphics::ScopedSaveState save(g);
+    const auto bodyPath = buildShape(rb.getY(), rb.getHeight());
+    g.reduceClipRegion(bodyPath);
+
     g.setColour(bodyColour);
-    g.fillRect(rb);
+    g.fillPath(bodyPath);
 
     // Subtle top gloss for raised-panel feel — kept from the original
     // styling, looks good against both the body olive and the accent
