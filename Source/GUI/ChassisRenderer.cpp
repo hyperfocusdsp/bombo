@@ -1,7 +1,6 @@
 #include "ChassisRenderer.h"
 
 #include "Colours.h"
-#include "Fonts.h"
 
 namespace bombo::chassisRenderer
 {
@@ -57,30 +56,6 @@ void drawRedRegion(juce::Graphics& g, const Ctx& ctx)
     g.drawLine(0.0f, ctx.redRegionTopY,
                static_cast<float>(ctx.panelWidth), ctx.redRegionTopY, 1.5f);
 
-    g.restoreState();
-}
-
-void drawBand(juce::Graphics& g, const Ctx& ctx)
-{
-    if (ctx.bandRect.isEmpty()) return;
-    g.saveState();
-    g.reduceClipRegion(ctx.chassisPath);
-    g.setColour(col::bandYellow());
-    g.fillRect(ctx.bandRect);
-
-    const float bx = ctx.bandRect.getX();
-    const float by = ctx.bandRect.getY();
-    const float bw = ctx.bandRect.getWidth();
-    const float bh = ctx.bandRect.getHeight();
-    g.setColour(col::ink());
-    g.setFont(fonts::value(bh * 0.32f));
-    g.drawText("BOMBO-TEC",
-               juce::Rectangle<float>(bx, by + bh * 0.10f, bw, bh * 0.42f),
-               juce::Justification::centred, false);
-    g.setFont(fonts::value(bh * 0.18f));
-    g.drawText("PEACE EDITION · 1992 · FOSS",
-               juce::Rectangle<float>(bx, by + bh * 0.55f, bw, bh * 0.40f),
-               juce::Justification::centred, false);
     g.restoreState();
 }
 

@@ -32,10 +32,10 @@ constexpr int kChassisMarginBot = 4;
 constexpr int kChassisCornerR   = 0;
 constexpr int kTailH            = 160;
 
-// Bands inside the chassis rect portion.
+// Bands inside the chassis rect portion. The macro-row strip is gone
+// 2026-05-17 — macros live in the bomb's nose (see layoutMacrosInNose).
 constexpr int kHeaderH      = 50;
 constexpr int kScopeH       = 100;
-constexpr int kMacroH       = 90;
 constexpr int kRackPadX     = 2;        // padding between chassis edge and column 0/N-1
 constexpr int kRackTopGap   = 22;      // accommodates the A↔B balance fader strip above VOICE A/B
 constexpr int kRackBotGap   = 4;
@@ -47,11 +47,10 @@ constexpr int kColTitleH    = 18;      // was 20
 constexpr int kColAccentH   = 3;
 constexpr int kModuleIdH    = 12;      // was 14
 constexpr int kInnerPadX    = 1;       // was 3 — eliminates inter-column gap
-constexpr int kRowH         = 64;      // was 72 → 58 → 64 (round 3 tune: fill more body)
+constexpr int kRowH         = 78;      // grew from 64 → 78 after macro row left
+                                       // for the nose; bigger rack knobs.
 constexpr int kKnobLabelH   = 13;
 constexpr int kNCols        = 7;
-
-constexpr int kMacroKnobSize = 38;     // was 46 — ~20% shrink, matches kRowH
 } // namespace
 
 // ────────────────────────────────────────────────────────────────────
@@ -164,13 +163,17 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     }
 
     // ── Macro row ───────────────────────────────────────────────────
-    macro_[0] = makePlaceholderKnob("PITCH",  col::boneDim());
-    macro_[1] = makePlaceholderKnob("DECAY",  col::boneDim());
-    macro_[2] = makePlaceholderKnob("PUNCH",  col::boneDim());
-    macro_[3] = makePlaceholderKnob("WEIGHT", col::boneDim());
-    macro_[4] = makePlaceholderKnob("MOOD",   col::boneDim());
-    macro_[5] = makePlaceholderKnob("SPACE",  col::boneDim());
-    macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::accentAmber(), col::boneDim());
+    // Macros live in the red nose region — labels must sit on a saturated
+    // red background, so use col::bone() (cream-white) not boneDim for
+    // legibility. OUT gets the same treatment plus a fonts::label bump
+    // applied in layoutMacrosInNose() so it reads as the hero.
+    macro_[0] = makePlaceholderKnob("PITCH",  col::bone());
+    macro_[1] = makePlaceholderKnob("DECAY",  col::bone());
+    macro_[2] = makePlaceholderKnob("PUNCH",  col::bone());
+    macro_[3] = makePlaceholderKnob("WEIGHT", col::bone());
+    macro_[4] = makePlaceholderKnob("MOOD",   col::bone());
+    macro_[5] = makePlaceholderKnob("SPACE",  col::bone());
+    macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::accentAmber(), col::bone());
     for (auto& m : macro_)
     {
         if (m == nullptr) continue;
@@ -381,14 +384,15 @@ void FaceplatePanel::paint(juce::Graphics& g)
     // edges (matches tools/bombshape_gen.py).
     const chassisRenderer::Ctx ctx{
         chassisPath_, capPath_, finPathL_, finPathR_,
-        chassisRectArea_, chassisApexY_, redRegionTopY_, bandRect_,
+        chassisRectArea_, chassisApexY_, redRegionTopY_,
         getWidth(), getHeight()
     };
     chassisRenderer::drawBackground(g);
     chassisRenderer::drawCapAndFins(g, ctx);
     chassisRenderer::drawChassis(g, ctx);
     chassisRenderer::drawRedRegion(g, ctx);
-    chassisRenderer::drawBand(g, ctx);
+    // Yellow BOMBO-TEC cartouche band removed 2026-05-17 — the strip is
+    // now the preset bar's home (PresetBarComponent paints itself there).
 
     headerRenderer::draw(g, headerBounds_, chassisPath_);
     paintScopeFrame(g);    // red U-border around scope, drawn under scope component
@@ -602,40 +606,32 @@ void FaceplatePanel::resized()
         scope_.setBounds(scopeBounds_);
     }
 
-    // Preset bar (Phase 3) — thin horizontal strip between band-bottom and
-    // macro-top. Full chassis width by default; layout editor can drag it
-    // elsewhere via the "presetBar" id. When the bank hasn't been wired
-    // yet (presetBar_ == nullptr) we skip the strip AND keep macroTop at
-    // the legacy +8 offset so the rack doesn't ghost-shift.
-    constexpr int kPresetBarH   = 22;
-    constexpr int kPresetBarPad = 6;   // gap above and below the bar
+    // Preset bar — moved INTO the former yellow-cartouche-band footprint
+    // 2026-05-17. The PresetBarComponent paints its own backdrop +
+    // chevrons, so it visually replaces the cartouche. bandRect_ stays
+    // around as the layout anchor + F2 drag handle, and the layout
+    // override id ("presetBar") still works for fine-tuning.
     int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
     if (presetBar_ != nullptr)
     {
-        const int barTop = static_cast<int>(bandRect_.getBottom()) + kPresetBarPad;
-        const juce::Rectangle<int> barDefault(chassisL, barTop,
-                                              chassisR - chassisL, kPresetBarH);
+        const juce::Rectangle<int> barDefault = bandRect_.toNearestInt();
         presetBarBounds_ = layout_.boundsOr("presetBar", barDefault);
         presetBar_->setBounds(presetBarBounds_);
-        macroTop = barTop + kPresetBarH + kPresetBarPad;
+        macroTop = presetBarBounds_.getBottom() + 8;
     }
-    // Default macro row bounds — overridable via LayoutManager.
-    juce::Rectangle<int> macroDefault(chassisL, macroTop,
-                                      chassisR - chassisL, kMacroH);
-    juce::Rectangle<int> macroFinal = layout_.boundsOr("macroRow", macroDefault);
-    layoutMacros(macroFinal);
-    // Editor hit-box: tight rect around the painted knob+label band so the
-    // dashed selection hugs the knobs rather than the full chassis-wide
-    // 90px slot. macroFinal stays wide so layoutMacros' centering math
-    // keeps the visible knobs in the same place.
-    {
-        constexpr int kMacroColW   = 44;
-        const int macroBandW = kMacroColW * kNCols + (kNCols - 1) * kColGap;
-        const int macroBandH = kMacroKnobSize + kKnobLabelH + 4;
-        const int macroBandX = macroFinal.getX() + (macroFinal.getWidth()  - macroBandW) / 2;
-        const int macroBandY = macroFinal.getY() + (macroFinal.getHeight() - macroBandH) / 2;
-        macroBoundsTracked_ = juce::Rectangle<int>(macroBandX, macroBandY, macroBandW, macroBandH);
-    }
+    // Macros now live in the bomb's nose (red region) rather than in a
+    // horizontal strip above the rack. noseInteriorDefault is the
+    // bounding box; layoutMacrosInNose() centres the 3+2+2 stack inside
+    // it. F2 layout-edit can override the bounding box via "macroRow".
+    const int kNoseBottomPad = 8;   // headroom above the rounded tip
+    const juce::Rectangle<int> noseInteriorDefault(chassisL,
+                                                   static_cast<int>(redRegionTopY_) + 6,
+                                                   chassisR - chassisL,
+                                                   h - static_cast<int>(redRegionTopY_)
+                                                       - 6 - kNoseBottomPad);
+    juce::Rectangle<int> noseInterior = layout_.boundsOr("macroRow", noseInteriorDefault);
+    layoutMacrosInNose(noseInterior);
+    macroBoundsTracked_ = noseInterior;
     bandBoundsTracked_  = bandRect_.toNearestInt();
 
     // ── Rack columns ────────────────────────────────────────────────
@@ -650,7 +646,11 @@ void FaceplatePanel::resized()
     const int colW           = kColW;
     const int leftMargin     = chassisL + (chassisR - chassisL - totalUsed) / 2;
 
-    const int rectTop = macroTop + kMacroH + kRackTopGap;
+    // With macros gone from this strip, the rack starts directly below
+    // the preset bar (with kRackTopGap above the VOICE A/B title strips
+    // to keep room for the A↔B balance fader). macroTop is computed in
+    // the preset-bar block above as presetBarBounds_.getBottom() + 8.
+    const int rectTop = macroTop + kRackTopGap;
 
     // Uniform section height (reverted 2026-05-17 per user feedback after
     // b506649): all columns share the height of the tallest one for
@@ -913,32 +913,88 @@ void FaceplatePanel::wireMacroFanOut()
     // macro_[6] (OUT) is APVTS-bound directly — no fan-out needed.
 }
 
-void FaceplatePanel::layoutMacros(juce::Rectangle<int> area)
+void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
 {
-    // Aligns 1:1 with the FX columns below (matching kColW). Both rows
-    // share the same total-rack width and centering math.
-    constexpr int kColW      = 44;
-    const int totalGap       = (kNCols - 1) * kColGap;
-    const int totalUsed      = kColW * kNCols + totalGap;
-    const int colW           = kColW;
-    const int leftMargin     = area.getX() + (area.getWidth() - totalUsed) / 2;
+    // Macros relocated into the bomb's red nose region (2026-05-17). OUT
+    // sits as a larger hero at the centre; the six satellite macros are
+    // arranged in a perfect hexagonal ring around it (60° intervals,
+    // starting at top).
+    //
+    // Macro indexing (matches construction order in the ctor):
+    //   0 = PITCH   (top)            3 = WEIGHT (bottom)
+    //   1 = DECAY   (top-right)      4 = MOOD   (bottom-left)
+    //   2 = PUNCH   (bottom-right)   5 = SPACE  (top-left)
+    //   6 = OUT     (centre, master gain APVTS-bound)
+    if (noseInterior.isEmpty()) return;
 
-    const int knobH = kMacroKnobSize;
-    const int labelH = kKnobLabelH;
-    const int bandH = knobH + labelH + 4;
-    const int yTop = area.getY() + (area.getHeight() - bandH) / 2;
+    constexpr int kSatSize   = 38;     // satellite knob diameter
+    constexpr int kHeroSize  = 70;     // OUT hero diameter
+    constexpr int kLabelH    = 12;
+    constexpr int kLabelGap  = 2;
+    constexpr int kRingGap   = 14;     // gap between OUT edge and satellite edge
 
-    for (int i = 0; i < kNCols; ++i)
+    // Ring radius from centre of OUT to centre of each satellite. Edge-
+    // to-edge gap is kRingGap so the cluster reads as a tight assembly
+    // rather than a scatter.
+    const int radius = (kHeroSize / 2) + kRingGap + (kSatSize / 2);
+
+    // Cluster footprint — used for centering in the nose and for the
+    // F2-editor hit-box. Width: 2*radius + satellite diameter.
+    // Height: same vertically, plus the bottom-satellite's label strip.
+    const int clusterW = 2 * radius + kSatSize;
+    const int clusterH = 2 * radius + kSatSize + kLabelGap + kLabelH;
+
+    const int cx = noseInterior.getCentreX();
+    // Anchor the cluster well above vertical centre — the nose tapers
+    // wider at the top, so an upper-third placement lets the cluster
+    // breathe (no satellite-label flirting with the rounded tip) and
+    // positions OUT where the eye naturally lands when scanning down
+    // from the rack.
+    const int topMinCy = noseInterior.getY() + radius + kSatSize / 2 + 6;
+    const int botMaxCy = noseInterior.getBottom()
+                       - (radius + kSatSize / 2 + kLabelGap + kLabelH + 4);
+    // 35 % from the top of the nose interior (golden-ratio-ish anchor).
+    const int targetCy = noseInterior.getY()
+                       + static_cast<int>(noseInterior.getHeight() * 0.42f);
+    const int cy = juce::jlimit(topMinCy, botMaxCy, targetCy);
+
+    auto setKnob = [&](int macroIdx, int knobCx, int knobCy, int knobSize, bool wantLabel)
     {
-        auto& m = macro_[i];
-        if (!m) continue;
-        const int cx = leftMargin + i * (colW + kColGap) + colW / 2;
-        const int knobX = cx - knobH / 2;
-        if (m->slider) m->slider->setBounds(knobX, yTop, knobH, knobH);
-        if (m->label)  m->label ->setBounds(leftMargin + i * (colW + kColGap),
-                                            yTop + knobH + 2,
-                                            colW, labelH);
+        auto& m = macro_[macroIdx];
+        if (! m) return;
+        const int knobX  = knobCx - knobSize / 2;
+        const int knobY  = knobCy - knobSize / 2;
+        const int labelW = knobSize + 22;
+        if (m->slider) m->slider->setBounds(knobX, knobY, knobSize, knobSize);
+        if (m->label)
+        {
+            m->label->setBounds(knobCx - labelW / 2,
+                                knobY + knobSize + kLabelGap,
+                                labelW, kLabelH);
+            m->label->setVisible(wantLabel);
+        }
+    };
+
+    // OUT hero at the geometric centre. Hero gets a bigger label font
+    // so the master-output is unmistakably the centerpiece of the nose.
+    setKnob(6, cx, cy, kHeroSize, true);
+    if (auto& m6 = macro_[6]; m6 && m6->label)
+        m6->label->setFont(fonts::label(11.5f).boldened());
+
+    // 6 satellites equally spaced. Screen y increases downwards, so a
+    // -π/2 angle points UP. Stepping +π/3 walks clockwise.
+    constexpr float kPi = juce::MathConstants<float>::pi;
+    const float startAngle = -kPi / 2.0f;
+    const int satOrder[6] = { 0, 1, 2, 3, 4, 5 };  // PITCH, DECAY, PUNCH, WEIGHT, MOOD, SPACE
+    for (int i = 0; i < 6; ++i)
+    {
+        const float a = startAngle + static_cast<float>(i) * (kPi / 3.0f);
+        const int sx = cx + static_cast<int>(std::cos(a) * static_cast<float>(radius));
+        const int sy = cy + static_cast<int>(std::sin(a) * static_cast<float>(radius));
+        setKnob(satOrder[i], sx, sy, kSatSize, true);
     }
+
+    (void) clusterW;
 }
 
 } // namespace bombo

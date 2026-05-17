@@ -69,11 +69,23 @@ void PresetBarComponent::refresh()
 
 void PresetBarComponent::paint(juce::Graphics& g)
 {
-    const auto r = getLocalBounds().toFloat().reduced(1.0f);
-    g.setColour(col::graphite().withAlpha(0.70f));
-    g.fillRoundedRectangle(r, 3.0f);
-    g.setColour(col::ink().withAlpha(0.55f));
-    g.drawRoundedRectangle(r, 3.0f, 0.8f);
+    // Preset bar lives in the footprint where the yellow cartouche band
+    // used to sit (since 2026-05-17). The amber top-and-bottom hairlines
+    // are an echo of the cartouche so the strip reads as a designed
+    // control surface rather than an empty stripe of chassis.
+    const auto outer = getLocalBounds().toFloat();
+    const auto inner = outer.reduced(2.0f, 2.0f);
+
+    g.setColour(col::graphite().withAlpha(0.92f));
+    g.fillRoundedRectangle(inner, 3.0f);
+
+    g.setColour(col::ink().withAlpha(0.60f));
+    g.drawRoundedRectangle(inner, 3.0f, 0.8f);
+
+    // Amber hairlines top + bottom, full bar width.
+    g.setColour(col::accentAmber().withAlpha(0.55f));
+    g.fillRect(outer.getX(), outer.getY(),                     outer.getWidth(), 1.0f);
+    g.fillRect(outer.getX(), outer.getBottom() - 1.0f,         outer.getWidth(), 1.0f);
 }
 
 void PresetBarComponent::mouseDown(const juce::MouseEvent& e)
