@@ -123,6 +123,7 @@ private:
     juce::AudioParameterFloat*  pPitchEnd = nullptr;
     juce::AudioParameterFloat*  pPitchDecay = nullptr;
     juce::AudioParameterFloat*  pPitchCurve = nullptr;
+    juce::AudioParameterFloat*  pSubHpf = nullptr;
     juce::AudioParameterFloat*  pMidPitchStart = nullptr;
     juce::AudioParameterFloat*  pMidPitchEnd = nullptr;
     juce::AudioParameterFloat*  pMidDecay = nullptr;

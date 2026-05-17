@@ -24,6 +24,9 @@ struct VoiceTrigger
     float pitchEndHz      = 45.0f;
     float pitchEnvDecayMs = 80.0f;
     float pitchCurve      = 3.0f;
+    // Sub HPF — one-pole high-pass on the SUB layer only. 20 Hz = bypass.
+    // Useful range 30-100 Hz to carve muddy lows in tight psytrance kicks.
+    float subHpfHz        = 20.0f;
     // MID
     float midPitchStartHz = 300.0f;
     float midPitchEndHz   = 80.0f;
@@ -96,6 +99,24 @@ public:
         fadeoutGain_ = 1.0f;
         fadeoutStep_ = 0.0f;
         samplePos_   = 0;
+        // Sub HPF coefficient — cached at trigger time. One-pole HPF:
+        //   y[n] = a * (y[n-1] + x[n] - x[n-1])
+        // where a = 1 / (1 + (2π fc) / sr) approximated. Below 22 Hz we
+        // disable entirely (coef = 1.0, no filtering — output passes
+        // through; default 20 Hz acts as bypass).
+        if (t.subHpfHz < 22.0f)
+        {
+            subHpfA_ = 1.0f;       // disabled — straight passthrough
+        }
+        else
+        {
+            constexpr float tau_h = 6.28318530717958647692f;
+            const float rc = 1.0f / (tau_h * t.subHpfHz);
+            const float dt = 1.0f / sampleRate_;
+            subHpfA_ = rc / (rc + dt);
+        }
+        subHpfPrevX_ = 0.0f;
+        subHpfPrevY_ = 0.0f;
         // COLOR filter: one-pole LP applied to the full body sum (mid +
         // click + noise + sample). Cutoff sweep matches NoiseGen's range
         // direction (color=0 → dark, color=1 → bright) but starts higher
@@ -150,7 +171,16 @@ public:
         const float subFreq = pitchEnv_.tick();
         const float subOscOut = osc_.tickWave(subFreq, trig_.waveform);
         const float subAmp = ampEnv_.tick();
-        const float sub = subOscOut * subAmp;
+        float sub = subOscOut * subAmp;
+        // Sub HPF — one-pole, cached at trigger. Bypassed when subHpfA_=1.
+        if (subHpfA_ < 0.9999f)
+        {
+            const float y = subHpfA_ * (subHpfPrevY_ + sub - subHpfPrevX_);
+            subHpfPrevX_ = sub;
+            subHpfPrevY_ = y;
+            if (std::fpclassify(subHpfPrevY_) == FP_SUBNORMAL) subHpfPrevY_ = 0.0f;
+            sub = y;
+        }
 
         // MID layer (always sine — avoid aliasing at body frequencies)
         const float midFreq = midPitchEnv_.tick();
@@ -238,6 +268,10 @@ private:
     // COLOR (unified body LP) — cached at trigger time.
     float          bodyColorAlpha_ = 1.0f;
     float          bodyColorZ_     = 0.0f;
+    // Sub HPF — one-pole, cached at trigger time. subHpfA_ = 1.0 ⇒ bypass.
+    float          subHpfA_      = 1.0f;
+    float          subHpfPrevX_  = 0.0f;
+    float          subHpfPrevY_  = 0.0f;
 };
 
 } // namespace bombo
