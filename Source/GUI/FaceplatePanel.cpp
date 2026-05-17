@@ -682,23 +682,13 @@ void FaceplatePanel::resized()
                      kScopeH - 16 };
     scope_.setBounds(scopeBounds_);
 
-    // Macro + rack vertical centering inside the body interior (2026-05-17).
-    // Body interior = bandRect_.getBottom() (top boundary) → redRegionTopY_
-    // (bottom boundary). Macro sits below the band; rack sits below macros
-    // with kRackTopGap (which also hosts the balance fader). Center the
-    // macro+rack stack inside the interior with a few px of olive frame.
-    const int bodyInteriorTop = static_cast<int>(bandRect_.getBottom()) + 8;
-    const int bodyInteriorBot = static_cast<int>(redRegionTopY_) - 12;
-    const int interiorH       = bodyInteriorBot - bodyInteriorTop;
-    // Rack target height — computed below using maxControls; here we just
-    // need to know macro + gap + rack approximate total to center the stack.
-    int maxControlsTmp = 0;
-    for (const auto& s : sections_)
-        maxControlsTmp = juce::jmax(maxControlsTmp, static_cast<int>(s.controls.size()));
-    const int rackHTarget   = kColTitleH + maxControlsTmp * kRowH + 4;
-    const int stackH        = kMacroH + kRackTopGap + rackHTarget;
-    const int stackTopY     = bodyInteriorTop + juce::jmax(0, (interiorH - stackH) / 2);
-    const int macroTop      = stackTopY;
+    // Macro + rack stack hugs the band's bottom edge — slack falls BELOW
+    // the rack inside the body interior. User feedback 2026-05-17 round
+    // 3: the centered position (band-bot + slack/2) read as "rack too
+    // low." Pulling the whole stack up so the rack sits in the upper-
+    // mid of the body, with olive frame between rack bottom and the
+    // red-region boundary.
+    const int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
     layoutMacros({ chassisL, macroTop, chassisR - chassisL, kMacroH });
 
     // ── Rack columns ────────────────────────────────────────────────
