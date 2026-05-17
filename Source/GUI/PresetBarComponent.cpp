@@ -31,7 +31,7 @@ PresetBarComponent::PresetBarComponent(PresetBank& bank,
     name_.setJustificationType(juce::Justification::centred);
     name_.setColour(juce::Label::textColourId,        col::accentAmber());
     name_.setColour(juce::Label::backgroundColourId,  juce::Colours::transparentBlack);
-    name_.setFont(bombo::fonts::value(15.0f).boldened());
+    name_.setFont(bombo::fonts::value(11.5f).boldened());
     name_.setInterceptsMouseClicks(false, false);  // bar handles its own clicks
 
     addChildComponent(nameEditor_);
@@ -113,21 +113,21 @@ void PresetBarComponent::resized()
     auto area = getLocalBounds().reduced(3, 2);
     if (area.isEmpty()) return;
 
-    // Buttons get fixed, slim widths — the preset NAME is the
-    // hero of this strip, not the chevrons. Earlier sizing used
-    // (height + 2) which made the chevrons huge square slabs and
-    // squeezed the name down to nothing.
-    constexpr int kChevronW = 26;
-    constexpr int kMenuW    = 28;
-    constexpr int kGap      = 4;
+    // Layout: < on the far LEFT edge of the cartouche, > on the far
+    // RIGHT edge, name display fills the middle. The ≡ menu button is
+    // hidden — its menu opens by clicking anywhere on the name strip
+    // (mouseDown already routes through showMenu). Keeping the strip
+    // visually clean inside the narrow cartouche footprint.
+    constexpr int kChevronW = 18;
+    constexpr int kGap      = 3;
 
     prev_.setBounds(area.removeFromLeft(kChevronW));
-    area.removeFromLeft(2);
-    next_.setBounds(area.removeFromLeft(kChevronW));
     area.removeFromLeft(kGap);
 
-    menu_.setBounds(area.removeFromRight(kMenuW));
+    next_.setBounds(area.removeFromRight(kChevronW));
     area.removeFromRight(kGap);
+
+    menu_.setVisible(false);
 
     name_.setBounds(area);
     nameEditor_.setBounds(area);

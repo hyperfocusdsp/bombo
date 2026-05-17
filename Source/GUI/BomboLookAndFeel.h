@@ -204,35 +204,20 @@ public:
         if (! isChoiceText)
             text = slider.getTextFromValue(slider.getValue());
         const float capInner = coreR * 0.95f;
-        // Choice text renders single-line regardless of internal spaces; only
-        // continuous "<number> <unit>" formatters get the two-line treatment.
-        const int spaceIdx = isChoiceText ? -1 : text.indexOfChar(' ');
-        const float valueFontSize = juce::jlimit(8.0f, 13.0f, capInner * 0.62f);
-        g.setColour(valueColour.withAlpha(0.92f));
-        if (spaceIdx > 0)
-        {
-            const auto num  = text.substring(0, spaceIdx);
-            const auto unit = text.substring(spaceIdx + 1);
-            const float unitFontSize = juce::jmax(6.5f, valueFontSize * 0.72f);
-            g.setFont(fonts::value(valueFontSize));
-            g.drawText(num,
-                       juce::Rectangle<float>(cx - capInner, cy - capInner,
-                                              capInner * 2.0f, capInner * 1.3f),
-                       juce::Justification::centredBottom);
-            g.setFont(fonts::value(unitFontSize));
-            g.drawText(unit,
-                       juce::Rectangle<float>(cx - capInner, cy - capInner * 0.05f,
-                                              capInner * 2.0f, capInner * 1.0f),
-                       juce::Justification::centredTop);
-        }
-        else
-        {
-            g.setFont(fonts::value(valueFontSize));
-            g.drawText(text,
-                       juce::Rectangle<float>(cx - capInner, cy - capInner,
-                                              capInner * 2.0f, capInner * 2.0f),
-                       juce::Justification::centred);
-        }
+
+        // The two-line "<number> / <unit>" layout looked clever at first
+        // but at 38–54 px knob sizes it gave un-legible 7 pt unit text
+        // that read as random glyphs ('dB' looked like '0', etc.). User
+        // 2026-05-17: "make them legible and not clashing ffs". So we
+        // now always render the FULL value string single-line. Choice
+        // knobs render their string label as-is.
+        const float valueFontSize = juce::jlimit(9.0f, 14.0f, capInner * 0.55f);
+        g.setColour(valueColour.withAlpha(0.95f));
+        g.setFont(fonts::value(valueFontSize).boldened());
+        g.drawText(text,
+                   juce::Rectangle<float>(cx - capInner, cy - capInner,
+                                          capInner * 2.0f, capInner * 2.0f),
+                   juce::Justification::centred);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override
