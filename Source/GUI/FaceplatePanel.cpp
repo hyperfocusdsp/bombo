@@ -35,8 +35,9 @@ constexpr int kHeaderH      = 50;
 constexpr int kScopeH       = 100;
 constexpr int kMacroH       = 90;
 constexpr int kRackPadX     = 2;        // padding between chassis edge and column 0/N-1
-constexpr int kRackTopGap   = 4;
+constexpr int kRackTopGap   = 22;      // accommodates the A↔B balance fader strip above VOICE A/B
 constexpr int kRackBotGap   = 4;
+constexpr int kBalFaderH    = 16;      // horizontal balance fader height
 
 // FX columns.
 constexpr int kColGap       = 0;       // colors butt up; the per-FX accent IS the separator (2026-05-17)
@@ -728,9 +729,17 @@ void FaceplatePanel::resized()
         layoutSection(s);
     }
 
-    // Balance fader now lives in the header bar (relocated 2026-05-17 per
-    // user feedback — moved out of the inter-column space). layoutHeader
-    // owns its bounds.
+    // Balance fader — relocated 2026-05-17 round 2: out of the header,
+    // now a thin horizontal strip sitting in kRackTopGap directly ABOVE
+    // the VOICE A + VOICE B title strips. Visually adjacent to what it
+    // affects (the two columns it mixes between).
+    if (balanceFader_ && sections_.size() >= 2)
+    {
+        const int balX = sections_[0].rectBounds.getX();
+        const int balR = sections_[1].rectBounds.getRight();
+        const int balY = sections_[0].rectBounds.getY() - kBalFaderH - 2;
+        balanceFader_->setBounds(balX, balY, balR - balX, kBalFaderH);
+    }
 
     layoutHeader(headerBounds_);
 }
@@ -803,21 +812,16 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     const int y = (area.getHeight() - kPillH) / 2 + area.getY();
     int xCursor = area.getRight() - 14;
 
-    // Right-to-left: tabs, BPM, BALANCE, loop, LIM, DICE.
-    // BALANCE sits immediately LEFT of BPM — most prominent center-header
-    // position. Bigger than the pills so the A↔B disc reads at a glance.
+    // Right-to-left: tabs, BPM, loop, LIM, DICE.
+    // Balance fader moved OUT of the header (2026-05-17 round 2) — see
+    // resized() for its new position above VOICE A + VOICE B title strips.
+    (void) kBalW;  // suppress unused-constant warning
     insertFxTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
     xCursor -= kTabW + 1;
     synthTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
     xCursor -= kTabW + kPad;
     if (bpmDisplay_) bpmDisplay_->setBounds(xCursor - kBpmW, y, kBpmW, kPillH);
     xCursor -= kBpmW + kPad;
-    if (balanceFader_)
-    {
-        const int balY = area.getY() + (area.getHeight() - kBalW) / 2;
-        balanceFader_->setBounds(xCursor - kBalW, balY, kBalW, kBalW);
-        xCursor -= kBalW + kPad;
-    }
     if (loopBtn_)    loopBtn_   ->setBounds(xCursor - kLoopW, y, kLoopW, kPillH);
     xCursor -= kLoopW + kPad;
     if (limPill_)    limPill_   ->setBounds(xCursor - kLimW,  y, kLimW,  kPillH);
