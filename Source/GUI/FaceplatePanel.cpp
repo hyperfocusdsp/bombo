@@ -39,16 +39,16 @@ constexpr int kRackTopGap   = 4;
 constexpr int kRackBotGap   = 4;
 
 // FX columns.
-constexpr int kColGap       = 8;
-constexpr int kColTitleH    = 20;
+constexpr int kColGap       = 2;       // was 8 — tightened 2026-05-17 per user feedback
+constexpr int kColTitleH    = 18;      // was 20
 constexpr int kColAccentH   = 3;
-constexpr int kModuleIdH    = 14;
-constexpr int kInnerPadX    = 3;
-constexpr int kRowH         = 72;
+constexpr int kModuleIdH    = 12;      // was 14
+constexpr int kInnerPadX    = 1;       // was 3 — eliminates inter-column gap
+constexpr int kRowH         = 58;      // was 72 — ~20% knob shrink
 constexpr int kKnobLabelH   = 13;
 constexpr int kNCols        = 7;
 
-constexpr int kMacroKnobSize = 46;
+constexpr int kMacroKnobSize = 38;     // was 46 — ~20% shrink, matches kRowH
 } // namespace
 
 // ────────────────────────────────────────────────────────────────────
@@ -600,18 +600,6 @@ void FaceplatePanel::resized()
     const int w = getWidth();
     const int h = getHeight();
 
-    // ── Chassis bounds ──────────────────────────────────────────────
-    const int chassisL = kChassisMarginX;
-    const int chassisR = w - kChassisMarginX;
-    const int chassisT = kChassisMarginTop;
-    const int chassisApexY = h - kChassisMarginBot;
-    const int chassisRectBot = chassisApexY - kTailH;
-
-    chassisRectArea_   = { chassisL, chassisT, chassisR - chassisL,
-                           chassisRectBot - chassisT };
-    chassisRectBottomY_ = chassisRectBot;
-    chassisApexY_       = chassisApexY;
-
     // Build the chassis path via the parametric Mini-Nuke silhouette
     // generator (locked R4B-CLASSIC 2026-05-17). The path is a single
     // continuous egg-shape from rear-cap area down through the bulge to
@@ -619,17 +607,34 @@ void FaceplatePanel::resized()
     // region (drawn in paintRedRegion) is a clipped paint inside the
     // same silhouette. Body, cap, and fin paths are owned by FaceplatePanel
     // as members so paint() can reference them per-stage.
-    {
-        const juce::Rectangle<float> boundsF(0.0f, 0.0f,
-                                             static_cast<float>(w),
-                                             static_cast<float>(h));
-        chassisPath_ = bombo::BombShape::buildBombPath(boundsF);
-        capPath_     = bombo::BombShape::buildCapPath(boundsF);
-        finPathL_    = bombo::BombShape::buildFinPath(boundsF, -1);
-        finPathR_    = bombo::BombShape::buildFinPath(boundsF, +1);
-        bandRect_    = bombo::BombShape::bandRect(boundsF);
-        redRegionTopY_ = bombo::BombShape::redRegionTopYInBounds(boundsF);
-    }
+    const juce::Rectangle<float> boundsF(0.0f, 0.0f,
+                                         static_cast<float>(w),
+                                         static_cast<float>(h));
+    chassisPath_   = bombo::BombShape::buildBombPath(boundsF);
+    capPath_       = bombo::BombShape::buildCapPath(boundsF);
+    finPathL_      = bombo::BombShape::buildFinPath(boundsF, -1);
+    finPathR_      = bombo::BombShape::buildFinPath(boundsF, +1);
+    bandRect_      = bombo::BombShape::bandRect(boundsF);
+    redRegionTopY_ = bombo::BombShape::redRegionTopYInBounds(boundsF);
+
+    // ── Inscribed UI region — the band-bottom to red-region-top zone of
+    //    the body interior. chassisRectArea_ used to be "rect above V-tail";
+    //    now it's "the body interior the rack lives in." kRackBotGap of
+    //    headroom above the red region so the bottom row doesn't kiss the
+    //    nose split line. Width = body bulge width (the widest usable
+    //    horizontal strip — narrows the rack OUTER bounds slightly so the
+    //    rack columns sit inside the silhouette rather than overflowing it.
+    const int chassisL = kChassisMarginX;
+    const int chassisR = w - kChassisMarginX;
+    const int chassisT = kChassisMarginTop;
+    const int rackBotPad = 8;
+    const int chassisRectBot = static_cast<int>(redRegionTopY_) - rackBotPad;
+    const int chassisApexY   = static_cast<int>(redRegionTopY_) + 4;  // nose interior
+
+    chassisRectArea_    = { chassisL, chassisT, chassisR - chassisL,
+                            chassisRectBot - chassisT };
+    chassisRectBottomY_ = chassisRectBot;
+    chassisApexY_       = chassisApexY;
 
     // ── Bands inside the chassis rect ───────────────────────────────
     headerBounds_ = { chassisL, chassisT, chassisR - chassisL, kHeaderH };
