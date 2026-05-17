@@ -1,7 +1,7 @@
 #include "BBSComponent.h"
 
+#include "../Colours.h"
 #include "../Fonts.h"
-#include "../Theme/ThemeProvider.h"
 
 namespace bombo
 {
@@ -63,12 +63,11 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 
 void BBSComponent::paint(juce::Graphics& g)
 {
-    const auto& p = bombo::ThemeProvider::current();
     const auto bounds = getLocalBounds();
 
     // Backdrop: graphite at 0.92 alpha — faceplate shows through faintly,
     // sells the "you're inside the bomb" reading rather than a hard cut.
-    g.fillAll(p.graphite.withAlpha(0.92f));
+    g.fillAll(col::graphite().withAlpha(0.92f));
 
     // Banner — monospace, bone fg with amber accent on the title line.
     // Cells sized to the smaller of (width/banner_chars, height/banner_lines)
@@ -101,7 +100,7 @@ void BBSComponent::paint(juce::Graphics& g)
         // Title line (the "H Y P E R F O C U S  B B S" one, by convention
         // the second-from-last with text) gets the amber accent.
         const bool isTitleLine = (i == 7);
-        g.setColour(isTitleLine ? p.accentAmber : p.bone);
+        g.setColour(isTitleLine ? col::accentAmber() : col::bone());
 
         const juce::String line(kBannerLines[i]);
         const juce::Rectangle<float> r(xStart,
