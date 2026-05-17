@@ -144,6 +144,8 @@ if(BOMBO_BUILD_TESTS)
     target_sources(Bombo_Tests PRIVATE
         tests/RunTests.cpp
         tests/PaletteTests.cpp
+        tests/VoiceStealingTests.cpp
+        tests/StateRoundTripTests.cpp
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.cpp)
