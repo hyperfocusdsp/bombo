@@ -24,7 +24,7 @@ class BalanceFader;
 class DiceButton;
 
 // Bombo faceplate. Four bands stacked top-to-bottom:
-//   1. Header  — BOMBO logo, subtitle, LIM/MNT pills, SYNTH/FX tab
+//   1. Header  — BOMBO logo, DICE/LIM/LOOP/BPM pills (always-visible, no pages)
 //   2. Scope   — recessed post-master oscilloscope strip (30 Hz redraw)
 //   3. Macro   — 7 small knobs aligned 1:1 with the FX columns below
 //   4. Rack    — 7 colour-coded FX columns. Each column paints as a
@@ -192,8 +192,6 @@ private:
     std::unique_ptr<BpmDisplay>         bpmDisplay_;
     std::unique_ptr<BalanceFader>       balanceFader_;
     std::unique_ptr<DiceButton>         diceButton_;
-    juce::Rectangle<int> synthTabBounds_;
-    juce::Rectangle<int> insertFxTabBounds_;
     juce::Rectangle<int> headerBounds_;
 
     // Scope.

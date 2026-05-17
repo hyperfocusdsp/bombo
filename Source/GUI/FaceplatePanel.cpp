@@ -525,24 +525,6 @@ void FaceplatePanel::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
     g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
 
     // BPM display + Loop toggle are real components; they paint themselves.
-
-    // SYNTH / INSERT FX tab.
-    {
-        const auto sR = synthTabBounds_.toFloat();
-        g.setColour(col::accentAmber());
-        g.fillRoundedRectangle(sR, 4.0f);
-        g.setColour(col::ink());
-        g.setFont(fonts::label(10.0f));
-        g.drawText("SYNTH", synthTabBounds_, juce::Justification::centred);
-
-        const auto fR = insertFxTabBounds_.toFloat();
-        g.setColour(col::graphite());
-        g.fillRoundedRectangle(fR, 4.0f);
-        g.setColour(col::boneDim());
-        g.drawRoundedRectangle(fR.reduced(0.5f), 4.0f, 1.0f);
-        g.setColour(col::boneDim());
-        g.drawText("INSERT FX", insertFxTabBounds_, juce::Justification::centred);
-    }
 }
 
 void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
@@ -884,27 +866,20 @@ void FaceplatePanel::layoutSection(Section& s)
 
 void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
 {
-    constexpr int kPillH  = 22;
-    constexpr int kLimW   = 50;
-    constexpr int kLoopW  = 60;
-    constexpr int kBpmW   = 78;
-    constexpr int kDiceW  = 22; // square
-    constexpr int kBalW   = 40; // square (A↔B balance knob, relocated 2026-05-17 — bigger for legibility)
-    constexpr int kTabW   = 64;
-    constexpr int kPad    = 8;
+    constexpr int kPillH    = 22;
+    constexpr int kLimW     = 50;
+    constexpr int kLoopW    = 60;
+    constexpr int kBpmW     = 78;
+    constexpr int kDiceW    = 22; // square
+    constexpr int kPad      = 8;
     constexpr int kPadSmall = 4;
 
     const int y = (area.getHeight() - kPillH) / 2 + area.getY();
     int xCursor = area.getRight() - 14;
 
-    // Right-to-left: tabs, BPM, loop, LIM, DICE.
-    // Balance fader moved OUT of the header (2026-05-17 round 2) — see
-    // resized() for its new position above VOICE A + VOICE B title strips.
-    (void) kBalW;  // suppress unused-constant warning
-    insertFxTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
-    xCursor -= kTabW + 1;
-    synthTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
-    xCursor -= kTabW + kPad;
+    // Right-to-left: BPM, loop, LIM, DICE. (SYNTH/FX tab nub removed
+    // 2026-05-17 — layout is single-page, all controls always visible.
+    // Balance fader lives above VOICE A/B strips, not in the header.)
     if (bpmDisplay_) bpmDisplay_->setBounds(xCursor - kBpmW, y, kBpmW, kPillH);
     xCursor -= kBpmW + kPad;
     if (loopBtn_)    loopBtn_   ->setBounds(xCursor - kLoopW, y, kLoopW, kPillH);
