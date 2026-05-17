@@ -37,6 +37,13 @@ void drawChassis(juce::Graphics& g, const Ctx& ctx)
     grad.addColour(0.78, col::bodyLo());
     g.setGradientFill(grad);
     g.fillPath(ctx.chassisPath);
+
+    // Silhouette outline — pulls the bomb shape together against any
+    // backdrop (Hyprland transparency, dark wallpaper, light wallpaper).
+    // Without this stroke the dark graphite chassis dissolves into a
+    // dark host window and the rack columns read as floating tiles.
+    g.setColour(col::bone().withAlpha(0.65f));
+    g.strokePath(ctx.chassisPath, juce::PathStrokeType(1.5f));
 }
 
 void drawRedRegion(juce::Graphics& g, const Ctx& ctx)
