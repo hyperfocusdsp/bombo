@@ -666,6 +666,15 @@ void FaceplatePanel::resized()
     bandRect_      = bombo::BombShape::bandRect(boundsF);
     redRegionTopY_ = bombo::BombShape::redRegionTopYInBounds(boundsF);
 
+    // Band bounds — layout-override hook so the user can drag the
+    // yellow cartouche around in edit mode.
+    {
+        const auto bandDefault = bandRect_.toNearestInt();
+        const auto bandFinal   = layout_.boundsOr("band", bandDefault);
+        bandRect_              = bandFinal.toFloat();
+        bandBoundsTracked_     = bandFinal;
+    }
+
     // ── Inscribed UI region — the band-bottom to red-region-top zone of
     //    the body interior. chassisRectArea_ used to be "rect above V-tail";
     //    now it's "the body interior the rack lives in." kRackBotGap of
@@ -702,11 +711,15 @@ void FaceplatePanel::resized()
     // Scope strip inside its red U-frame, same finTipW as the header.
     constexpr int kScopeBorder = 3;
     const int scopeTop = chassisT + kHeaderH;
-    scopeBounds_ = { finTipX + kScopeBorder,
-                     scopeTop + 8,
-                     finTipW - 2 * kScopeBorder,
-                     kScopeH - 16 };
-    scope_.setBounds(scopeBounds_);
+    // Scope strip bounds — layout-override hook.
+    {
+        const juce::Rectangle<int> scopeDefault(finTipX + kScopeBorder,
+                                                scopeTop + 8,
+                                                finTipW - 2 * kScopeBorder,
+                                                kScopeH - 16);
+        scopeBounds_ = layout_.boundsOr("scopeStrip", scopeDefault);
+        scope_.setBounds(scopeBounds_);
+    }
 
     // Macro + rack stack hugs the band's bottom edge — slack falls BELOW
     // the rack inside the body interior. User feedback 2026-05-17 round
@@ -771,16 +784,17 @@ void FaceplatePanel::resized()
         layoutSection(s);
     }
 
-    // Balance fader — relocated 2026-05-17 round 2: out of the header,
-    // now a thin horizontal strip sitting in kRackTopGap directly ABOVE
-    // the VOICE A + VOICE B title strips. Visually adjacent to what it
-    // affects (the two columns it mixes between).
+    // Balance fader — default position is in the kRackTopGap above
+    // VOICE A + VOICE B title strips, but layout_.boundsOr lets the user
+    // drag it anywhere in edit mode. Bug fix 2026-05-17: previously the
+    // bounds were hard-applied, so drag-edits never moved the actual knob.
     if (balanceFader_ && sections_.size() >= 2)
     {
         const int balX = sections_[0].rectBounds.getX();
         const int balR = sections_[1].rectBounds.getRight();
         const int balY = sections_[0].rectBounds.getY() - kBalFaderH - 2;
-        balanceFader_->setBounds(balX, balY, balR - balX, kBalFaderH);
+        const juce::Rectangle<int> balDefault(balX, balY, balR - balX, kBalFaderH);
+        balanceFader_->setBounds(layout_.boundsOr("balanceFader", balDefault));
     }
 
     layoutHeader(headerBounds_);
