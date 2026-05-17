@@ -655,18 +655,27 @@ void FaceplatePanel::resized()
     const int leftMargin     = chassisL + (chassisR - chassisL - totalUsed) / 2;
 
     const int rectTop = macroTop + kMacroH + kRackTopGap;
-    const int rectBot = chassisRectBot - kRackBotGap;
-    const int rectH   = rectBot - rectTop;
+
+    // Each section's height is sized to its OWN control count — no more
+    // uniform-height-of-tallest-section padding. Shorter columns (DUCK 4
+    // knobs, FILTER/DRIVE/DELAY/VOICE A 5 knobs) chop dead colored space
+    // below their last knob (2026-05-17 per user feedback). Bottoms are
+    // visually uneven but the rack is much more compact vertically.
+    constexpr int kRectBotPad = 4;  // breathing room below last knob
 
     for (int i = 0; i < kNCols && i < static_cast<int>(sections_.size()); ++i)
     {
         auto& s = sections_[i];
         const int x = leftMargin + i * (colW + kColGap);
+        const int numControls = static_cast<int>(s.controls.size());
+        const int rectH = kColTitleH + numControls * kRowH + kRectBotPad;
         s.rectBounds = { x, rectTop, colW, rectH };
         s.titleBounds = { s.rectBounds.getX(),
                           s.rectBounds.getY(),
                           s.rectBounds.getWidth(),
                           kColTitleH };
+        // moduleIdBounds kept for backward compat with mouseDown/Section
+        // struct, but no longer painted (paintSection omits it).
         s.moduleIdBounds = { s.rectBounds.getX(),
                              s.rectBounds.getBottom() - kModuleIdH,
                              s.rectBounds.getWidth(),
@@ -685,14 +694,13 @@ void FaceplatePanel::layoutSection(Section& s)
 {
     if (s.rectBounds.isEmpty() || s.controls.empty()) return;
 
+    // Module-ID strip removed — no bottom trim needed. Each section's
+    // rect height is now sized exactly to its controls (see resized).
     auto inner = s.rectBounds.reduced(kInnerPadX, 0)
-                              .withTrimmedTop(kColTitleH)
-                              .withTrimmedBottom(kModuleIdH);
+                              .withTrimmedTop(kColTitleH);
     if (inner.isEmpty()) return;
 
     // Uniform row height across all sections — every knob the same size.
-    // The max-controls-per-section budget is enforced by the column
-    // contents in the constructor; the rack rectH is sized for 6 rows.
     const int rowH = kRowH;
 
     int y = inner.getY();
