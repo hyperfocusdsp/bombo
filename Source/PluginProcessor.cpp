@@ -19,6 +19,7 @@ void BomboProcessor::cacheParameterPointers()
     pPitchEnd      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(pitchEnd));
     pPitchDecay    = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(pitchDecay));
     pPitchCurve    = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(pitchCurve));
+    pSubHpf        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(subHpf));
     pMidPitchStart = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(midPitchStart));
     pMidPitchEnd   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(midPitchEnd));
     pMidDecay      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(midDecay));
@@ -117,6 +118,7 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     t.pitchEndHz      = pPitchEnd->get();
     t.pitchEnvDecayMs = pPitchDecay->get();
     t.pitchCurve      = pPitchCurve->get();
+    t.subHpfHz        = pSubHpf->get();
     t.midPitchStartHz = pMidPitchStart->get();
     t.midPitchEndHz   = pMidPitchEnd->get();
     t.midDecayMs      = pMidDecay->get();

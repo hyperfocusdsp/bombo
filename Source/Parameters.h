@@ -19,6 +19,11 @@ namespace pid
     inline constexpr const char* pitchEnd        = "pitch_end";
     inline constexpr const char* pitchDecay      = "pitch_decay";
     inline constexpr const char* pitchCurve      = "pitch_curve";
+    // Sub-layer HPF (VOICE A 6th slot, added 2026-05-17 for tight psytrance
+    // kick shaping — see project_bombo_empty_slot_fills.md). Pre-filter
+    // on the SUB layer only; carves muddy ultra-lows so kicks punch at
+    // 50-60 Hz instead of pumping the system. Default 20 Hz = bypass.
+    inline constexpr const char* subHpf          = "sub_hpf";
     inline constexpr const char* midPitchStart   = "mid_pitch_start";
     inline constexpr const char* midPitchEnd     = "mid_pitch_end";
     inline constexpr const char* midDecay        = "mid_decay";
@@ -171,6 +176,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Pitch Decay", skewRange(5.0f, 800.0f, 0.4f), 80.0f, msFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::pitchCurve, 1},
         "Pitch Curve", Range(0.5f, 6.0f, 0.01f), 3.0f, curveFormat));
+    // Sub HPF — one-pole on SUB layer only. 20 Hz default = effectively off.
+    // Skew biased so the useful 30-100 Hz region gets most of the knob travel.
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::subHpf, 1},
+        "Sub HPF", skewRange(20.0f, 200.0f, 0.4f), 20.0f, hzFormat));
 
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::midPitchStart, 1},
         "Mid Pitch Start", skewRange(100.0f, 800.0f, 0.4f), 300.0f, hzFormat));

@@ -74,11 +74,14 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         Section s;
         s.name = "VOICE A"; s.moduleId = "AMP-1"; s.mutePid = pid::voiceAMute;
         s.accent = col::voice(); s.labelOnBg = col::bone();
-        addChoice(s, pid::waveform,   "WAVE",  s.labelOnBg);
-        addKnob  (s, pid::pitchStart, "PITCH", s.labelOnBg);
-        addKnob  (s, pid::pitchEnd,   "END",   s.labelOnBg);
-        addKnob  (s, pid::pitchDecay, "P.DEC", s.labelOnBg);
-        addKnob  (s, pid::pitchCurve, "CURVE", s.labelOnBg);
+        addChoice(s, pid::waveform,   "WAVE",   s.labelOnBg);
+        addKnob  (s, pid::pitchStart, "PITCH",  s.labelOnBg);
+        addKnob  (s, pid::pitchEnd,   "END",    s.labelOnBg);
+        addKnob  (s, pid::pitchDecay, "P.DEC",  s.labelOnBg);
+        addKnob  (s, pid::pitchCurve, "CURVE",  s.labelOnBg);
+        // SUB HPF — one-pole high-pass on the SUB layer only. Carves muddy
+        // ultra-lows for tight psytrance/hard-techno kicks. 20 Hz = bypass.
+        addKnob  (s, pid::subHpf,     "SUB HP", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
     {
