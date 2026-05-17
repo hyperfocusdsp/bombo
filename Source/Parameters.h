@@ -196,6 +196,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::limiterAmount, 1},
         "Limiter Amount", Range(0.0f, 1.0f, 0.001f), 0.5f, normFormat));
 
+    // Auto tail-kill toggle (default ON — matches the established
+    // "trim tails between trigs" behaviour). Off → long delay/reverb
+    // tails ring naturally after the last trigger.
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::tailKillOn, 1}, "Tail Kill On", true));
+
     // Transport: loop toggle + BPM (integer, 60–300).
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::loopOn, 1}, "Loop On", false));
