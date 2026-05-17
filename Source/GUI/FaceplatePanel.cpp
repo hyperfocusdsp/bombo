@@ -386,17 +386,21 @@ void FaceplatePanel::paintChassis(juce::Graphics& g)
 {
     if (chassisPath_.isEmpty()) return;
 
-    // Body fill — olive green for the VAULT theme treatment (Phase 2 lock
-    // 2026-05-17). For other themes the col::graphite gradient still reads
-    // as the body color; the Mini-Nuke read is theme-specific.
-    juce::ColourGradient grad(col::graphiteHi(),
+    // VAULT palette (hardcoded ahead of proper Phase 2e theme integration —
+    // user needed the visual NOW to inform proportion decisions, see
+    // memory project_bombo_silhouette_locked_r4b_classic.md). Olive body
+    // with a subtle vertical gradient for raised-panel feel.
+    constexpr juce::uint32 kVaultBodyHi = 0xFF6E8052;  // brighter olive
+    constexpr juce::uint32 kVaultBodyLo = 0xFF4A5638;  // shaded olive
+
+    juce::ColourGradient grad(juce::Colour(kVaultBodyHi),
                               static_cast<float>(getWidth()) * 0.5f,
                               static_cast<float>(chassisRectArea_.getY()),
-                              col::graphite(),
+                              juce::Colour(kVaultBodyLo),
                               static_cast<float>(getWidth()) * 0.5f,
                               static_cast<float>(chassisApexY_),
                               false);
-    grad.addColour(0.78, col::graphite());
+    grad.addColour(0.78, juce::Colour(kVaultBodyLo));
     g.setGradientFill(grad);
     g.fillPath(chassisPath_);
 }
@@ -404,13 +408,14 @@ void FaceplatePanel::paintChassis(juce::Graphics& g)
 void FaceplatePanel::paintCapAndFins(juce::Graphics& g)
 {
     if (capPath_.isEmpty()) return;
-    // Cap + fins use a darker shade so they read as separate hardware
-    // pieces behind the body. Body's outline (drawn next) hides the seam.
-    g.setColour(col::ink().interpolatedWith(col::graphite(), 0.3f));
+    // VAULT palette — cap is a dark shaded olive (looks like the recessed
+    // rear-cap behind the body); fins are red (same as nose, per Mini-Nuke
+    // convention).
+    constexpr juce::uint32 kVaultCap  = 0xFF323A26;  // very dark olive
+    constexpr juce::uint32 kVaultRed  = 0xFFB43F32;  // Mini-Nuke red
+    g.setColour(juce::Colour(kVaultCap));
     g.fillPath(capPath_);
-    // Red fins — matches the Mini-Nuke ref. Falls back to accent if no
-    // explicit red is defined for the current theme.
-    g.setColour(col::accentAmber().withRotatedHue(0.95f).withSaturation(0.7f));
+    g.setColour(juce::Colour(kVaultRed));
     g.fillPath(finPathL_);
     g.fillPath(finPathR_);
 }
@@ -424,13 +429,9 @@ void FaceplatePanel::paintRedRegion(juce::Graphics& g)
     g.saveState();
     g.reduceClipRegion(chassisPath_);
 
-    // VAULT theme red — derived from the amber accent for now (theme-
-    // safe fallback). The dedicated noseRed slot lands with Phase 2e.
-    const juce::Colour noseRed = col::accentAmber()
-                                    .withRotatedHue(0.95f)
-                                    .withSaturation(0.78f)
-                                    .withMultipliedBrightness(0.85f);
-    g.setColour(noseRed);
+    // VAULT palette (hardcoded — proper Phase 2e theme JSON pending).
+    constexpr juce::uint32 kVaultRed = 0xFFB43F32;
+    g.setColour(juce::Colour(kVaultRed));
     g.fillRect(juce::Rectangle<float>(0.0f,
                                       redRegionTopY_,
                                       static_cast<float>(getWidth()),
@@ -448,11 +449,11 @@ void FaceplatePanel::paintRedRegion(juce::Graphics& g)
 void FaceplatePanel::paintBand(juce::Graphics& g)
 {
     if (bandRect_.isEmpty()) return;
-    // Yellow hazard band (VAULT theme cartouche). Uses the existing amber
-    // accent for now — a dedicated bandYellow slot will land with Phase 2e.
+    // VAULT palette hazard band (hardcoded — proper Phase 2e theme JSON pending).
+    constexpr juce::uint32 kVaultYellow = 0xFFE8B528;
     g.saveState();
     g.reduceClipRegion(chassisPath_);
-    g.setColour(col::accentAmber());
+    g.setColour(juce::Colour(kVaultYellow));
     g.fillRect(bandRect_);
     // Cartouche text — BOMBO-TEC + PEACE EDITION serial. Stencil-aware
     // monospace from bombo::fonts::value. Two lines, centered in the band.
@@ -525,32 +526,17 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
 {
     if (s.rectBounds.isEmpty()) return;
 
-    const auto rb = s.rectBounds.toFloat();
     const bool muted = isMuted(s);
 
-    // Column body — desaturate + dim the accent when muted so it reads as
-    // "bypassed" without losing column identity entirely.
-    const auto bodyColour = muted
-        ? s.accent.withSaturation(0.20f).withBrightness(s.accent.getBrightness() * 0.55f)
-        : s.accent;
-    g.setColour(bodyColour);
-    g.fillRect(rb);
+    // Section column body — VAULT direction (2026-05-17): the column no
+    // longer paints a per-FX colored background or a module-ID strip.
+    // The body olive shows through; section identity reads via the
+    // accent-colored title strip + accent tab only. Muted state desaturates
+    // the title text to communicate bypass.
 
-    // Subtle top gloss for raised-panel feel.
-    {
-        juce::ColourGradient gloss(juce::Colours::white.withAlpha(0.07f),
-                                   rb.getX(), rb.getY(),
-                                   juce::Colours::transparentBlack,
-                                   rb.getX(), rb.getY() + rb.getHeight() * 0.18f,
-                                   false);
-        g.setGradientFill(gloss);
-        g.fillRect(rb.withHeight(rb.getHeight() * 0.18f));
-    }
-
-    // Title strip: 3 px accent tab + ink bar with bone title text.
-    // For muteable sections the whole title strip is the click target —
-    // we slightly brighten the ink bar when muted so the bypass state
-    // reads at a glance.
+    // Title strip: 3 px accent tab + thin dark title bar with name text.
+    // This is the ONLY remaining splash of section accent — everything
+    // else fades into the body.
     {
         const auto accentStrip = juce::Rectangle<int>(s.rectBounds.getX(),
                                                       s.rectBounds.getY(),
@@ -560,14 +546,19 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
                                                    s.rectBounds.getY() + kColAccentH,
                                                    s.rectBounds.getWidth(),
                                                    kColTitleH - kColAccentH);
-        g.setColour(bodyColour.darker(0.45f));
+        // Accent tab — desaturated when muted; otherwise full accent.
+        const auto tabColour = muted
+            ? s.accent.withSaturation(0.20f).withBrightness(s.accent.getBrightness() * 0.55f)
+            : s.accent;
+        g.setColour(tabColour);
         g.fillRect(accentStrip);
-        g.setColour(muted ? col::graphite() : col::ink());
+        // Title bar — dark band so the text reads. Subtle, not opaque
+        // black — lets the body olive bleed through for unity.
+        g.setColour(col::ink().withAlpha(0.55f));
         g.fillRect(titleBar);
         g.setColour(muted ? col::boneDim() : col::bone());
         g.setFont(fonts::title(11.5f));
         g.drawText(s.name, titleBar, juce::Justification::centred);
-        // Strike-through line when muted — unambiguous bypass cue.
         if (muted)
         {
             const float midY = titleBar.getCentreY();
@@ -576,19 +567,9 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
                        titleBar.getRight() - 8.0f, midY, 1.0f);
         }
     }
-
-    // Module ID strip at the bottom of the column rect.
-    {
-        g.setColour(col::ink().withAlpha(0.55f));
-        g.fillRect(s.moduleIdBounds);
-        g.setColour(col::bone().withAlpha(0.45f));
-        g.setFont(fonts::label(8.5f));
-        g.drawText(s.moduleId, s.moduleIdBounds, juce::Justification::centred);
-    }
-
-    // Thin column outline.
-    g.setColour(col::ink().withAlpha(0.50f));
-    g.drawRect(s.rectBounds, 1);
+    // Module-ID strip is REMOVED (was AMP-1/OSS-1/SAT-A/etc.) — saves
+    // ~12 px of vertical real estate per section column AND visually
+    // unifies the rack with the body.
 }
 
 // ────────────────────────────────────────────────────────────────────
