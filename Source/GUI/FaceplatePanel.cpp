@@ -937,9 +937,10 @@ void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
 
     // Sizes tuned to fit inside the actual bomb silhouette (not just the
     // rectangular nose bounding box). The teardrop tapers steeply below
-    // the body-bottom line, so the cluster has to be modest.
-    constexpr int kSatSize   = 26;     // satellite knob diameter
-    constexpr int kHeroSize  = 46;     // OUT hero diameter
+    // the body-bottom line, so the cluster has to be modest — but big
+    // enough to read at a glance. Tuned iteratively against screenshots.
+    constexpr int kSatSize   = 38;     // satellite knob diameter
+    constexpr int kHeroSize  = 66;     // OUT hero diameter
     constexpr int kLabelH    = 12;
     constexpr int kLabelGap  = 2;
     constexpr int kRingGap   = 14;     // gap between OUT edge and satellite edge
