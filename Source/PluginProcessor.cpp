@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Parameters.h"        // createParameterLayout (heavy include, .cpp-only)
 #include "DSP/SampleSlot.h"
 
 BomboProcessor::BomboProcessor()
