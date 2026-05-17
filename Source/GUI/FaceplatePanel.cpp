@@ -10,7 +10,7 @@
 #include "HeaderRenderer.h"
 #include "SampleSlotWidget.h"
 #include "WaveBuffer.h"
-#include "../Parameters.h"
+#include "../ParameterIds.h"
 
 namespace bombo
 {
