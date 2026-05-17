@@ -39,7 +39,7 @@ constexpr int kRackTopGap   = 4;
 constexpr int kRackBotGap   = 4;
 
 // FX columns.
-constexpr int kColGap       = 2;       // was 8 — tightened 2026-05-17 per user feedback
+constexpr int kColGap       = 0;       // colors butt up; the per-FX accent IS the separator (2026-05-17)
 constexpr int kColTitleH    = 18;      // was 20
 constexpr int kColAccentH   = 3;
 constexpr int kModuleIdH    = 12;      // was 14
@@ -526,17 +526,35 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
 {
     if (s.rectBounds.isEmpty()) return;
 
+    const auto rb = s.rectBounds.toFloat();
     const bool muted = isMuted(s);
 
-    // Section column body — VAULT direction (2026-05-17): the column no
-    // longer paints a per-FX colored background or a module-ID strip.
-    // The body olive shows through; section identity reads via the
-    // accent-colored title strip + accent tab only. Muted state desaturates
-    // the title text to communicate bypass.
+    // VAULT direction round 3 (2026-05-17): the FX columns get FULL
+    // accent-colored bodies again — the colors themselves act as the
+    // separators (no kColGap, no outline). Body olive shows on the LEFT
+    // and RIGHT of the entire rack strip; the rack reads as a band of
+    // industrial sticker labels glued onto the bomb. Muted columns
+    // desaturate to communicate bypass without losing column identity.
+    const auto bodyColour = muted
+        ? s.accent.withSaturation(0.20f).withBrightness(s.accent.getBrightness() * 0.55f)
+        : s.accent;
+    g.setColour(bodyColour);
+    g.fillRect(rb);
+
+    // Subtle top gloss for raised-panel feel — kept from the original
+    // styling, looks good against both the body olive and the accent
+    // column color.
+    {
+        juce::ColourGradient gloss(juce::Colours::white.withAlpha(0.07f),
+                                   rb.getX(), rb.getY(),
+                                   juce::Colours::transparentBlack,
+                                   rb.getX(), rb.getY() + rb.getHeight() * 0.18f,
+                                   false);
+        g.setGradientFill(gloss);
+        g.fillRect(rb.withHeight(rb.getHeight() * 0.18f));
+    }
 
     // Title strip: 3 px accent tab + thin dark title bar with name text.
-    // This is the ONLY remaining splash of section accent — everything
-    // else fades into the body.
     {
         const auto accentStrip = juce::Rectangle<int>(s.rectBounds.getX(),
                                                       s.rectBounds.getY(),
@@ -546,15 +564,11 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
                                                    s.rectBounds.getY() + kColAccentH,
                                                    s.rectBounds.getWidth(),
                                                    kColTitleH - kColAccentH);
-        // Accent tab — desaturated when muted; otherwise full accent.
-        const auto tabColour = muted
-            ? s.accent.withSaturation(0.20f).withBrightness(s.accent.getBrightness() * 0.55f)
-            : s.accent;
-        g.setColour(tabColour);
+        // Accent strip — darker shade of the column accent (was full
+        // brightness; now slightly darker so the tab + body don't merge).
+        g.setColour(bodyColour.darker(0.45f));
         g.fillRect(accentStrip);
-        // Title bar — dark band so the text reads. Subtle, not opaque
-        // black — lets the body olive bleed through for unity.
-        g.setColour(col::ink().withAlpha(0.55f));
+        g.setColour(muted ? col::graphite() : col::ink());
         g.fillRect(titleBar);
         g.setColour(muted ? col::boneDim() : col::bone());
         g.setFont(fonts::title(11.5f));
@@ -567,9 +581,9 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s)
                        titleBar.getRight() - 8.0f, midY, 1.0f);
         }
     }
-    // Module-ID strip is REMOVED (was AMP-1/OSS-1/SAT-A/etc.) — saves
-    // ~12 px of vertical real estate per section column AND visually
-    // unifies the rack with the body.
+    // Module-ID strip REMOVED — saves ~12 px vertically per column.
+    // No separator lines between columns either — the accent color IS
+    // the separator (kColGap = 0 above).
 }
 
 // ────────────────────────────────────────────────────────────────────
