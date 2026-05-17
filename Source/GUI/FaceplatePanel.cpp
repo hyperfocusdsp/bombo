@@ -676,24 +676,9 @@ void FaceplatePanel::resized()
         layoutSection(s);
     }
 
-    // ── Voice A ↔ Voice B balance knob. Sits floating on the border
-    //    between columns 0 and 1, vertically centered in the knob-rows
-    //    area (below the title strip, above the module-id strip). Small
-    //    diameter (~ rowH × 0.5) so it doesn't overlap adjacent knob caps.
-    if (balanceFader_ && sections_.size() >= 2)
-    {
-        const auto& a = sections_[0].rectBounds;
-        const auto& b = sections_[1].rectBounds;
-        const int borderX = (a.getRight() + b.getX()) / 2;
-        const int rowsTop = a.getY() + kColTitleH;
-        const int rowsBot = a.getBottom() - kModuleIdH;
-        const int rowsMid = (rowsTop + rowsBot) / 2;
-        const int diameter = juce::jmin(kRowH / 2 + 6, 38);
-        balanceFader_->setBounds(borderX - diameter / 2,
-                                 rowsMid - diameter / 2,
-                                 diameter,
-                                 diameter);
-    }
+    // Balance fader now lives in the header bar (relocated 2026-05-17 per
+    // user feedback — moved out of the inter-column space). layoutHeader
+    // owns its bounds.
 
     layoutHeader(headerBounds_);
 }
@@ -759,6 +744,7 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     constexpr int kLoopW  = 60;
     constexpr int kBpmW   = 78;
     constexpr int kDiceW  = 22; // square
+    constexpr int kBalW   = 28; // square (A↔B balance knob, relocated 2026-05-17)
     constexpr int kTabW   = 64;
     constexpr int kPad    = 8;
     constexpr int kPadSmall = 4;
@@ -766,7 +752,7 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     const int y = (area.getHeight() - kPillH) / 2 + area.getY();
     int xCursor = area.getRight() - 14;
 
-    // Right-to-left: tabs, BPM, loop, LIM, DICE.
+    // Right-to-left: tabs, BPM, loop, LIM, DICE, BALANCE.
     insertFxTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
     xCursor -= kTabW + 1;
     synthTabBounds_ = { xCursor - kTabW, y, kTabW, kPillH };
@@ -778,6 +764,14 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     if (limPill_)    limPill_   ->setBounds(xCursor - kLimW,  y, kLimW,  kPillH);
     xCursor -= kLimW + kPadSmall;
     if (diceButton_) diceButton_->setBounds(xCursor - kDiceW, y, kDiceW, kPillH);
+    xCursor -= kDiceW + kPadSmall;
+    if (balanceFader_)
+    {
+        // Sized slightly bigger than the dice so the A↔B disc is legible.
+        // Vertically centered on the same row as the other header pills.
+        const int balY = area.getY() + (area.getHeight() - kBalW) / 2;
+        balanceFader_->setBounds(xCursor - kBalW, balY, kBalW, kBalW);
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────
