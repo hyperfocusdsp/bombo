@@ -1,0 +1,13 @@
+{
+  "name": "SUB-RUMBLE",
+  "displayName": "Sub-Rumble",
+  "params": {
+    "pitch_start": 80.0, "pitch_end": 38.0, "pitch_decay": 220.0, "pitch_curve": 2.0,
+    "sub_hpf": 28.0,
+    "amp_decay": 1200.0,
+    "click_amount": 0.08,
+    "noise_amount": 0.10,
+    "mid_level": 0.30,
+    "drive_amount": 0.15
+  }
+}

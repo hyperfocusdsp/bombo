@@ -58,6 +58,14 @@ constexpr int kMacroKnobSize = 38;     // was 46 — ~20% shrink, matches kRowH
 
 FaceplatePanel::~FaceplatePanel() = default;
 
+void FaceplatePanel::setPresetBank(PresetBank& bank)
+{
+    if (presetBar_ != nullptr) return;  // idempotent
+    presetBar_ = std::make_unique<PresetBarComponent>(bank, apvts_);
+    addAndMakeVisible(*presetBar_);
+    if (! getBounds().isEmpty()) resized();
+}
+
 FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
                                const WaveBuffer* waveBuffer,
                                SampleSlotCallbacks sampleSlotCb,
@@ -381,13 +389,11 @@ void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
 {
     if (scopeBounds_.isEmpty()) return;
 
-    // VAULT red — matches the fin + nose color so the scope reads as
-    // attached to the fin assembly. U-shape: top + left + right borders
-    // ONLY (no bottom — the bottom opens into the macro row, completing
-    // the "rear cap continues into the chassis" visual).
-    constexpr juce::uint32 kVaultRed = 0xFFB43F32;
+    // Match the fin/nose red so the scope reads as attached to the
+    // rear-cap assembly. U-shape: top + left + right borders ONLY (no
+    // bottom — the bottom opens into the macro row).
     constexpr int kBorder = 3;
-    g.setColour(juce::Colour(kVaultRed));
+    g.setColour(col::noseRed());
 
     const int x  = scopeBounds_.getX() - kBorder;
     const int y  = scopeBounds_.getY() - kBorder;
@@ -416,21 +422,17 @@ void FaceplatePanel::paintChassis(juce::Graphics& g)
 {
     if (chassisPath_.isEmpty()) return;
 
-    // VAULT palette (hardcoded ahead of proper Phase 2e theme integration —
-    // user needed the visual NOW to inform proportion decisions, see
-    // memory project_bombo_silhouette_locked_r4b_classic.md). Olive body
-    // with a subtle vertical gradient for raised-panel feel.
-    constexpr juce::uint32 kVaultBodyHi = 0xFF6E8052;  // brighter olive
-    constexpr juce::uint32 kVaultBodyLo = 0xFF4A5638;  // shaded olive
-
-    juce::ColourGradient grad(juce::Colour(kVaultBodyHi),
+    // Body gradient: bodyHi (top) → bodyLo (apex). VAULT is the designed
+    // home theme; other themes derive bodyHi/bodyLo from graphiteHi/graphite
+    // via the ThemeLoader fallback so the chassis still renders coherently.
+    juce::ColourGradient grad(col::bodyHi(),
                               static_cast<float>(getWidth()) * 0.5f,
                               static_cast<float>(chassisRectArea_.getY()),
-                              juce::Colour(kVaultBodyLo),
+                              col::bodyLo(),
                               static_cast<float>(getWidth()) * 0.5f,
                               static_cast<float>(chassisApexY_),
                               false);
-    grad.addColour(0.78, juce::Colour(kVaultBodyLo));
+    grad.addColour(0.78, col::bodyLo());
     g.setGradientFill(grad);
     g.fillPath(chassisPath_);
 }
@@ -438,14 +440,11 @@ void FaceplatePanel::paintChassis(juce::Graphics& g)
 void FaceplatePanel::paintCapAndFins(juce::Graphics& g)
 {
     if (capPath_.isEmpty()) return;
-    // VAULT palette — cap is a dark shaded olive (looks like the recessed
-    // rear-cap behind the body); fins are red (same as nose, per Mini-Nuke
-    // convention).
-    constexpr juce::uint32 kVaultCap  = 0xFF323A26;  // very dark olive
-    constexpr juce::uint32 kVaultRed  = 0xFFB43F32;  // Mini-Nuke red
-    g.setColour(juce::Colour(kVaultCap));
+    // Cap sits behind the body (recessed rear); fins use the same red
+    // as the nose paint region (Mini-Nuke convention).
+    g.setColour(col::cap());
     g.fillPath(capPath_);
-    g.setColour(juce::Colour(kVaultRed));
+    g.setColour(col::noseRed());
     g.fillPath(finPathL_);
     g.fillPath(finPathR_);
 }
@@ -459,9 +458,7 @@ void FaceplatePanel::paintRedRegion(juce::Graphics& g)
     g.saveState();
     g.reduceClipRegion(chassisPath_);
 
-    // VAULT palette (hardcoded — proper Phase 2e theme JSON pending).
-    constexpr juce::uint32 kVaultRed = 0xFFB43F32;
-    g.setColour(juce::Colour(kVaultRed));
+    g.setColour(col::noseRed());
     g.fillRect(juce::Rectangle<float>(0.0f,
                                       redRegionTopY_,
                                       static_cast<float>(getWidth()),
@@ -479,11 +476,9 @@ void FaceplatePanel::paintRedRegion(juce::Graphics& g)
 void FaceplatePanel::paintBand(juce::Graphics& g)
 {
     if (bandRect_.isEmpty()) return;
-    // VAULT palette hazard band (hardcoded — proper Phase 2e theme JSON pending).
-    constexpr juce::uint32 kVaultYellow = 0xFFE8B528;
     g.saveState();
     g.reduceClipRegion(chassisPath_);
-    g.setColour(juce::Colour(kVaultYellow));
+    g.setColour(col::bandYellow());
     g.fillRect(bandRect_);
     // Cartouche text — BOMBO-TEC + PEACE EDITION serial. Stencil-aware
     // monospace from bombo::fonts::value. Two lines, centered in the band.
@@ -629,8 +624,22 @@ std::vector<LayoutElem> FaceplatePanel::getEditableElements() const
     out.push_back({ "macroRow",      macroBoundsTracked_, false, "macro_row"   });
     out.push_back({ "scopeStrip",    scopeBounds_,        false, "scope_strip" });
     out.push_back({ "band",          bandBoundsTracked_,  false, "band"        });
+    if (presetBar_ != nullptr)
+        out.push_back({ "presetBar", presetBarBounds_,    false, "macro_row"   });
     if (balanceFader_ != nullptr)
-        out.push_back({ "balanceFader", balanceFader_->getBounds(), false, "rotary_knob" });
+    {
+        // Hit-box inflated vertically — the 16px tall fader is unreachable
+        // in edit mode otherwise. First drag persists the inflated rect to
+        // Layout.json, so the runtime fader grows to the same easier-to-grab
+        // size. Horizontal is left as-is (already 88px between V.A/V.B).
+        const auto raw = balanceFader_->getBounds();
+        const int kInflateV = 8;  // 16 → 32 tall
+        const juce::Rectangle<int> hit(raw.getX(),
+                                       raw.getY() - kInflateV,
+                                       raw.getWidth(),
+                                       raw.getHeight() + 2 * kInflateV);
+        out.push_back({ "balanceFader", hit, false, "rotary_knob" });
+    }
 
     for (size_t i = 0; i < sections_.size(); ++i)
     {
@@ -711,7 +720,6 @@ void FaceplatePanel::resized()
     // Scope strip inside its red U-frame, same finTipW as the header.
     constexpr int kScopeBorder = 3;
     const int scopeTop = chassisT + kHeaderH;
-    // Scope strip bounds — layout-override hook.
     {
         const juce::Rectangle<int> scopeDefault(finTipX + kScopeBorder,
                                                 scopeTop + 8,
@@ -721,20 +729,41 @@ void FaceplatePanel::resized()
         scope_.setBounds(scopeBounds_);
     }
 
-    // Macro + rack stack hugs the band's bottom edge — slack falls BELOW
-    // the rack inside the body interior. User feedback 2026-05-17 round
-    // 3: the centered position (band-bot + slack/2) read as "rack too
-    // low." Pulling the whole stack up so the rack sits in the upper-
-    // mid of the body, with olive frame between rack bottom and the
-    // red-region boundary.
-    // Default macro row bounds — overridable via LayoutManager.
+    // Preset bar (Phase 3) — thin horizontal strip between band-bottom and
+    // macro-top. Full chassis width by default; layout editor can drag it
+    // elsewhere via the "presetBar" id. When the bank hasn't been wired
+    // yet (presetBar_ == nullptr) we skip the strip AND keep macroTop at
+    // the legacy +8 offset so the rack doesn't ghost-shift.
+    constexpr int kPresetBarH   = 22;
+    constexpr int kPresetBarPad = 6;   // gap above and below the bar
     int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
+    if (presetBar_ != nullptr)
+    {
+        const int barTop = static_cast<int>(bandRect_.getBottom()) + kPresetBarPad;
+        const juce::Rectangle<int> barDefault(chassisL, barTop,
+                                              chassisR - chassisL, kPresetBarH);
+        presetBarBounds_ = layout_.boundsOr("presetBar", barDefault);
+        presetBar_->setBounds(presetBarBounds_);
+        macroTop = barTop + kPresetBarH + kPresetBarPad;
+    }
+    // Default macro row bounds — overridable via LayoutManager.
     juce::Rectangle<int> macroDefault(chassisL, macroTop,
                                       chassisR - chassisL, kMacroH);
     juce::Rectangle<int> macroFinal = layout_.boundsOr("macroRow", macroDefault);
-    macroBoundsTracked_ = macroFinal;
-    bandBoundsTracked_  = bandRect_.toNearestInt();
     layoutMacros(macroFinal);
+    // Editor hit-box: tight rect around the painted knob+label band so the
+    // dashed selection hugs the knobs rather than the full chassis-wide
+    // 90px slot. macroFinal stays wide so layoutMacros' centering math
+    // keeps the visible knobs in the same place.
+    {
+        constexpr int kMacroColW   = 44;
+        const int macroBandW = kMacroColW * kNCols + (kNCols - 1) * kColGap;
+        const int macroBandH = kMacroKnobSize + kKnobLabelH + 4;
+        const int macroBandX = macroFinal.getX() + (macroFinal.getWidth()  - macroBandW) / 2;
+        const int macroBandY = macroFinal.getY() + (macroFinal.getHeight() - macroBandH) / 2;
+        macroBoundsTracked_ = juce::Rectangle<int>(macroBandX, macroBandY, macroBandW, macroBandH);
+    }
+    bandBoundsTracked_  = bandRect_.toNearestInt();
 
     // ── Rack columns ────────────────────────────────────────────────
     // Explicit column width (locked 2026-05-17 per user feedback): each

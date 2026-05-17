@@ -1,0 +1,12 @@
+{
+  "name": "DETROIT SLAP",
+  "displayName": "Detroit Slap",
+  "params": {
+    "pitch_start": 170.0, "pitch_end": 55.0, "pitch_decay": 40.0, "pitch_curve": 4.0,
+    "amp_attack": 0.15, "amp_decay": 320.0,
+    "click_amount": 0.55, "click_center": 6500.0,
+    "noise_amount": 0.35, "noise_color": 0.40,
+    "drive_amount": 0.40, "drive_mode": 2,
+    "duck_depth": 0.70
+  }
+}

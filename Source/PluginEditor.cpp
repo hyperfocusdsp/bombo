@@ -73,6 +73,9 @@ BomboEditor::BomboEditor(BomboProcessor& p)
 
     setOpaque(false);
     setLookAndFeel(&lnf);
+    // Wire the factory preset bank BEFORE addAndMakeVisible so the panel's
+    // first resized() lays the preset bar out alongside the macros/rack.
+    faceplate.setPresetBank(p.presetBank());
     addAndMakeVisible(faceplate);
     // Selector added AFTER faceplate so it paints on TOP of the chassis
     // (faceplate fills the full editor surface; without this order the
@@ -97,10 +100,10 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     };
 
     // Dev affordance — small button next to the theme selector to open
-    // the BBS overlay. Replaced in Phase 2 by long-press on the central
-    // nose detonator (the Archie fuze).
+    // the BBS overlay. Long-press nose-detonator activation is parked
+    // pending mockup; Ctrl+Shift+B in keyPressed() also opens it.
     bbsButton_.setButtonText("BBS");
-    bbsButton_.setTooltip("Open the hidden 1992 BBS terminal (Phase 2 will move this to the nose detonator)");
+    bbsButton_.setTooltip("Open the hidden 1992 BBS terminal");
     bbsButton_.onClick = [this] { bbs_.show(); };
     addAndMakeVisible(bbsButton_);
 
@@ -255,10 +258,8 @@ void BomboEditor::resized()
     const int boundsH = static_cast<int>(std::ceil(static_cast<float>(getHeight()) / scale));
     faceplate.setBounds(0, 0, boundsW, boundsH);
 
-    // Temporary theme selector + BBS dev button — moved 2026-05-17 to the
-    // BOTTOM-right of the editor so they don't overlap the faceplate's
-    // header pills. Both go away when Phase 2's HeaderBar (Plan B) and
-    // NoseDetonator (Phase 2f) ship.
+    // Temporary theme selector + BBS dev button — bottom-right; both go
+    // away when Plan B's HeaderBar ships.
     themeSelector_.setBounds(getWidth() - 110, getHeight() - 26, 100, 22);
     bbsButton_.setBounds(getWidth() - 158, getHeight() - 26, 44, 22);
 

@@ -46,7 +46,10 @@ PersistentState::~PersistentState()
 
 juce::String PersistentState::getActiveTheme() const
 {
-    return props_->getValue("theme.active", "bandw");
+    // VAULT is the designed-for-R4B-CLASSIC default (Phase 2e, 2026-05-17).
+    // Existing installs that previously persisted "bandw" stay on bandw —
+    // this default only fires when no theme.active key exists yet.
+    return props_->getValue("theme.active", "vault");
 }
 
 void PersistentState::setActiveTheme(const juce::String& name)

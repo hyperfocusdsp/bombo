@@ -107,14 +107,14 @@ public:
 
     void runTest() override
     {
-        beginTest("getActiveTheme returns \"bandw\" when no state file exists");
+        beginTest("getActiveTheme returns \"vault\" when no state file exists");
         auto tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
                        .getChildFile("bombo_test_state_missing_" + juce::String(juce::Time::currentTimeMillis()));
         tmp.createDirectory();
 
         bombo::PersistentState state(tmp);
-        expectEquals(state.getActiveTheme(), juce::String("bandw"),
-                     "default theme is bandw when file is absent");
+        expectEquals(state.getActiveTheme(), juce::String("vault"),
+                     "default theme is vault when file is absent");
 
         tmp.deleteRecursively();
     }
@@ -174,17 +174,19 @@ public:
 
     void runTest() override
     {
-        beginTest("after loadBundledThemes, all three names present");
+        beginTest("after loadBundledThemes, all four names present");
         bombo::ThemeProvider::get().loadBundledThemes();
         const auto& names = bombo::ThemeProvider::get().registeredNames();
 
         const bool hasBandw    = std::find(names.begin(), names.end(), std::string("bandw"))    != names.end();
         const bool hasPhosphor = std::find(names.begin(), names.end(), std::string("phosphor")) != names.end();
         const bool hasNightrun = std::find(names.begin(), names.end(), std::string("nightrun")) != names.end();
+        const bool hasVault    = std::find(names.begin(), names.end(), std::string("vault"))    != names.end();
 
         expect(hasBandw,    "bandw registered");
         expect(hasPhosphor, "phosphor registered");
         expect(hasNightrun, "nightrun registered");
+        expect(hasVault,    "vault registered");
 
         beginTest("switching to phosphor changes accentAmber");
         bombo::ThemeProvider::get().setActive("phosphor");
@@ -192,8 +194,27 @@ public:
         expect(bombo::ThemeProvider::current().accentAmber == juce::Colour { 0xFFCC8A00u },
                "phosphor accent matches JSON");
 
-        // Restore for any later tests that depend on bandw being active.
+        beginTest("vault palette carries the Mini-Nuke chassis fields");
+        bombo::ThemeProvider::get().setActive("vault");
+        bombo::ThemeProvider::get().dispatchPendingMessages();
+        const auto& vp = bombo::ThemeProvider::current();
+        expect(vp.bodyHi     == juce::Colour { 0xFF6E8052u }, "vault bodyHi");
+        expect(vp.bodyLo     == juce::Colour { 0xFF4A5638u }, "vault bodyLo");
+        expect(vp.cap        == juce::Colour { 0xFF323A26u }, "vault cap");
+        expect(vp.noseRed    == juce::Colour { 0xFFB43F32u }, "vault noseRed");
+        expect(vp.bandYellow == juce::Colour { 0xFFE8B528u }, "vault bandYellow");
+
+        beginTest("legacy theme without chassis fields falls back via ThemeLoader");
+        // bandw.json predates Phase 2e and omits the 5 chassis fields.
+        // ThemeLoader fills them from graphiteHi/graphite/ink/drive/accentAmber.
         bombo::ThemeProvider::get().setActive("bandw");
+        bombo::ThemeProvider::get().dispatchPendingMessages();
+        const auto& bp = bombo::ThemeProvider::current();
+        expect(bp.bodyHi  == bp.graphiteHi,  "bandw bodyHi falls back to graphiteHi");
+        expect(bp.bodyLo  == bp.graphite,    "bandw bodyLo falls back to graphite");
+        expect(bp.cap     == bp.ink,         "bandw cap falls back to ink");
+        expect(bp.noseRed == bp.drive,       "bandw noseRed falls back to drive");
+        expect(bp.bandYellow == bp.accentAmber, "bandw bandYellow falls back to accentAmber");
     }
 };
 

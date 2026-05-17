@@ -45,7 +45,24 @@ juce_add_binary_data(BomboResources
         Resources/Fonts/AllertaStencil-Regular.ttf
         Resources/Themes/bandw.json
         Resources/Themes/phosphor.json
-        Resources/Themes/nightrun.json)
+        Resources/Themes/nightrun.json
+        Resources/Themes/vault.json
+        Resources/Presets/01_pulse.json
+        Resources/Presets/02_echo_chamber.json
+        Resources/Presets/03_acid_tape.json
+        Resources/Presets/04_concrete.json
+        Resources/Presets/05_embers.json
+        Resources/Presets/06_sub_rumble.json
+        Resources/Presets/07_klanger.json
+        Resources/Presets/08_trinity_99.json
+        Resources/Presets/09_house_a.json
+        Resources/Presets/10_detroit_slap.json
+        Resources/Presets/11_goa_stomp.json
+        Resources/Presets/12_mainroom_punch.json
+        Resources/Presets/13_synthwave_body.json
+        Resources/Presets/14_lofi_click.json
+        Resources/Presets/15_9000_sub.json
+        Resources/Presets/16_tape_tom.json)
 
 target_sources(Bombo
     PRIVATE
@@ -64,6 +81,8 @@ target_sources(Bombo
         Source/GUI/Theme/ThemedComponent.h
         Source/State/PersistentState.h
         Source/State/PersistentState.cpp
+        Source/State/PresetBank.h
+        Source/State/PresetBank.cpp
         Source/GUI/Fonts.h
         Source/GUI/Fonts.cpp
         Source/GUI/BalanceFader.h
@@ -76,6 +95,8 @@ target_sources(Bombo
         Source/GUI/WaveBuffer.h
         Source/GUI/ScopeComponent.h
         Source/GUI/ScopeComponent.cpp
+        Source/GUI/PresetBarComponent.h
+        Source/GUI/PresetBarComponent.cpp
         Source/GUI/BBS/BBSComponent.h
         Source/GUI/BBS/BBSComponent.cpp
         Source/GUI/BombShape.h
