@@ -398,7 +398,16 @@ void FaceplatePanel::paint(juce::Graphics& g)
 
     headerRenderer::draw(g, headerBounds_, chassisPath_);
     paintScopeFrame(g);    // red U-border around scope, drawn under scope component
-    for (const auto& s : sections_) paintSection(g, s);
+
+    // Clip section painting to the chassis silhouette so VOICE A's outer
+    // left corners and DUCK's outer right corners follow the bomb's
+    // curvature instead of overhanging the body outline. Rack-internal
+    // columns are unaffected; only the outermost columns visibly clip.
+    {
+        juce::Graphics::ScopedSaveState save(g);
+        g.reduceClipRegion(chassisPath_);
+        for (const auto& s : sections_) paintSection(g, s);
+    }
 }
 
 void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
