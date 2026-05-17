@@ -167,6 +167,14 @@ private:
     // cap + fin paths are separate so they can render BEHIND the body,
     // with the body's outline hiding their attachment edges.
     juce::Path             chassisPath_;
+    // Pre-rasterised alpha mask of chassisPath_ — used by paint() to
+    // hard-clip the rack so VOICE A / DUCK outer corners can never
+    // overhang the bomb silhouette. Rebuilt in resized() each time the
+    // panel changes size; reused for free per repaint. The image-mask
+    // form of reduceClipRegion is pixel-perfect and immune to the
+    // path-rasterisation anti-alias seams that let earlier
+    // reduceClipRegion(chassisPath_) attempts leak at the curves.
+    juce::Image            chassisMask_;
     juce::Path             capPath_;
     juce::Path             finPathL_;
     juce::Path             finPathR_;
