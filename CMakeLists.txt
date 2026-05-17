@@ -78,6 +78,8 @@ target_sources(Bombo
         Source/GUI/ScopeComponent.cpp
         Source/GUI/BBS/BBSComponent.h
         Source/GUI/BBS/BBSComponent.cpp
+        Source/GUI/BombShape.h
+        Source/GUI/BombShape.cpp
         Source/DSP/Oscillators.h
         Source/DSP/Envelopes.h
         Source/DSP/ClickGen.h
@@ -149,9 +151,11 @@ if(BOMBO_BUILD_TESTS)
         tests/VoiceStealingTests.cpp
         tests/StateRoundTripTests.cpp
         tests/BbsPersistenceTests.cpp
+        tests/BombShapeTests.cpp
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.cpp
-        Source/State/PersistentState.cpp)
+        Source/State/PersistentState.cpp
+        Source/GUI/BombShape.cpp)
     target_include_directories(Bombo_Tests PRIVATE Source tests)
     target_compile_definitions(Bombo_Tests PRIVATE
         JUCE_WEB_BROWSER=0
