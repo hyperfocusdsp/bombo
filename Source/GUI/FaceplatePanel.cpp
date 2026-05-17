@@ -656,26 +656,29 @@ void FaceplatePanel::resized()
 
     const int rectTop = macroTop + kMacroH + kRackTopGap;
 
-    // Each section's height is sized to its OWN control count — no more
-    // uniform-height-of-tallest-section padding. Shorter columns (DUCK 4
-    // knobs, FILTER/DRIVE/DELAY/VOICE A 5 knobs) chop dead colored space
-    // below their last knob (2026-05-17 per user feedback). Bottoms are
-    // visually uneven but the rack is much more compact vertically.
-    constexpr int kRectBotPad = 4;  // breathing room below last knob
+    // Uniform section height (reverted 2026-05-17 per user feedback after
+    // b506649): all columns share the height of the tallest one for
+    // visual balance. Shorter columns (DUCK = 4 knobs, V.A / DRV / DLY /
+    // FLT = 5) leave empty olive-tinted slots below their last knob —
+    // intentional placeholders for whichever extra knobs land per-column
+    // to round everything out to 6 controls.
+    constexpr int kRectBotPad = 4;
+    int maxControls = 0;
+    for (const auto& s : sections_)
+        maxControls = juce::jmax(maxControls, static_cast<int>(s.controls.size()));
+    const int rectH = kColTitleH + maxControls * kRowH + kRectBotPad;
 
     for (int i = 0; i < kNCols && i < static_cast<int>(sections_.size()); ++i)
     {
         auto& s = sections_[i];
         const int x = leftMargin + i * (colW + kColGap);
-        const int numControls = static_cast<int>(s.controls.size());
-        const int rectH = kColTitleH + numControls * kRowH + kRectBotPad;
         s.rectBounds = { x, rectTop, colW, rectH };
         s.titleBounds = { s.rectBounds.getX(),
                           s.rectBounds.getY(),
                           s.rectBounds.getWidth(),
                           kColTitleH };
-        // moduleIdBounds kept for backward compat with mouseDown/Section
-        // struct, but no longer painted (paintSection omits it).
+        // moduleIdBounds kept for backward compat with the Section
+        // struct + mouseDown hit-testing; paintSection omits its visual.
         s.moduleIdBounds = { s.rectBounds.getX(),
                              s.rectBounds.getBottom() - kModuleIdH,
                              s.rectBounds.getWidth(),
