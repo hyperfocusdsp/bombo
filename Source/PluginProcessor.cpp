@@ -149,9 +149,7 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
 void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
 {
     currentSampleRate_ = static_cast<float>(sampleRate);
-    for (auto& v : voices_) v.setSampleRate(currentSampleRate_);
-    for (auto& slot : pending_) { slot.live = false; slot.samplesUntil = 0; }
-    activeVoice_ = 0;
+    voiceMgr_.prepare(currentSampleRate_);
     samplesUntilLoopFire_ = 0;
 
     // Replay any sample-restore that was stashed by setStateInformation
@@ -194,56 +192,6 @@ bool BomboProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
     return out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono();
 }
 
-void BomboProcessor::pushPending(int samplesUntil) noexcept
-{
-    for (auto& slot : pending_)
-    {
-        if (!slot.live)
-        {
-            slot.samplesUntil = samplesUntil;
-            slot.live = true;
-            return;
-        }
-    }
-}
-
-int BomboProcessor::tickPending() noexcept
-{
-    int count = 0;
-    for (auto& slot : pending_)
-    {
-        if (!slot.live) continue;
-        if (slot.samplesUntil == 0) { ++count; slot.live = false; }
-        else                        { --slot.samplesUntil; }
-    }
-    return count;
-}
-
-void BomboProcessor::stealVoice() noexcept
-{
-    // Kick drum is conceptually monophonic — the voice pool exists ONLY
-    // so the 5 ms steal fadeout has room to complete before the new note
-    // takes over. User-reported 2026-05-17: with the old logic (fade
-    // current + next only), intermediate voices in a 4-slot round-robin
-    // pool kept ringing through new triggers. Long ampDecay (default
-    // 700 ms) made this audible as "voice A continues its release past
-    // the next trig."
-    //
-    // Fix: on every new trigger, start a 5 ms fadeout on EVERY still-
-    // active voice in the pool, then advance activeVoice_ to a fresh slot
-    // (its fadeoutGain_ gets reset to 1.0 by trigger() right after).
-    for (auto& v : voices_)
-        if (v.isActive())
-            v.startFadeout(currentSampleRate_);
-    activeVoice_ = (activeVoice_ + 1) % kNumVoices;
-}
-
-bool BomboProcessor::anyVoiceActive() const noexcept
-{
-    for (const auto& v : voices_) if (v.isActive()) return true;
-    return false;
-}
-
 void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -263,10 +211,10 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     // sample 0 of the buffer since the editor doesn't tell us when each
     // key was pressed within the block.
     int kbCount = keyboardTriggers_.exchange(0, std::memory_order_relaxed);
-    if (kbCount > kNumVoices) kbCount = kNumVoices;
+    if (kbCount > bombo::VoiceManager::kNumVoices) kbCount = bombo::VoiceManager::kNumVoices;
     for (int i = 0; i < kbCount; ++i)
     {
-        pushPending(0);
+        voiceMgr_.pushPending(0);
         ++scheduled;
     }
 
@@ -275,11 +223,11 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         const auto& msg = meta.getMessage();
         if (msg.isNoteOn())
         {
-            if (scheduled >= kNumVoices) continue;
+            if (scheduled >= bombo::VoiceManager::kNumVoices) continue;
             int offset = meta.samplePosition;
             if (offset < 0) offset = 0;
             if (offset > bufSamples) offset = bufSamples;
-            pushPending(offset);
+            voiceMgr_.pushPending(offset);
             ++scheduled;
         }
     }
@@ -328,12 +276,12 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             const int lastBeat  = static_cast<int>(std::floor(ppqEnd - 1.0e-6));
             for (int b = firstBeat; b <= lastBeat; ++b)
             {
-                if (scheduled >= kNumVoices) break;
+                if (scheduled >= bombo::VoiceManager::kNumVoices) break;
                 const double sampleOfBeat = (static_cast<double>(b) - ppqStart) * samplesPerBeat;
                 int offset = static_cast<int>(std::round(sampleOfBeat));
                 if (offset < 0) offset = 0;
                 if (offset > bufSamples) offset = bufSamples;
-                pushPending(offset);
+                voiceMgr_.pushPending(offset);
                 ++scheduled;
             }
             // Free-running counter resets so a transport-stop transitions
@@ -345,11 +293,11 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             // Free-running. Decrement the counter, fire when it hits zero,
             // then reset to the beat length.
             int cursor = 0;
-            while (cursor < numSamples && scheduled < kNumVoices)
+            while (cursor < numSamples && scheduled < bombo::VoiceManager::kNumVoices)
             {
                 if (samplesUntilLoopFire_ <= 0)
                 {
-                    pushPending(cursor);
+                    voiceMgr_.pushPending(cursor);
                     ++scheduled;
                     samplesUntilLoopFire_ = static_cast<int>(std::round(samplesPerBeat));
                 }
@@ -397,9 +345,7 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             // next trig." Fix: also startFadeout() on every active voice
             // so the dry body fades over its own 5 ms steal-fadeout
             // alongside the wet, giving a tight clean tail cut.
-            for (auto& v : voices_)
-                if (v.isActive())
-                    v.startFadeout(currentSampleRate_);
+            voiceMgr_.fadeoutAllActive();
             chain_.killTail();
             pendingTailKillSamples_ = -1;
         }
@@ -419,17 +365,15 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
 
     for (int i = 0; i < numSamples; ++i)
     {
-        const int nFired = tickPending();
+        const int nFired = voiceMgr_.tickPending();
         for (int k = 0; k < nFired; ++k)
         {
-            stealVoice();
-            voices_[activeVoice_].trigger(trig);
+            voiceMgr_.stealAndAdvance();
+            voiceMgr_.trigger(trig);
             chain_.killTail();
         }
 
-        float dry = 0.0f;
-        for (auto& v : voices_) dry += v.tick();
-
+        const float dry = voiceMgr_.renderSample();
         const float wet = chain_.process(dry);
         const float g = masterGainSmoothed.getNextValue();
         const float out = wet * g;
