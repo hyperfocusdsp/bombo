@@ -13,6 +13,8 @@
 #include "DSP/StereoFinalizer.h"
 #include "GUI/WaveBuffer.h"
 #include "State/PresetBank.h"
+#include "State/PersistentState.h"
+#include "GUI/BBS/ProgressionManager.h"
 
 class BomboProcessor : public juce::AudioProcessor
 {
@@ -119,6 +121,14 @@ public:
     // preset bar can step through bundled presets. State (current index)
     // lives on the processor side so it survives editor close/reopen.
     bombo::PresetBank& presetBank() noexcept { return presetBank_; }
+
+    // Persistent state (theme, BBS unlock, bounce dir, progression). Lives
+    // on the processor so it survives editor close/reopen.
+    bombo::PersistentState& persistentState() noexcept { return persistentState_; }
+
+    // BBS progression — tracks save count, level, unlocked SYSOPs. Stored
+    // in persistentState_ so state survives editor destruction.
+    bombo::ProgressionManager& progressionManager() noexcept { return progressionManager_; }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -239,8 +249,10 @@ private:
     juce::String pendingRestorePath_;
     bool pendingRestoreIsFolder_ = false;
 
-    bombo::WaveBuffer waveBuffer_{};
-    bombo::PresetBank presetBank_{};
+    bombo::WaveBuffer       waveBuffer_{};
+    bombo::PresetBank       presetBank_{};
+    bombo::PersistentState  persistentState_{};
+    bombo::ProgressionManager progressionManager_{ persistentState_ };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboProcessor)
 };

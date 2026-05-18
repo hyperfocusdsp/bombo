@@ -54,7 +54,7 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // Restore persisted theme (set the provider FIRST, then sync the selector
     // text so its onChange is not triggered with the wrong order).
     {
-        const juce::String saved = persistentState_.getActiveTheme();
+        const juce::String saved = processorRef.persistentState().getActiveTheme();
         bombo::ThemeProvider::get().setActive(saved.toStdString());
         themeSelector_.setText(saved, juce::dontSendNotification);
     }
@@ -63,7 +63,7 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     {
         const juce::String name = themeSelector_.getText();
         bombo::ThemeProvider::get().setActive(name.toStdString());
-        persistentState_.setActiveTheme(name);
+        processorRef.persistentState().setActiveTheme(name);
     };
 
    #if JUCE_LINUX
@@ -89,11 +89,17 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // BBS overlay — added LAST so it paints above everything (faceplate,
     // selector). Stays invisible until activation. The callbacks persist
     // the unlock state on first show and the last-seen screen on dismiss.
+    // Wire setters before addChildComponent so the component is fully
+    // configured before the first resized() / paint() call.
+    bbs_.setProgressionManager(&p.progressionManager());
+    bbs_.setApvts(&p.apvts);
+    bbs_.setTriggerCallback([&p]() { p.triggerOneShot(); });
+    bbs_.setPresetBank(&p.presetBank());
     addChildComponent(bbs_);
     bbs_.onShown = [this]
     {
-        if (! persistentState_.getBbsUnlocked())
-            persistentState_.setBbsUnlocked(true);
+        if (! processorRef.persistentState().getBbsUnlocked())
+            processorRef.persistentState().setBbsUnlocked(true);
     };
     bbs_.onDismissed = [this]
     {
@@ -437,7 +443,7 @@ void BomboEditor::startBounceFlow(bombo::OfflineBouncer::Format format)
     const juce::String fmtLabel = isWav ? "WAV"  : "AIFF";
     const juce::String filter   = isWav ? "*.wav" : "*.aiff;*.aif";
 
-    const juce::File startDir = persistentState_.getLastBounceDir();
+    const juce::File startDir = processorRef.persistentState().getLastBounceDir();
     // Timestamped default name so successive bounces don't silently
     // overwrite each other; user can rename in the dialog.
     const juce::String stamp = juce::Time::getCurrentTime().formatted("%Y%m%d_%H%M%S");
@@ -470,7 +476,7 @@ void BomboEditor::startBounceFlow(bombo::OfflineBouncer::Format format)
             if (! chosen.hasFileExtension(ext))
                 chosen = chosen.withFileExtension(ext);
 
-            persistentState_.setLastBounceDir(chosen.getParentDirectory());
+            processorRef.persistentState().setLastBounceDir(chosen.getParentDirectory());
 
             bouncer_ = bombo::OfflineBouncer::startAsync(
                 processorRef,
