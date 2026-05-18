@@ -155,7 +155,7 @@ juce::String BoomFeed::snapshotToWaveform(const Snapshot& s) const
     // Approximate a kick waveform shape from ampDecay: descending bar chart.
     float decayNorm = 0.5f;
     for (const auto& [id, val] : s.values)
-        if (id == juce::String(pid::ampDecay)) { decayNorm = val; break; }
+        if (id == pid::ampDecay) { decayNorm = val; break; }
 
     const char* blockChars[] = { " ", "\xe2\x96\x81", "\xe2\x96\x82", "\xe2\x96\x83",
                                   "\xe2\x96\x84", "\xe2\x96\x85", "\xe2\x96\x86",
