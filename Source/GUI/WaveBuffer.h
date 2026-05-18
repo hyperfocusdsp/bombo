@@ -1,64 +1,98 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 
 namespace bombo
 {
 
-// Lock-free SPSC ring for audio-thread → GUI-thread scope rendering. The
-// processor pushes one sample per audio sample; we sub-sample by kDecim
-// before writing, so the ring holds ~500 ms of mono signal at 48 kHz.
+// Trigger-locked capture buffer for the scope display.
 //
-// Atomic write position with release ordering on the producer side and
-// acquire ordering on the consumer side gives the right happens-before
-// for the buffer contents without any locking. The single relaxed store
-// path is allocator-free, which matters because push() is called inside
-// processBlock.
+// On each new kick trigger the audio thread calls triggerReset(), which saves
+// the effective tail length from the previous cycle (prevLength_), resets the
+// write position to zero, and bumps triggerVersion_.  Subsequent push() calls
+// fill the buffer left-to-right; pushes past kCapture are silently dropped.
+//
+// lastLoudIdx_ tracks the last decimated position where |sample| exceeded
+// kSilenceFloor.  At reset time prevLength_ is set to lastLoudIdx_ + a short
+// grace pad so the GUI can scale the X axis to exactly the previous sound's
+// duration without showing lots of silent headroom.
+//
+// Memory ordering: prevLength_ and writePos_ are both stored with release
+// before triggerVersion_ is bumped (also release), so a GUI thread that
+// acquires triggerVersion_ is guaranteed to see up-to-date prevLength_ and
+// writePos_ == 0.
 class WaveBuffer
 {
 public:
-    static constexpr int kSize  = 1024;
-    static constexpr int kMask  = kSize - 1;
-    static constexpr int kDecim = 24;  // ~500 ms display window at 48 kHz
+    static constexpr int   kCapture     = 8192;
+    static constexpr int   kDecim       = 24;
+    static constexpr float kSilenceFloor = 0.002f;  // ≈ −54 dBFS
+    static constexpr int   kSilencePad  = 80;       // ≈ 40 ms of grace after last loud sample
 
-    // Producer. RT-safe — no allocation, single atomic store every kDecim
-    // calls. The dropped samples in between are fine for scope display;
-    // we're showing a downsampled scope, not capturing every sample.
+    // Audio thread: call once when a new trigger fires. RT-safe.
+    void triggerReset() noexcept
+    {
+        // Compute effective tail length from the just-finished capture cycle.
+        const int tail = lastLoudIdx_ > 0
+                       ? std::min(lastLoudIdx_ + kSilencePad, kCapture)
+                       : 0;
+        prevLength_.store(tail, std::memory_order_release);
+
+        capturePos_   = 0;
+        lastLoudIdx_  = 0;
+        pendingCount_ = 0;
+        writePos_.store(0, std::memory_order_release);
+        triggerVersion_.fetch_add(1, std::memory_order_release);
+    }
+
+    // Audio thread: post-master sample feed. RT-safe.
     void push(float s) noexcept
     {
         if (++pendingCount_ >= kDecim)
         {
-            const int w = writePos_.load(std::memory_order_relaxed);
-            buffer_[static_cast<std::size_t>(w & kMask)] = s;
-            writePos_.store(w + 1, std::memory_order_release);
             pendingCount_ = 0;
+            const int pos = capturePos_;
+            if (pos < kCapture)
+            {
+                buffer_[static_cast<std::size_t>(pos)] = s;
+                capturePos_ = pos + 1;
+                writePos_.store(capturePos_, std::memory_order_release);
+                if (s > kSilenceFloor || s < -kSilenceFloor)
+                    lastLoudIdx_ = capturePos_;
+            }
         }
     }
 
-    // Consumer. Reads the most recent `n` ring entries into `dst` in
-    // chronological order (oldest first). Reading slightly stale data is
-    // fine — the scope re-renders at 30 Hz anyway.
-    void readLatest(float* dst, int n) const noexcept
-    {
-        if (n > kSize) n = kSize;
-        const int w = writePos_.load(std::memory_order_acquire);
-        for (int i = 0; i < n; ++i)
-            dst[i] = buffer_[static_cast<std::size_t>((w - n + i) & kMask)];
-    }
-
+    // Audio thread: call from prepareToPlay / reset.
     void clear() noexcept
     {
         for (auto& s : buffer_) s = 0.0f;
-        writePos_.store(0, std::memory_order_release);
+        capturePos_   = 0;
+        lastLoudIdx_  = 0;
         pendingCount_ = 0;
+        writePos_.store(0, std::memory_order_release);
     }
 
+    // GUI thread accessors.
+    int          triggerVersion() const noexcept { return triggerVersion_.load(std::memory_order_acquire); }
+    int          writePos()       const noexcept { return writePos_.load(std::memory_order_acquire); }
+    // Effective tail length of the PREVIOUS trigger cycle. 0 on the very first
+    // trigger (no history yet). GUI uses this to normalise the X axis.
+    int          prevLength()     const noexcept { return prevLength_.load(std::memory_order_acquire); }
+    const float* data()           const noexcept { return buffer_.data(); }
+
 private:
-    std::array<float, kSize> buffer_{};
+    std::array<float, kCapture> buffer_{};
+    std::atomic<int> triggerVersion_{0};
     std::atomic<int> writePos_{0};
-    int pendingCount_ = 0;  // Audio thread only — no atomic needed.
+    std::atomic<int> prevLength_{0};
+    int capturePos_   = 0;  // Audio thread only.
+    int lastLoudIdx_  = 0;  // Audio thread only.
+    int pendingCount_ = 0;  // Audio thread only.
 };
 
 } // namespace bombo

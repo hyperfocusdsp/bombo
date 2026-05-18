@@ -425,6 +425,7 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     for (int i = 0; i < numSamples; ++i)
     {
         const int nFired = voiceMgr_.tickPending();
+        if (nFired > 0) waveBuffer_.triggerReset();
         for (int k = 0; k < nFired; ++k)
         {
             voiceMgr_.stealAndAdvance();
