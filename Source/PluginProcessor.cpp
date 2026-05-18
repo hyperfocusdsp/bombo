@@ -175,25 +175,29 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     if (pendingPath.isNotEmpty())
     {
         const bool isFactoryRestore = pendingPath.startsWith("<factory>");
-        juce::MessageManager::callAsync(
-            [this, pendingPath, pendingIsFolder, isFactoryRestore]()
+        auto restore = [this, pendingPath, pendingIsFolder, isFactoryRestore]()
+        {
+            if (isFactoryRestore)
             {
-                if (isFactoryRestore)
-                {
-                    this->loadFactorySamples();
-                    const int savedIdx = pendingPath.fromFirstOccurrenceOf(":", false, false)
-                                                    .getIntValue();
-                    if (savedIdx > 0) this->loadVoiceBSampleByIndex(savedIdx);
-                }
-                else if (pendingIsFolder) this->setVoiceBSampleFolder(juce::File(pendingPath));
-                else                      this->loadVoiceBSample      (juce::File(pendingPath));
-            });
+                this->loadFactorySamples();
+                const int savedIdx = pendingPath.fromFirstOccurrenceOf(":", false, false)
+                                                .getIntValue();
+                if (savedIdx > 0) this->loadVoiceBSampleByIndex(savedIdx);
+            }
+            else if (pendingIsFolder) this->setVoiceBSampleFolder(juce::File(pendingPath));
+            else                      this->loadVoiceBSample      (juce::File(pendingPath));
+        };
+        // Offline render (bouncer clone) destructs as soon as run() returns;
+        // dispatching to the message thread would invoke `this` after free.
+        if (isNonRealtime()) restore();
+        else                 juce::MessageManager::callAsync(std::move(restore));
     }
     else if (! sampleAlreadyLoaded)
     {
         // Fresh install / blank state — bootstrap the factory bank so VOICE B
         // has something playable out of the box.
-        juce::MessageManager::callAsync([this]() { this->loadFactorySamples(); });
+        if (isNonRealtime()) loadFactorySamples();
+        else                 juce::MessageManager::callAsync([this]() { this->loadFactorySamples(); });
     }
 
     chain_.setSampleRate(currentSampleRate_);
@@ -855,21 +859,24 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
                 pendingRestorePath_     = path;
                 pendingRestoreIsFolder_ = folder.isNotEmpty();
             }
-            juce::MessageManager::callAsync(
-                [this, path, folder, isFactoryRestore]()
+            auto restore = [this, path, folder, isFactoryRestore]()
+            {
+                if (isFactoryRestore)
                 {
-                    if (isFactoryRestore)
-                    {
-                        this->loadFactorySamples();
-                        const int savedIdx = path.fromFirstOccurrenceOf(":", false, false)
-                                                  .getIntValue();
-                        if (savedIdx > 0) this->loadVoiceBSampleByIndex(savedIdx);
-                    }
-                    else if (folder.isNotEmpty())
-                        this->setVoiceBSampleFolder(juce::File(path));
-                    else
-                        this->loadVoiceBSample(juce::File(path));
-                });
+                    this->loadFactorySamples();
+                    const int savedIdx = path.fromFirstOccurrenceOf(":", false, false)
+                                              .getIntValue();
+                    if (savedIdx > 0) this->loadVoiceBSampleByIndex(savedIdx);
+                }
+                else if (folder.isNotEmpty())
+                    this->setVoiceBSampleFolder(juce::File(path));
+                else
+                    this->loadVoiceBSample(juce::File(path));
+            };
+            // setStateInformation can run on the bouncer's clone — calling
+            // back through the message thread would land after destruction.
+            if (isNonRealtime()) restore();
+            else                 juce::MessageManager::callAsync(std::move(restore));
         }
     }
 }

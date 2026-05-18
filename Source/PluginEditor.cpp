@@ -360,6 +360,12 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
 
 void BomboEditor::startBounceFlow(bombo::OfflineBouncer::Format format)
 {
+    // Drop re-clicks while a bounce is in flight — reassigning bouncer_
+    // would stopThread(2000) on the message thread (UI freeze up to 2 s)
+    // and let the prior completion lambda fire for a file the user
+    // implicitly cancelled by re-clicking.
+    if (bouncer_ != nullptr) return;
+
     const bool isWav = (format == bombo::OfflineBouncer::Format::Wav);
     const juce::String ext      = isWav ? ".wav" : ".aiff";
     const juce::String fmtLabel = isWav ? "WAV"  : "AIFF";
