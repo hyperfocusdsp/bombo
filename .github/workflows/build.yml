@@ -31,10 +31,18 @@ jobs:
             libcurl4-openssl-dev mesa-common-dev ninja-build
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "$RUNNER_OS" = "Linux" ]; then EXTRA="-DBOMBO_LTO=OFF"; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release $EXTRA
 
       - name: Build
-        run: cmake --build build --config Release -j
+        shell: bash
+        run: |
+          JOBS="-j"
+          if [ "$RUNNER_OS" = "Linux" ]; then JOBS="-j 2"; fi
+          cmake --build build --config Release $JOBS
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -C Release
