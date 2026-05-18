@@ -1,5 +1,7 @@
 #include "ScopeComponent.h"
 
+#include <algorithm>
+
 #include "Colours.h"
 #include "Fonts.h"
 
@@ -21,8 +23,31 @@ ScopeComponent::~ScopeComponent()
 void ScopeComponent::timerCallback()
 {
     if (wb_ == nullptr) return;
-    wb_->readLatest(snapshot_.data(), static_cast<int>(snapshot_.size()));
-    repaint();
+
+    const int ver = wb_->triggerVersion();
+    if (ver != lastVersion_)
+    {
+        lastVersion_ = ver;
+        // Freeze the current wave as the ghost before starting the new cycle.
+        prevSnapshot_  = snapshot_;
+        prevDrawnTo_   = drawUpTo_;
+        prevXTotal_    = displayLength_ > 0 ? displayLength_ : std::max(drawUpTo_, 1);
+        // Reset for the new capture.
+        drawUpTo_      = 0;
+        displayLength_ = wb_->prevLength();  // 0 on very first trigger
+        repaint();
+    }
+
+    const int wp = wb_->writePos();
+    if (wp != drawUpTo_)
+    {
+        const float* src = wb_->data();
+        const int end = juce::jmin(wp, WaveBuffer::kCapture);
+        for (int i = drawUpTo_; i < end; ++i)
+            snapshot_[i] = src[i];
+        drawUpTo_ = end;
+        repaint();
+    }
 }
 
 void ScopeComponent::paint(juce::Graphics& g)
@@ -47,32 +72,68 @@ void ScopeComponent::paint(juce::Graphics& g)
     g.drawHorizontalLine(static_cast<int>(bounds.getCentreY()),
                          bounds.getX() + 8.0f, bounds.getRight() - 8.0f);
 
-    // Polyline. Sample index i → x; sample value → y mirrored about centre.
+    // Three-layer phosphor scope:
+    //   1. Ghost  — previous waveform at low alpha (full width, frozen)
+    //   2. Live   — current waveform at full alpha, growing left→right
+    //   3. Playhead — thin amber hairline at the live/ghost boundary
     const auto plotArea = bounds.reduced(10.0f, 18.0f);
     const float w     = plotArea.getWidth();
     const float midY  = plotArea.getCentreY();
     const float halfH = plotArea.getHeight() * 0.5f * 0.92f;
 
-    const int n = static_cast<int>(snapshot_.size());
-    if (n < 2 || w <= 1.0f) return;
+    if (w <= 1.0f) return;
 
-    juce::Path path;
-    bool started = false;
-    const float invN = 1.0f / static_cast<float>(n - 1);
-    for (int i = 0; i < n; ++i)
+    const juce::PathStrokeType thinStroke (1.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded);
+    const juce::PathStrokeType thickStroke(1.3f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded);
+
+    // --- Layer 1: ghost (previous waveform, dim) ---
+    if (prevDrawnTo_ >= 2 && prevXTotal_ > 1)
     {
-        const float x = plotArea.getX() + static_cast<float>(i) * invN * w;
-        const float v = juce::jlimit(-1.5f, 1.5f, snapshot_[i]);
-        const float y = midY - v * halfH;
-        if (!started) { path.startNewSubPath(x, y); started = true; }
-        else          { path.lineTo(x, y); }
+        const float invPrev = 1.0f / static_cast<float>(prevXTotal_ - 1);
+        juce::Path ghost;
+        for (int i = 0; i < prevDrawnTo_; ++i)
+        {
+            const float x = plotArea.getX() + static_cast<float>(i) * invPrev * w;
+            const float v = juce::jlimit(-1.5f, 1.5f, prevSnapshot_[i]);
+            const float y = midY - v * halfH;
+            if (i == 0) ghost.startNewSubPath(x, y);
+            else        ghost.lineTo(x, y);
+        }
+        g.setColour(col::bone().withAlpha(0.22f));
+        g.strokePath(ghost, thinStroke);
     }
 
-    g.setColour(col::bone().withAlpha(0.88f));
-    g.strokePath(path,
-                 juce::PathStrokeType(1.3f,
-                                      juce::PathStrokeType::curved,
-                                      juce::PathStrokeType::rounded));
+    // --- Layer 2: live waveform (current capture, bright) ---
+    const int n = drawUpTo_;
+    if (n >= 2)
+    {
+        const int xTotal     = displayLength_ > 0 ? displayLength_ : n;
+        const float invTotal = 1.0f / static_cast<float>(std::max(xTotal - 1, 1));
+
+        juce::Path live;
+        for (int i = 0; i < n; ++i)
+        {
+            const float x = plotArea.getX() + static_cast<float>(i) * invTotal * w;
+            const float v = juce::jlimit(-1.5f, 1.5f, snapshot_[i]);
+            const float y = midY - v * halfH;
+            if (i == 0) live.startNewSubPath(x, y);
+            else        live.lineTo(x, y);
+        }
+        g.setColour(col::bone().withAlpha(0.88f));
+        g.strokePath(live, thickStroke);
+
+        // --- Layer 3: playhead hairline (only while actively capturing) ---
+        const int xTotal2 = displayLength_ > 0 ? displayLength_ : std::max(n, 1);
+        if (n < xTotal2)
+        {
+            const float px = plotArea.getX()
+                           + static_cast<float>(n) / static_cast<float>(std::max(xTotal2 - 1, 1)) * w;
+            g.setColour(col::accentAmber().withAlpha(0.85f));
+            g.drawVerticalLine(static_cast<int>(px),
+                               plotArea.getY(),
+                               plotArea.getBottom());
+        }
+    }
 }
 
 } // namespace bombo

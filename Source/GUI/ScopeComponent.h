@@ -29,8 +29,14 @@ public:
 private:
     void timerCallback() override;
 
-    const WaveBuffer*                       wb_ = nullptr;
-    std::array<float, WaveBuffer::kSize>    snapshot_{};
+    const WaveBuffer*                         wb_            = nullptr;
+    std::array<float, WaveBuffer::kCapture>   snapshot_{};      // current capture
+    std::array<float, WaveBuffer::kCapture>   prevSnapshot_{};  // ghosted previous
+    int                                       lastVersion_   = -1;
+    int                                       drawUpTo_      = 0;
+    int                                       displayLength_ = 0;  // X normaliser for current wave
+    int                                       prevDrawnTo_   = 0;  // samples in prevSnapshot_
+    int                                       prevXTotal_    = 0;  // X normaliser for prevSnapshot_
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScopeComponent)
 };
