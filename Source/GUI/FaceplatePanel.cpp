@@ -76,7 +76,9 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
                                const WaveBuffer* waveBuffer,
                                SampleSlotCallbacks sampleSlotCb,
                                HostBpmFn hostBpmFn,
-                               RandomizeFn randomizeCb)
+                               RandomizeFn randomizeCb,
+                               BounceFn bounceWavCb,
+                               BounceFn bounceAiffCb)
     : apvts_(apvts),
       sampleSlotCb_(std::move(sampleSlotCb))
 {
@@ -229,6 +231,28 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     diceButton_ = std::make_unique<DiceButton>();
     diceButton_->onClick = std::move(randomizeCb);
     addAndMakeVisible(*diceButton_);
+
+    // ── BNC WAV / BNC AIF pills (offline bounce) ───────────────────
+    // Momentary TextButtons (not APVTS-attached). Editor wires onClick
+    // to a FileChooser + OfflineBouncer flow. Callback may be empty in
+    // headless/test contexts — guard so the click is a no-op.
+    bncWavPill_ = std::make_unique<juce::TextButton>("BNC WAV");
+    bncWavPill_->setColour(juce::TextButton::textColourOnId,  col::bone());
+    bncWavPill_->setColour(juce::TextButton::textColourOffId, col::bone());
+    bncWavPill_->setTooltip("Bounce the current sound to a .wav file");
+    bncWavPill_->setWantsKeyboardFocus(false);
+    bncWavPill_->setMouseClickGrabsKeyboardFocus(false);
+    bncWavPill_->onClick = [cb = std::move(bounceWavCb)] { if (cb) cb(); };
+    addAndMakeVisible(*bncWavPill_);
+
+    bncAifPill_ = std::make_unique<juce::TextButton>("BNC AIF");
+    bncAifPill_->setColour(juce::TextButton::textColourOnId,  col::bone());
+    bncAifPill_->setColour(juce::TextButton::textColourOffId, col::bone());
+    bncAifPill_->setTooltip("Bounce the current sound to an .aiff file");
+    bncAifPill_->setWantsKeyboardFocus(false);
+    bncAifPill_->setMouseClickGrabsKeyboardFocus(false);
+    bncAifPill_->onClick = [cb = std::move(bounceAiffCb)] { if (cb) cb(); };
+    addAndMakeVisible(*bncAifPill_);
 }
 
 FaceplatePanel::Control*
@@ -835,14 +859,17 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     constexpr int kLoopW    = 60;
     constexpr int kBpmW     = 78;
     constexpr int kDiceW    = 22; // square
+    constexpr int kBncW     = 52; // "BNC WAV" / "BNC AIF"
     constexpr int kPad      = 8;
     constexpr int kPadSmall = 4;
 
     const int y = (area.getHeight() - kPillH) / 2 + area.getY();
     int xCursor = area.getRight() - 14;
 
-    // Right-to-left: BPM, loop, TAIL, LIM, DICE. TAIL sits next to LIM
-    // because both are "post-FX behaviour" toggles, visually grouped.
+    // Right-to-left: BPM, loop, TAIL, LIM, DICE, AIF, WAV. The two BNC
+    // pills cluster on the left edge of the row — they're actions, not
+    // toggle state, so they sit apart from the LIM/TAIL behaviour cluster
+    // and adjacent to DICE (another action).
     if (bpmDisplay_) bpmDisplay_->setBounds(xCursor - kBpmW, y, kBpmW, kPillH);
     xCursor -= kBpmW + kPad;
     if (loopBtn_)    loopBtn_   ->setBounds(xCursor - kLoopW, y, kLoopW, kPillH);
@@ -850,8 +877,12 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
     if (tailPill_)   tailPill_  ->setBounds(xCursor - kTailW, y, kTailW, kPillH);
     xCursor -= kTailW + kPadSmall;
     if (limPill_)    limPill_   ->setBounds(xCursor - kLimW,  y, kLimW,  kPillH);
-    xCursor -= kLimW + kPadSmall;
+    xCursor -= kLimW + kPad;
     if (diceButton_) diceButton_->setBounds(xCursor - kDiceW, y, kDiceW, kPillH);
+    xCursor -= kDiceW + kPadSmall;
+    if (bncAifPill_) bncAifPill_->setBounds(xCursor - kBncW,  y, kBncW,  kPillH);
+    xCursor -= kBncW + kPadSmall;
+    if (bncWavPill_) bncWavPill_->setBounds(xCursor - kBncW,  y, kBncW,  kPillH);
 }
 
 // ────────────────────────────────────────────────────────────────────

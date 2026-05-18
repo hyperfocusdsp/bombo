@@ -9,6 +9,7 @@
 #include "GUI/BBS/BBSComponent.h"
 #include "GUI/Theme/ThemeProvider.h"
 #include "State/PersistentState.h"
+#include "Bounce/OfflineBouncer.h"
 
 class BomboProcessor;
 
@@ -55,6 +56,14 @@ private:
     // bbs_ in z-order so layout-edit drags don't show through the BBS
     // overlay when both are active.
     std::unique_ptr<bombo::LayoutEditOverlay> layoutEditor_;
+
+    // Bounce flow. fileChooser_ must outlive the async launchAsync
+    // callback (JUCE FileChooser docs are explicit about this). One
+    // bouncer at a time — re-clicking BNC while a bounce is in-flight
+    // cancels the old one in the unique_ptr reset.
+    std::unique_ptr<juce::FileChooser>      bounceChooser_;
+    std::unique_ptr<bombo::OfflineBouncer>  bouncer_;
+    void startBounceFlow(bombo::OfflineBouncer::Format format);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };

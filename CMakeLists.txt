@@ -131,7 +131,9 @@ target_sources(Bombo
         Source/DSP/Ducker.h
         Source/DSP/MultibandLimiter.h
         Source/DSP/MasterBus.h
-        Source/DSP/RumbleChain.h)
+        Source/DSP/RumbleChain.h
+        Source/Bounce/OfflineBouncer.h
+        Source/Bounce/OfflineBouncer.cpp)
 
 target_compile_definitions(Bombo
     PUBLIC

@@ -51,12 +51,17 @@ public:
     using HostBpmFn = std::function<float()>;
     // Dice button click — wired by editor to BomboProcessor::randomizeBombo.
     using RandomizeFn = std::function<void()>;
+    // Header bounce buttons — fired by user click on WAV / AIF pills.
+    // Editor wires these to OfflineBouncer + FileChooser flow.
+    using BounceFn = std::function<void()>;
 
     FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
                    const WaveBuffer* waveBuffer,
                    SampleSlotCallbacks sampleSlotCb = {},
                    HostBpmFn hostBpmFn = {},
-                   RandomizeFn randomizeCb = {});
+                   RandomizeFn randomizeCb = {},
+                   BounceFn bounceWavCb = {},
+                   BounceFn bounceAiffCb = {});
 
     // Wire the factory preset bank. Constructs the PresetBarComponent and
     // adds it to the panel. Call once after construction; safe to call
@@ -212,6 +217,10 @@ private:
     std::unique_ptr<BpmDisplay>         bpmDisplay_;
     std::unique_ptr<BalanceFader>       balanceFader_;
     std::unique_ptr<DiceButton>         diceButton_;
+    // Bounce pills — momentary TextButtons (not toggle-attached). Sit in
+    // the header row between DICE and the rack, left of LIM.
+    std::unique_ptr<juce::TextButton>   bncWavPill_;
+    std::unique_ptr<juce::TextButton>   bncAifPill_;
     juce::Rectangle<int> headerBounds_;
 
     // Scope.
