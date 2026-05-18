@@ -40,10 +40,7 @@ private:
     bool initialSizeApplied_ = false;
 
     // Temporary theme-switching UI (Plan A T7). Replaced by HeaderBar
-    // selector in Plan B. Declaration order matters: persistentState_
-    // must outlive themeSelector_'s onChange lambda, which captures
-    // `this` and writes to persistentState_.
-    bombo::PersistentState persistentState_;
+    // selector in Plan B.
     juce::ComboBox themeSelector_;
 
     // BBS hidden terminal overlay. Sibling of `faceplate`, sized to the

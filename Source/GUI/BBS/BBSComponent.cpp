@@ -1,114 +1,456 @@
 #include "BBSComponent.h"
-
 #include "../Colours.h"
 #include "../Fonts.h"
+#include "../../State/PresetBank.h"
+#include <juce_core/juce_core.h>
 
 namespace bombo
 {
 
-namespace
-{
-// Placeholder banner — replaced by AsciiArt.h content in Phase 1d.
-// Lines must be the same width so the centered draw doesn't jitter.
-constexpr const char* kBannerLines[] = {
-    "                                                          ",
-    "   ##  ##  ## ##  ## ## ## ##  ## ##  ## ##   #  ##  ##  ",
-    "   ##  ##  ##  #  ## #  ## ##  ## ##  ## ##   #  ##  ##  ",
-    "   ######  ## ##  ## #  ## ##  ## ##  ## ##  ##  ##  ##  ",
-    "   ##  ##  ##     ## #  ## ##  ## ##  ## ##   #  ##  ##  ",
-    "   ##  ##  ##  #  ## #  ## ##  ##  ####   #####  ##  ##  ",
-    "                                                          ",
-    "         H Y P E R F O C U S   B B S   //   1 9 9 2       ",
-    "                                                          ",
-    "         CONNECTION ESTABLISHED -- ESC TO DISCONNECT      ",
-    "                                                          "
-};
-constexpr int kBannerLineCount =
-    sizeof(kBannerLines) / sizeof(kBannerLines[0]);
-} // anonymous namespace
-
 BBSComponent::BBSComponent()
 {
-    setOpaque(false);          // backdrop is translucent, not fill-overrides
-    setInterceptsMouseClicks(true, false);
+    setOpaque(false);
+    setInterceptsMouseClicks(true, true);
     setWantsKeyboardFocus(true);
     setVisible(false);
+    setLookAndFeel(&lnf_);
+
+    screens_.onTransition = [this](BBSScreen s)
+    {
+        if (s == BBSScreen::BoomFeed) refreshSysopVoice();
+        repaint();
+    };
+}
+
+BBSComponent::~BBSComponent()
+{
+    setLookAndFeel(nullptr);
+}
+
+void BBSComponent::setProgressionManager(ProgressionManager* pm) noexcept
+{
+    progression_ = pm;
+}
+
+void BBSComponent::setApvts(juce::AudioProcessorValueTreeState* apvts) noexcept
+{
+    apvts_ = apvts;
+    boomFeed_.setApvts(apvts);
+}
+
+void BBSComponent::setTriggerCallback(std::function<void()> cb) noexcept
+{
+    triggerCb_ = cb;
+    boomFeed_.setTriggerCallback(cb);
+}
+
+void BBSComponent::setPresetBank(PresetBank* pb) noexcept
+{
+    presetBank_ = pb;
 }
 
 void BBSComponent::show()
 {
+    introCharPos_  = 0;
+    introComplete_ = false;
+    buildIntroText();
+    buildScrollerText();
+    refreshSysopVoice();
+    screens_.transitionTo(BBSScreen::Intro);
+
     setVisible(true);
-    toFront(true);             // sibling of faceplate — must paint on top
+    toFront(true);
     grabKeyboardFocus();
+    startTimer(40);
+
     if (onShown) onShown();
 }
 
 void BBSComponent::hide()
 {
+    stopTimer();
     setVisible(false);
     if (onDismissed) onDismissed();
 }
 
+void BBSComponent::resized() {}
+
+void BBSComponent::timerCallback()
+{
+    if (screens_.current() == BBSScreen::Intro && !introComplete_)
+    {
+        introCharPos_ += 2;
+        if (introCharPos_ >= introText_.length())
+        {
+            introComplete_ = true;
+            screens_.onIntroComplete();
+        }
+    }
+    scrollOffset_ = (scrollOffset_ + 1) % juce::jmax(1, scrollerText_.length());
+    repaint();
+}
+
 bool BBSComponent::keyPressed(const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress::escapeKey)
+    if (key == juce::KeyPress::escapeKey) { hide(); return true; }
+
+    if (screens_.current() == BBSScreen::Intro)
     {
-        hide();
+        introComplete_ = true;
+        screens_.onIntroComplete();
         return true;
     }
-    // Swallow other keys while open — don't let them leak to the faceplate
-    // (which would, e.g., re-trigger the kick if T is pressed).
-    return true;
+
+    if (key == juce::KeyPress::tabKey)
+    {
+        if (screens_.current() == BBSScreen::BoomFeed)
+            screens_.transitionTo(BBSScreen::MyDownloads);
+        else if (screens_.current() == BBSScreen::MyDownloads)
+            screens_.transitionTo(BBSScreen::BoomFeed);
+        return true;
+    }
+
+    if (screens_.current() == BBSScreen::BoomFeed)
+    {
+        const auto ch = key.getTextCharacter();
+        if (ch == 'n' || ch == 'N')
+        {
+            boomFeed_.advance(boomFeedMode_);
+            repaint();
+            return true;
+        }
+        if (ch == 'p' || ch == 'P')
+        {
+            boomFeed_.prev();
+            repaint();
+            return true;
+        }
+        if (key == juce::KeyPress::spaceKey)
+        {
+            if (triggerCb_) triggerCb_();
+            return true;
+        }
+        if (ch == 's' || ch == 'S')
+        {
+            if (apvts_ != nullptr && presetBank_ != nullptr)
+            {
+                const auto name = boomFeed_.currentFilename()
+                                      .upToLastOccurrenceOf(".KCK", false, true);
+                presetBank_->saveAs(name, *apvts_);
+                if (progression_ != nullptr) progression_->onKickSaved();
+                repaint();
+            }
+            return true;
+        }
+        if (ch == 'm' || ch == 'M')
+        {
+            boomFeedMode_ = (boomFeedMode_ == BoomFeed::Mode::Random)
+                                ? BoomFeed::Mode::Mutate
+                                : BoomFeed::Mode::Random;
+            repaint();
+            return true;
+        }
+    }
+
+    if (screens_.current() == BBSScreen::MyDownloads && presetBank_ != nullptr)
+    {
+        const auto countUserPresets = [&]() {
+            int n = 0;
+            for (int i = 0; i < presetBank_->size(); ++i)
+                if (presetBank_->at(i).source == PresetBank::Source::User) ++n;
+            return n;
+        };
+
+        if (key == juce::KeyPress::upKey)
+        {
+            myDownloadsSelected_ = juce::jmax(0, myDownloadsSelected_ - 1);
+            repaint(); return true;
+        }
+        if (key == juce::KeyPress::downKey)
+        {
+            myDownloadsSelected_ = juce::jmin(countUserPresets() - 1,
+                                               myDownloadsSelected_ + 1);
+            repaint(); return true;
+        }
+        if (key == juce::KeyPress::returnKey && apvts_ != nullptr)
+        {
+            int row = 0;
+            for (int i = 0; i < presetBank_->size(); ++i)
+            {
+                if (presetBank_->at(i).source != PresetBank::Source::User) continue;
+                if (row == myDownloadsSelected_)
+                {
+                    presetBank_->applyByIndex(i, *apvts_);
+                    if (triggerCb_) triggerCb_();
+                    break;
+                }
+                ++row;
+            }
+            repaint(); return true;
+        }
+        if (key == juce::KeyPress::deleteKey)
+        {
+            int row = 0;
+            for (int i = 0; i < presetBank_->size(); ++i)
+            {
+                if (presetBank_->at(i).source != PresetBank::Source::User) continue;
+                if (row == myDownloadsSelected_)
+                {
+                    presetBank_->deleteAt(i);
+                    myDownloadsSelected_ = juce::jmax(0, myDownloadsSelected_ - 1);
+                    break;
+                }
+                ++row;
+            }
+            repaint(); return true;
+        }
+    }
+
+    return true;  // swallow all keys while BBS is open
 }
 
 void BBSComponent::paint(juce::Graphics& g)
 {
-    const auto bounds = getLocalBounds();
+    g.fillAll(juce::Colour(0xFF0A0A0Au).withAlpha(0.94f));
 
-    // Backdrop: graphite at 0.92 alpha — faceplate shows through faintly,
-    // sells the "you're inside the bomb" reading rather than a hard cut.
-    g.fillAll(col::graphite().withAlpha(0.92f));
+    auto b = getLocalBounds();
 
-    // Banner — monospace, bone fg with amber accent on the title line.
-    // Cells sized to the smaller of (width/banner_chars, height/banner_lines)
-    // so the banner stays inscribed at any aspect.
-    constexpr float kPadFrac = 0.10f;
-    const float availW = static_cast<float>(bounds.getWidth())  * (1.0f - 2.0f * kPadFrac);
-    const float availH = static_cast<float>(bounds.getHeight()) * (1.0f - 2.0f * kPadFrac);
-
-    int maxChars = 0;
-    for (int i = 0; i < kBannerLineCount; ++i)
+    switch (screens_.current())
     {
-        const int len = static_cast<int>(std::strlen(kBannerLines[i]));
-        if (len > maxChars) maxChars = len;
+        case BBSScreen::Intro:
+            paintIntro(g);
+            break;
+
+        case BBSScreen::BoomFeed:
+        {
+            const int headerH   = 22;
+            const int scrollerH = 16;
+            const int footerH   = 14;
+            paintHeader    (g, b.removeFromTop(headerH));
+            b.removeFromBottom(footerH);
+            paintScrollerBar(g, b.removeFromBottom(scrollerH));
+            paintBoomFeed  (g);
+            break;
+        }
+
+        case BBSScreen::MyDownloads:
+        {
+            const int headerH   = 22;
+            const int scrollerH = 16;
+            const int footerH   = 14;
+            paintHeader     (g, b.removeFromTop(headerH));
+            b.removeFromBottom(footerH);
+            paintScrollerBar(g, b.removeFromBottom(scrollerH));
+            paintMyDownloads(g);
+            break;
+        }
     }
-    const float cellW = availW / static_cast<float>(maxChars);
-    const float cellH = availH / static_cast<float>(kBannerLineCount);
-    const float cell  = std::min(cellW, cellH);
 
-    // Use the project's canonical monospace font — keeps weight/metrics
-    // consistent with the value readouts elsewhere in the UI.
-    g.setFont(bombo::fonts::value(cell * 1.6f));
+    // Footer key hints (painted last so it's always visible)
+    const auto footerR = getLocalBounds().removeFromBottom(14);
+    g.setColour(juce::Colour(0xFF111111u));
+    g.fillRect(footerR);
+    g.setFont(juce::Font(juce::FontOptions("Courier New", 10.0f, juce::Font::plain)));
+    g.setColour(juce::Colour(0xFF555555u));
+    const juce::String hints = (screens_.current() == BBSScreen::BoomFeed)
+        ? "[ TAB = MY DOWNLOADS ]  [ ESC = EXIT ]"
+        : "[ TAB = BOOM FEED ]  [ ESC = EXIT ]";
+    g.drawText(hints, footerR, juce::Justification::centred);
+}
 
-    const float bannerHeight = cell * static_cast<float>(kBannerLineCount);
-    const float bannerWidth  = cell * static_cast<float>(maxChars);
-    const float xStart = (static_cast<float>(bounds.getWidth())  - bannerWidth)  * 0.5f;
-    const float yStart = (static_cast<float>(bounds.getHeight()) - bannerHeight) * 0.5f;
+void BBSComponent::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    g.setColour(juce::Colour(0xFF111111u));
+    g.fillRect(area);
+    g.setColour(juce::Colour(0xFF333333u));
+    g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
 
-    for (int i = 0; i < kBannerLineCount; ++i)
+    g.setFont(juce::Font(juce::FontOptions("Courier New", 11.0f, juce::Font::plain)));
+    g.setColour(juce::Colour(0xFFFFE066u));
+    g.drawText("HYPERFOCUS BBS v2.3",
+               area.reduced(8, 0), juce::Justification::centredLeft);
+
+    const auto& sysop = kSysops[currentSysopIdx_];
+    g.setColour(juce::Colour(0xFF888888u));
+    g.drawText(juce::String("SYSOP: ") + sysop.name,
+               area.reduced(8, 0), juce::Justification::centredRight);
+}
+
+void BBSComponent::paintScrollerBar(juce::Graphics& g, juce::Rectangle<int> area)
+{
+    g.setColour(juce::Colour(0xFF0D0D0Du));
+    g.fillRect(area);
+    g.setColour(juce::Colour(0xFF444444u));
+    g.fillRect(area.getX(), area.getY(), area.getWidth(), 1);
+
+    if (scrollerText_.isEmpty()) return;
+
+    const juce::String visible = scrollerText_.substring(scrollOffset_)
+                               + scrollerText_.substring(0, scrollOffset_);
+
+    g.setFont(juce::Font(juce::FontOptions("Courier New", 10.0f, juce::Font::plain)));
+    g.setColour(juce::Colour(0xFF555555u));
+    g.drawText(juce::String("\xe2\x96\xb8 ") + visible,
+               area.reduced(6, 0), juce::Justification::centredLeft, false);
+}
+
+void BBSComponent::paintIntro(juce::Graphics& g)
+{
+    const auto b = getLocalBounds().reduced(30, 20);
+    g.setFont(juce::Font(juce::FontOptions("Courier New", 12.0f, juce::Font::plain)));
+    g.setColour(juce::Colour(0xFFC8FF8Cu));
+    g.drawMultiLineText(introText_.substring(0, introCharPos_),
+                        b.getX(), b.getY() + 16, b.getWidth());
+}
+
+void BBSComponent::paintBoomFeed(juce::Graphics& g)
+{
+    const auto b = getLocalBounds()
+                       .withTrimmedTop(22)
+                       .withTrimmedBottom(30)
+                       .reduced(12, 8);
+
+    g.setFont(juce::Font(juce::FontOptions("Courier New", 11.0f, juce::Font::plain)));
+
+    auto area = b;
+
+    g.setColour(juce::Colour(0xFF444444u));
+    g.drawText("\xe2\x94\x80\xe2\x94\x80 KICK ROM BROWSER \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80",
+               area.removeFromTop(14), juce::Justification::centredLeft);
+
+    g.setColour(juce::Colour(0xFFC8FF8Cu));
+    g.drawText("FILENAME : " + boomFeed_.currentFilename(),
+               area.removeFromTop(16), juce::Justification::centredLeft);
+
+    g.setColour(juce::Colour(0xFF888888u));
+    g.drawText("SIZE     : 3.1 KB",
+               area.removeFromTop(16), juce::Justification::centredLeft);
+
+    g.setColour(juce::Colour(0xFFFFE066u));
+    g.drawText("WAVEFORM : " + boomFeed_.currentWaveformAscii(),
+               area.removeFromTop(16), juce::Justification::centredLeft);
+
+    area.removeFromTop(8);
+
+    g.setColour(juce::Colour(0xFF555555u));
+    g.drawText("[ N ] NEXT   [ P ] PREV   [ SPACE ] PLAY   [ S ] SAVE",
+               area.removeFromTop(18), juce::Justification::centredLeft);
+
+    const bool isRandom = (boomFeedMode_ == BoomFeed::Mode::Random);
+    g.setColour(juce::Colours::white);
+    g.drawText(juce::String("MODE: ")
+               + (isRandom ? "[> RANDOM] / [ MUTATE]"
+                           : "[ RANDOM] / [> MUTATE]"),
+               area.removeFromTop(16), juce::Justification::centredLeft);
+
+    area.removeFromTop(8);
+    g.setColour(juce::Colour(0xFF444444u));
+    g.fillRect(area.removeFromTop(1));
+    g.setColour(juce::Colour(0xFFC8FF8Cu));
+    g.drawText("MOTD: " + currentMotd_,
+               area.removeFromTop(14), juce::Justification::centredLeft);
+}
+
+void BBSComponent::paintMyDownloads(juce::Graphics& g)
+{
+    if (presetBank_ == nullptr) return;
+
+    const auto b = getLocalBounds()
+                       .withTrimmedTop(22)
+                       .withTrimmedBottom(30)
+                       .reduced(12, 8);
+
+    g.setFont(juce::Font(juce::FontOptions("Courier New", 11.0f, juce::Font::plain)));
+
+    auto area = b;
+
+    int userCount = 0;
+    for (int i = 0; i < presetBank_->size(); ++i)
+        if (presetBank_->at(i).source == PresetBank::Source::User) ++userCount;
+
+    g.setColour(juce::Colours::white);
+    g.drawText("MY DOWNLOADS" +
+               juce::String("                        ") +
+               juce::String(userCount) + " FILES",
+               area.removeFromTop(16), juce::Justification::centredLeft);
+
+    g.setColour(juce::Colour(0xFF444444u));
+    g.drawText("NAME                      SIZE     DATE       TIME",
+               area.removeFromTop(14), juce::Justification::centredLeft);
+    g.fillRect(area.removeFromTop(1));
+
+    const int rowH = 15;
+    int row = 0;
+    for (int i = 0; i < presetBank_->size(); ++i)
     {
-        // Title line (the "H Y P E R F O C U S  B B S" one, by convention
-        // the second-from-last with text) gets the amber accent.
-        const bool isTitleLine = (i == 7);
-        g.setColour(isTitleLine ? col::accentAmber() : col::bone());
+        const auto& p = presetBank_->at(i);
+        if (p.source != PresetBank::Source::User) continue;
 
-        const juce::String line(kBannerLines[i]);
-        const juce::Rectangle<float> r(xStart,
-                                       yStart + cell * static_cast<float>(i),
-                                       bannerWidth,
-                                       cell);
-        g.drawText(line, r, juce::Justification::centred, false);
+        const bool selected = (row == myDownloadsSelected_);
+        if (selected)
+        {
+            g.setColour(juce::Colour(0xFF1A3A1Au));
+            g.fillRect(area.getX(), area.getY(), area.getWidth(), rowH);
+        }
+
+        const juce::String prefix = selected ? "\xe2\x96\xba " : "  ";
+        const juce::String name   = juce::String(p.displayName).paddedRight(' ', 26);
+        const juce::String size   = juce::String("3.1KB").paddedRight(' ', 9);
+        const juce::String date   = p.filePath.exists()
+            ? p.filePath.getLastModificationTime().toString(false, false, false, false).substring(0, 5)
+            : "??-??";
+        const juce::String timeStr = p.filePath.exists()
+            ? p.filePath.getLastModificationTime().toString(false, true, false, true).substring(0, 5)
+            : "??:??";
+
+        g.setColour(selected ? juce::Colours::white : juce::Colour(0xFFAAAAAA));
+        g.drawText(prefix + name + size + date + "    " + timeStr,
+                   area.removeFromTop(rowH), juce::Justification::centredLeft);
+        ++row;
     }
+
+    if (row == 0)
+    {
+        g.setColour(juce::Colour(0xFF444444u));
+        g.drawText("  (NO DOWNLOADS YET \xe2\x80\x94 PRESS N IN BOOM FEED TO BROWSE)",
+                   area.removeFromTop(rowH), juce::Justification::centredLeft);
+    }
+}
+
+void BBSComponent::buildIntroText()
+{
+    introText_ =
+        "ATDT 555-1992...\n"
+        "CONNECT 2400\n"
+        "\n"
+        "\xe2\x96\x93\xe2\x96\x92\xe2\x96\x91\xe2\x96\x93\xe2\x96\x92\xe2\x96\x91\xe2\x96\x93\xe2\x96\x92\xe2\x96\x91\n"
+        "\n"
+        "  HYPERFOCUS  BBS\n"
+        "  ==============\n"
+        "\n"
+        "  CONNECTION ESTABLISHED\n"
+        "  PRESS ANY KEY TO SKIP\n";
+}
+
+void BBSComponent::buildScrollerText()
+{
+    if (currentSysopIdx_ >= 0 && currentSysopIdx_ < kSysopCount)
+        scrollerText_ = kSysops[currentSysopIdx_].scrollerLine;
+    else
+        scrollerText_ = "HYPERFOCUS BBS · KICK ROM ARCHIVE ·";
+    scrollerText_ += "   ";
+    scrollOffset_  = 0;
+}
+
+void BBSComponent::refreshSysopVoice()
+{
+    if (progression_ != nullptr)
+        currentSysopIdx_ = progression_->currentSysopIndex();
+    else
+        currentSysopIdx_ = 0;
+
+    currentMotd_ = pickMotd(currentSysopIdx_, rng_);
+    buildScrollerText();
 }
 
 } // namespace bombo
