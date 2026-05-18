@@ -108,13 +108,37 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         (void) this;
     };
 
-    // Dev affordance — small button next to the theme selector to open
-    // the BBS overlay. Long-press nose-detonator activation is parked
-    // pending mockup; Ctrl+Shift+B in keyPressed() also opens it.
-    bbsButton_.setButtonText("BBS");
-    bbsButton_.setTooltip("Open the hidden 1992 BBS terminal");
-    bbsButton_.onClick = [this] { bbs_.show(); };
-    addAndMakeVisible(bbsButton_);
+    // Wire NoseComponent callbacks through FaceplatePanel.
+    faceplate.setNoseProgressionLevel(processorRef.progressionManager().currentLevel());
+    faceplate.setNoseFirstEntryDone(processorRef.persistentState().getBbsUnlocked());
+
+    faceplate.onNoseActivated = [this]
+    {
+        processorRef.persistentState().setBbsUnlocked(true);
+        faceplate.setNoseFirstEntryDone(true);
+        bbs_.show();
+    };
+
+    faceplate.onNoseGlitchTap = [this](int tap)
+    {
+        static constexpr GlitchLevel kGlitchSequence[] = {
+            GlitchLevel::None,        // 0 unused
+            GlitchLevel::Flicker,     // tap 1
+            GlitchLevel::Garble,      // tap 2
+            GlitchLevel::BlackFlash,  // tap 3
+            GlitchLevel::StaticNoise, // tap 4
+            GlitchLevel::RedFlash,    // tap 5
+            GlitchLevel::GreenPulse,  // tap 6
+        };
+        if (tap >= 1 && tap <= 6)
+            triggerGlitch(kGlitchSequence[tap], tap == 4 ? 300 : tap == 3 ? 80 : 200);
+    };
+
+    // Wire progression level-up to update nose visual state.
+    processorRef.progressionManager().onLevelUp = [this](int newLevel)
+    {
+        faceplate.setNoseProgressionLevel(newLevel);
+    };
 
     // Layout-edit overlay — ported from an earlier project. F2 / Ctrl+Shift+E
     // toggles. Sits between faceplate and bbs_ in z-order so it doesn't
@@ -333,10 +357,9 @@ void BomboEditor::resized()
     const int boundsH = static_cast<int>(std::ceil(static_cast<float>(getHeight()) / scale));
     faceplate.setBounds(0, 0, boundsW, boundsH);
 
-    // Temporary theme selector + BBS dev button — bottom-right; both go
-    // away when Plan B's HeaderBar ships.
+    // Temporary theme selector — bottom-right; goes away when Plan B's
+    // HeaderBar ships.
     themeSelector_.setBounds(getWidth() - 110, getHeight() - 26, 100, 22);
-    bbsButton_.setBounds(getWidth() - 158, getHeight() - 26, 44, 22);
 
     // BBS overlay always sized to the full editor — independent of the
     // faceplate's scaled transform. Phase 2's chassis reshape just changes

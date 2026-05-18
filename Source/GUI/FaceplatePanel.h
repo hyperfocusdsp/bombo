@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "LayoutManager.h"   // LayoutElem + LayoutManager
+#include "Nose/NoseComponent.h"
 #include "PresetBarComponent.h"
 #include "ScopeComponent.h"
 #include "Theme/ThemedComponent.h"
@@ -82,6 +83,15 @@ public:
     // overlay can mutate + persist bounds.
     std::vector<LayoutElem> getEditableElements() const;
     LayoutManager& getLayoutManager() noexcept { return layout_; }
+
+    // Nose activation callbacks — wired by BomboEditor.
+    std::function<void()>    onNoseActivated;
+    std::function<void(int)> onNoseGlitchTap;
+
+    // Forwarders so PluginEditor can set nose state without accessing the
+    // private noseOverlay_ member directly.
+    void setNoseProgressionLevel(int level) { noseOverlay_.setProgressionLevel(level); }
+    void setNoseFirstEntryDone(bool done)   { noseOverlay_.setFirstEntryDone(done); }
 
 private:
     enum class CtlKind { Knob, Choice, Toggle, SampleSlot };
@@ -226,6 +236,10 @@ private:
     // Scope.
     ScopeComponent scope_;
     juce::Rectangle<int> scopeBounds_;
+
+    // Nose overlay — transparent component sized to the nose region,
+    // handles the 7-tap activation sequence and glitch visuals.
+    NoseComponent noseOverlay_;
 
     // Factory preset bar (Phase 3). nullptr until setPresetBank is called.
     std::unique_ptr<PresetBarComponent> presetBar_;

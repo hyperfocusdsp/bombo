@@ -253,6 +253,14 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     bncAifPill_->setMouseClickGrabsKeyboardFocus(false);
     bncAifPill_->onClick = [cb = std::move(bounceAiffCb)] { if (cb) cb(); };
     addAndMakeVisible(*bncAifPill_);
+
+    // ── Nose overlay ────────────────────────────────────────────────
+    // Transparent component over the nose region; handles 7-tap
+    // activation sequence and glitch visuals.
+    addChildComponent(noseOverlay_);
+    noseOverlay_.setVisible(true);
+    noseOverlay_.onActivationComplete = [this] { if (onNoseActivated) onNoseActivated(); };
+    noseOverlay_.onGlitchTap = [this](int tap) { if (onNoseGlitchTap) onNoseGlitchTap(tap); };
 }
 
 FaceplatePanel::Control*
@@ -728,6 +736,7 @@ void FaceplatePanel::resized()
                                                    juce::jmax(40, noseBot - noseTop));
     juce::Rectangle<int> noseInterior = layout_.boundsOr("macroRow", noseInteriorDefault);
     layoutMacrosInNose(noseInterior);
+    noseOverlay_.setBounds(noseInterior);
     macroBoundsTracked_ = noseInterior;
     bandBoundsTracked_  = bandRect_.toNearestInt();
 
