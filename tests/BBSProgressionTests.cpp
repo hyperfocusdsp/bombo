@@ -133,9 +133,56 @@ public:
     }
 };
 
+class ProgressionCallbackTest : public juce::UnitTest
+{
+public:
+    ProgressionCallbackTest()
+        : juce::UnitTest("Progression: onLevelUp callback fires correctly") {}
+    void runTest() override
+    {
+        auto tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                       .getChildFile("bombo_prog_cb_"
+                                     + juce::String(juce::Time::currentTimeMillis()));
+        tmp.createDirectory();
+
+        beginTest("callback fires once per level crossed");
+        {
+            bombo::PersistentState state(tmp);
+            bombo::ProgressionManager pm(state);
+            int callbackCount = 0;
+            int lastLevel = -1;
+            pm.onLevelUp = [&](int newLevel) { ++callbackCount; lastLevel = newLevel; };
+
+            // 5 saves → level 1 → callback fires once
+            for (int i = 0; i < 5; ++i) pm.onKickSaved();
+            expectEquals(callbackCount, 1, "callback fires once at L1");
+            expectEquals(lastLevel, 1, "callback receives level 1");
+
+            // 10 more saves → level 2 → callback fires once more
+            for (int i = 0; i < 10; ++i) pm.onKickSaved();
+            expectEquals(callbackCount, 2, "callback fires again at L2");
+            expectEquals(lastLevel, 2, "callback receives level 2");
+        }
+
+        beginTest("no callback when level stays the same");
+        {
+            bombo::PersistentState state(tmp);
+            bombo::ProgressionManager pm(state);
+            int callbackCount = 0;
+            pm.onLevelUp = [&](int) { ++callbackCount; };
+
+            pm.onKickSaved();  // 1 save — still level 0
+            expectEquals(callbackCount, 0, "no callback below threshold");
+        }
+
+        tmp.deleteRecursively();
+    }
+};
+
 static ProgressionLevelThresholdTest progressionLevelThresholdTest;
 static ProgressionUnlockTest         progressionUnlockTest;
 static ProgressionPersistenceTest    progressionPersistenceTest;
 static ProgressionForceResetTest     progressionForceResetTest;
+static ProgressionCallbackTest       progressionCallbackTest;
 
 } // anonymous namespace
