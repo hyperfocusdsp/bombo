@@ -279,10 +279,13 @@ void BBSComponent::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
     g.drawText("HYPERFOCUS BBS v2.3",
                area.reduced(8, 0), juce::Justification::centredLeft);
 
-    const auto& sysop = kSysops[currentSysopIdx_];
-    g.setColour(juce::Colour(0xFF888888u));
-    g.drawText(juce::String("SYSOP: ") + sysop.name,
-               area.reduced(8, 0), juce::Justification::centredRight);
+    if (currentSysopIdx_ >= 0 && currentSysopIdx_ < kSysopCount)
+    {
+        const auto& sysop = kSysops[currentSysopIdx_];
+        g.setColour(juce::Colour(0xFF888888u));
+        g.drawText(juce::String("SYSOP: ") + sysop.name,
+                   area.reduced(8, 0), juce::Justification::centredRight);
+    }
 }
 
 void BBSComponent::paintScrollerBar(juce::Graphics& g, juce::Rectangle<int> area)
