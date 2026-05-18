@@ -102,8 +102,45 @@ public:
     }
 };
 
+class BbsProgressionKeysTest : public juce::UnitTest
+{
+public:
+    BbsProgressionKeysTest() : juce::UnitTest("BBS: progression keys default + round-trip") {}
+    void runTest() override
+    {
+        auto tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                       .getChildFile("bombo_test_prog_" + juce::String(juce::Time::currentTimeMillis()));
+        tmp.createDirectory();
+
+        beginTest("fresh state has zero saves, level 0, three unlocked sysops");
+        {
+            bombo::PersistentState s(tmp);
+            expectEquals(s.getBbsSavesCount(), 0);
+            expectEquals(s.getBbsLevel(), 0);
+            expectEquals(s.getBbsUnlockedSysops(), juce::String("0,1,2"));
+        }
+
+        beginTest("saves + level + sysops survive reconstruction");
+        {
+            bombo::PersistentState s(tmp);
+            s.setBbsSavesCount(17);
+            s.setBbsLevel(2);
+            s.setBbsUnlockedSysops("0,1,2,3,4");
+        }
+        {
+            bombo::PersistentState s(tmp);
+            expectEquals(s.getBbsSavesCount(), 17);
+            expectEquals(s.getBbsLevel(), 2);
+            expectEquals(s.getBbsUnlockedSysops(), juce::String("0,1,2,3,4"));
+        }
+
+        tmp.deleteRecursively();
+    }
+};
+
 static BbsUnlockedDefaultTest             bbsUnlockedDefaultTest;
 static BbsUnlockedRoundTripTest           bbsUnlockedRoundTripTest;
 static BbsUnlockedIndependentOfThemeTest  bbsUnlockedIndependentOfThemeTest;
+static BbsProgressionKeysTest             bbsProgressionKeysTest;
 
 } // anonymous namespace

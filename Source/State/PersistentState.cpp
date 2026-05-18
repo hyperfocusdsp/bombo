@@ -80,6 +80,39 @@ void PersistentState::setBbsLastScreen(int screenEnum)
     props_->saveIfNeeded();
 }
 
+int PersistentState::getBbsSavesCount() const
+{
+    return props_->getIntValue("bbs.saves_count", 0);
+}
+
+void PersistentState::setBbsSavesCount(int count)
+{
+    props_->setValue("bbs.saves_count", count);
+    props_->saveIfNeeded();
+}
+
+int PersistentState::getBbsLevel() const
+{
+    return props_->getIntValue("bbs.level", 0);
+}
+
+void PersistentState::setBbsLevel(int level)
+{
+    props_->setValue("bbs.level", level);
+    props_->saveIfNeeded();
+}
+
+juce::String PersistentState::getBbsUnlockedSysops() const
+{
+    return props_->getValue("bbs.unlocked_sysops", "0,1,2");
+}
+
+void PersistentState::setBbsUnlockedSysops(const juce::String& csv)
+{
+    props_->setValue("bbs.unlocked_sysops", csv);
+    props_->saveIfNeeded();
+}
+
 juce::File PersistentState::getLastBounceDir() const
 {
     // Prefer userMusicDirectory; fall back to home if Music doesn't exist

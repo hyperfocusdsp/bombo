@@ -42,6 +42,16 @@ public:
     int  getBbsLastScreen() const;
     void setBbsLastScreen(int screenEnum);
 
+    // Progression state — saves counter drives level-up; level gates
+    // SYSOP unlocks. unlockedSysops is a comma-separated list of
+    // integer indices into SysopContent::kSysops (e.g. "0,1,2").
+    int          getBbsSavesCount() const;
+    void         setBbsSavesCount(int count);
+    int          getBbsLevel() const;
+    void         setBbsLevel(int level);
+    juce::String getBbsUnlockedSysops() const;   // default: "0,1,2"
+    void         setBbsUnlockedSysops(const juce::String& csv);
+
     // Last directory the user bounced to. Defaults to the platform user
     // music directory (~/Music on Linux+macOS, %USERPROFILE%/Music on
     // Windows). Updated on every successful bounce so the next FileChooser
