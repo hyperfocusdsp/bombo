@@ -23,6 +23,7 @@ static bombo::FaceplatePanel::SampleSlotCallbacks makeSampleSlotCallbacks(BomboP
     cb.onBrowsePick   = [&p](const juce::File& f) { p.setVoiceBSampleFolder(f); };
     cb.onIndexChange  = [&p](int idx)             { p.loadVoiceBSampleByIndex(idx); };
     cb.onClear        = [&p]()                    { p.clearVoiceBSample(); };
+    cb.onLoadFactory  = [&p]()                    { p.loadFactorySamples(); };
     cb.getNames       = [&p]()                    { return p.voiceBSampleNames(); };
     cb.getCurrentIdx  = [&p]()                    { return p.voiceBSampleIndex(); };
     return cb;
