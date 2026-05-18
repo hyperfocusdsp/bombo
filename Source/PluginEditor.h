@@ -44,11 +44,10 @@ private:
     juce::ComboBox themeSelector_;
 
     // BBS hidden terminal overlay. Sibling of `faceplate`, sized to the
-    // full editor bounds, invisible by default. Dev affordance: bbsButton_
-    // and Ctrl+Shift+B in keyPressed() both call bbs_.show(); long-press
-    // nose detonator activation is parked pending mockup.
+    // full editor bounds, invisible by default. Dev affordance:
+    // Ctrl+Shift+B in keyPressed() calls bbs_.show(); the nose 7-tap
+    // sequence activates it via faceplate.onNoseActivated.
     bombo::BBSComponent bbs_;
-    juce::TextButton    bbsButton_;
 
     // Layout-edit overlay (ported from squelch_pro 2026-05-17). Toggled
     // by F2 or Ctrl+Shift+E in keyPressed. Sits BETWEEN faceplate and
