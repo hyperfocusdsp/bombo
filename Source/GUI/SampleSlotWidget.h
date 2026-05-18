@@ -199,11 +199,16 @@ public:
         if (e.mods.isRightButtonDown())
         {
             juce::PopupMenu m;
-            m.addItem(1, "Browse new folder…");
+            m.addItem(1, "Browse new folder...");
             m.addItem(3, "Reload factory bank");
             if (isLoaded())
                 m.addItem(2, "Clear");
-            m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
+            // Show at the click position. `withTargetComponent` was offsetting
+            // the menu away from the cursor; the default (mouse position) is
+            // what users expect.
+            const auto screenPos = e.getScreenPosition();
+            m.showMenuAsync(juce::PopupMenu::Options()
+                                .withTargetScreenArea({screenPos.x, screenPos.y, 1, 1}),
                 [safe = juce::Component::SafePointer<SampleSlotWidget>(this)] (int r)
                 {
                     if (safe == nullptr) return;
@@ -213,26 +218,36 @@ public:
                 });
             return;
         }
-        // Left-click on empty → browse. Left-click on loaded → start drag.
-        if (! isLoaded())
-        {
-            launchChooser();
-            return;
-        }
-        dragStartY_ = e.position.y;
+        // Left-click: record state. Tap-and-release → browse. Press-and-drag
+        // → step through the folder. mouseUp decides which gesture happened.
+        dragStartY_   = e.position.y;
         dragStartIdx_ = currentIdx_;
+        dragMoved_    = false;
+        mouseDownMs_  = juce::Time::getMillisecondCounter();
     }
 
     void mouseDrag(const juce::MouseEvent& e) override
     {
         if (! isLoaded()) return;
-        // Vertical drag → step through the list. ~10 pixels per step.
         const int n = names_.size();
         if (n < 2) return;
+        // ~10 pixels per step; mark this as a drag gesture once we cross the
+        // threshold so mouseUp won't also fire the chooser.
         const float dy = dragStartY_ - e.position.y;
+        if (std::abs(dy) >= kDragThresholdPx) dragMoved_ = true;
         const int delta = static_cast<int>(dy / 10.0f);
         int newIdx = juce::jlimit(0, n - 1, dragStartIdx_ + delta);
         if (newIdx != currentIdx_) commitIndex(newIdx);
+    }
+
+    void mouseUp(const juce::MouseEvent& e) override
+    {
+        if (e.mods.isRightButtonDown()) return;
+        // Tap (no drag, quick release) → open the picker. Threshold matches
+        // a normal click — anything held longer or with movement is a drag.
+        const auto dt = juce::Time::getMillisecondCounter() - mouseDownMs_;
+        if (! dragMoved_ && dt < kClickWindowMs)
+            launchChooser();
     }
 
     void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails& wheel) override
@@ -301,10 +316,15 @@ private:
             });
     }
 
+    static constexpr float        kDragThresholdPx = 4.0f;
+    static constexpr juce::uint32 kClickWindowMs   = 250;
+
     juce::StringArray names_;
     int currentIdx_ = -1;
     float dragStartY_ = 0.0f;
     int   dragStartIdx_ = 0;
+    bool  dragMoved_ = false;
+    juce::uint32 mouseDownMs_ = 0;
     std::unique_ptr<juce::FileChooser> chooser_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleSlotWidget)

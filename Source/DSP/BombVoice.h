@@ -165,7 +165,15 @@ public:
 
     float tick() noexcept
     {
-        if (!ampEnv_.isActive() || fadeoutGain_ <= 0.0f) return 0.0f;
+        // Once the amp envelope hits its noise floor, the sub/mid layers go
+        // silent on their own, but the SAMPLE layer bypasses ampEnv — short
+        // decay settings would slice it mid-cycle. Kick off the existing
+        // 5 ms fadeout so the sample bleeds out cleanly. Click-free at any
+        // decay value (including 0).
+        if (!ampEnv_.isActive() && fadeoutStep_ <= 0.0f && fadeoutGain_ > 0.0f)
+            startFadeout(sampleRate_);
+
+        if (fadeoutGain_ <= 0.0f) return 0.0f;
 
         // SUB layer
         const float subFreq = pitchEnv_.tick();
