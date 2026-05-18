@@ -661,6 +661,19 @@ juce::String BomboProcessor::voiceBSamplePath() const
     return voiceBSamplePath_;
 }
 
+BomboProcessor::VoiceBSnapshot BomboProcessor::snapshotVoiceBSample() const
+{
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    return { voiceBSample_, voiceBSamplePath_ };
+}
+
+void BomboProcessor::installVoiceBSampleSnapshot(VoiceBSnapshot snap)
+{
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    voiceBSample_     = std::move(snap.buffer);
+    voiceBSamplePath_ = std::move(snap.path);
+}
+
 void BomboProcessor::randomizeBombo()
 {
     using namespace bombo::pid;

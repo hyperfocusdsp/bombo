@@ -80,4 +80,24 @@ void PersistentState::setBbsLastScreen(int screenEnum)
     props_->saveIfNeeded();
 }
 
+juce::File PersistentState::getLastBounceDir() const
+{
+    // Prefer userMusicDirectory; fall back to home if Music doesn't exist
+    // (headless WSL / minimal Linux installs often lack ~/Music).
+    auto def = juce::File::getSpecialLocation(juce::File::userMusicDirectory);
+    if (! def.isDirectory())
+        def = juce::File::getSpecialLocation(juce::File::userHomeDirectory);
+
+    const auto stored = props_->getValue("bounce.lastDir", juce::String());
+    if (stored.isEmpty()) return def;
+    const juce::File f(stored);
+    return (f.isDirectory() ? f : def);
+}
+
+void PersistentState::setLastBounceDir(const juce::File& dir)
+{
+    props_->setValue("bounce.lastDir", dir.getFullPathName());
+    props_->saveIfNeeded();
+}
+
 } // namespace bombo
