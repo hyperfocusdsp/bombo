@@ -192,6 +192,7 @@ if(BOMBO_BUILD_TESTS)
         tests/StateRoundTripTests.cpp
         tests/BbsPersistenceTests.cpp
         tests/BombShapeTests.cpp
+        tests/OfflineBouncerTests.cpp
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.cpp
@@ -210,6 +211,7 @@ if(BOMBO_BUILD_TESTS)
             juce::juce_graphics
             juce::juce_dsp
             juce::juce_audio_basics
+            juce::juce_audio_formats
         PUBLIC
             juce::juce_recommended_config_flags)
     if(BOMBO_LTO)
