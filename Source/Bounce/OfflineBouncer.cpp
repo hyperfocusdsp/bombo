@@ -64,6 +64,12 @@ void OfflineBouncer::run()
                                   static_cast<int>(stateBlob_.getSize()));
     clone.installVoiceBSampleSnapshot(std::move(voiceBSnapshot_));
 
+    // Force one-shot bounce regardless of the user's stored Loop state — a
+    // bounce captured while Loop=on would otherwise contain ~20 kicks before
+    // the 10 s silence-trim cap triggered. Loop param ID: pid::loopOn.
+    if (auto* loopParam = clone.apvts.getParameter("loop_on"))
+        loopParam->setValueNotifyingHost(0.0f);
+
     // Force stereo I/O on the clone (the live processor accepts mono+stereo
     // but we always bounce stereo so VOICE B's stereo content + the
     // stereo finalizer survive).
