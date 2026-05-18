@@ -113,6 +113,8 @@ target_sources(Bombo
         Source/GUI/BBS/ProgressionManager.cpp
         Source/GUI/BBS/BoomFeed.h
         Source/GUI/BBS/BoomFeed.cpp
+        Source/GUI/Nose/NoseComponent.h
+        Source/GUI/Nose/NoseComponent.cpp
         Source/GUI/BombShape.h
         Source/GUI/BombShape.cpp
         Source/GUI/LayoutManager.h
