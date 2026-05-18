@@ -109,6 +109,8 @@ target_sources(Bombo
         Source/GUI/PresetBarComponent.cpp
         Source/GUI/BBS/BBSComponent.h
         Source/GUI/BBS/BBSComponent.cpp
+        Source/GUI/BBS/ProgressionManager.h
+        Source/GUI/BBS/ProgressionManager.cpp
         Source/GUI/BombShape.h
         Source/GUI/BombShape.cpp
         Source/GUI/LayoutManager.h
@@ -191,8 +193,10 @@ if(BOMBO_BUILD_TESTS)
         tests/VoiceStealingTests.cpp
         tests/StateRoundTripTests.cpp
         tests/BbsPersistenceTests.cpp
+        tests/BBSProgressionTests.cpp
         tests/BombShapeTests.cpp
         tests/OfflineBouncerTests.cpp
+        Source/GUI/BBS/ProgressionManager.cpp
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.cpp
