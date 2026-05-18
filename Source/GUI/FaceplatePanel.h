@@ -43,6 +43,7 @@ public:
         std::function<void()>                  onClear;        // clearVoiceBSample
         std::function<juce::StringArray()>     getNames;       // voiceBSampleNames
         std::function<int()>                   getCurrentIdx;  // voiceBSampleIndex
+        std::function<void()>                  onLoadFactory;  // loadFactorySamples
     };
 
     // Host BPM accessor for the header's BPM display. Returns 0 in

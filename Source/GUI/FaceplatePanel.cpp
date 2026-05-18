@@ -313,10 +313,11 @@ FaceplatePanel::addSampleSlot(Section& s, const juce::String& displayName,
     // Forward callbacks straight from the slot widget to whatever the
     // editor wired in. Owner is responsible for keeping the processor side
     // safe across editor open/close.
-    c->sampleSlot->onBrowsePick  = sampleSlotCb_.onBrowsePick;
-    c->sampleSlot->onIndexChange = sampleSlotCb_.onIndexChange;
-    c->sampleSlot->onClear       = sampleSlotCb_.onClear;
-    c->sampleSlot->getNames      = sampleSlotCb_.getNames;
+    c->sampleSlot->onBrowsePick    = sampleSlotCb_.onBrowsePick;
+    c->sampleSlot->onIndexChange   = sampleSlotCb_.onIndexChange;
+    c->sampleSlot->onClear         = sampleSlotCb_.onClear;
+    c->sampleSlot->onLoadFactory   = sampleSlotCb_.onLoadFactory;
+    c->sampleSlot->getNames        = sampleSlotCb_.getNames;
     c->sampleSlot->getCurrentIndex = sampleSlotCb_.getCurrentIdx;
     // Initial population — restore any state the processor already holds
     // (DAW session restore may have populated it before the editor opened).
