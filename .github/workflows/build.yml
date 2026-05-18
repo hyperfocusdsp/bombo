@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Opt into Node.js 24 for actions/* that still ship with Node 20 runtimes.
+# GitHub forces this default starting 2026-06-02 — pinning here avoids any
+# surprise red CI during the user's AFK window.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build:
     name: ${{ matrix.os }}
