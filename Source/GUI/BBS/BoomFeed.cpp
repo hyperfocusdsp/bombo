@@ -146,7 +146,8 @@ juce::String BoomFeed::snapshotToFilename(const Snapshot& s) const
         std::memcpy(&bits, &val, sizeof(bits));
         h ^= bits * 2654435761u;  // Knuth multiplicative hash
     }
-    const juce::String hex = juce::String::toHexString(static_cast<int>(h)).toUpperCase();
+    const juce::String hex = juce::String::toHexString(static_cast<int>(h))
+                                 .paddedLeft('0', 8).toUpperCase();
     return "KICK-" + hex.substring(0, 4) + "-" + hex.substring(4, 8) + ".KCK";
 }
 
