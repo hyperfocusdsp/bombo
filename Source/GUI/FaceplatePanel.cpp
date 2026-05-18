@@ -61,6 +61,9 @@ constexpr int kNCols        = 7;
 
 FaceplatePanel::~FaceplatePanel() = default;
 
+FaceplatePanel::Control::Control()  = default;
+FaceplatePanel::Control::~Control() = default;
+
 void FaceplatePanel::setPresetBank(PresetBank& bank)
 {
     if (presetBar_ != nullptr) return;  // idempotent
