@@ -92,6 +92,8 @@ public:
     // private noseOverlay_ member directly.
     void setNoseProgressionLevel(int level) { noseOverlay_.setProgressionLevel(level); }
     void setNoseFirstEntryDone(bool done)   { noseOverlay_.setFirstEntryDone(done); }
+    void setNoseForceResetReady(std::function<bool()> fn) { noseOverlay_.isForceResetReady = std::move(fn); }
+    void setNoseForceResetCallback(std::function<void()> fn) { noseOverlay_.onForceReset = std::move(fn); }
 
 private:
     enum class CtlKind { Knob, Choice, Toggle, SampleSlot };
