@@ -51,8 +51,9 @@ void BBSComponent::setPresetBank(PresetBank* pb) noexcept
 
 void BBSComponent::show()
 {
-    introCharPos_  = 0;
-    introComplete_ = false;
+    introCharPos_        = 0;
+    introComplete_       = false;
+    myDownloadsSelected_ = 0;
     buildIntroText();
     buildScrollerText();
     refreshSysopVoice();
@@ -168,8 +169,9 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
         }
         if (key == juce::KeyPress::downKey)
         {
-            myDownloadsSelected_ = juce::jmin(countUserPresets() - 1,
-                                               myDownloadsSelected_ + 1);
+            const int n = countUserPresets();
+            if (n > 0)
+                myDownloadsSelected_ = juce::jmin(n - 1, myDownloadsSelected_ + 1);
             repaint(); return true;
         }
         if (key == juce::KeyPress::returnKey && apvts_ != nullptr)
@@ -197,7 +199,14 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
                 if (row == myDownloadsSelected_)
                 {
                     presetBank_->deleteAt(i);
-                    myDownloadsSelected_ = juce::jmax(0, myDownloadsSelected_ - 1);
+                    const int remaining = [&]() {
+                        int n = 0;
+                        for (int j = 0; j < presetBank_->size(); ++j)
+                            if (presetBank_->at(j).source == PresetBank::Source::User) ++n;
+                        return n;
+                    }();
+                    myDownloadsSelected_ = (remaining == 0) ? -1
+                                                             : juce::jmax(0, myDownloadsSelected_ - 1);
                     break;
                 }
                 ++row;

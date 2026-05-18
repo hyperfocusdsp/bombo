@@ -1,4 +1,5 @@
 #include "ProgressionManager.h"
+#include "SysopContent.h"
 #include <juce_core/juce_core.h>
 
 namespace bombo
@@ -44,8 +45,12 @@ void ProgressionManager::loadFromState()
     const auto csv = state_.getBbsUnlockedSysops();
     unlockedSysops_.clear();
     for (auto& tok : juce::StringArray::fromTokens(csv, ",", ""))
-        if (tok.isNotEmpty())
-            unlockedSysops_.push_back(tok.trim().getIntValue());
+    {
+        if (tok.isEmpty()) continue;
+        const int idx = tok.trim().getIntValue();
+        if (idx >= 0 && idx < kSysopCount)
+            unlockedSysops_.push_back(idx);
+    }
     if (unlockedSysops_.empty())
         unlockedSysops_ = { 0, 1, 2 };
 }
