@@ -62,7 +62,13 @@ juce_add_binary_data(BomboResources
         Resources/Presets/13_synthwave_body.json
         Resources/Presets/14_lofi_click.json
         Resources/Presets/15_9000_sub.json
-        Resources/Presets/16_tape_tom.json)
+        Resources/Presets/16_tape_tom.json
+        Resources/Samples/kick_01.wav
+        Resources/Samples/kick_02.wav
+        Resources/Samples/kick_03.wav
+        Resources/Samples/kick_04.wav
+        Resources/Samples/kick_05.wav
+        Resources/Samples/kick_06.wav)
 
 target_sources(Bombo
     PRIVATE
