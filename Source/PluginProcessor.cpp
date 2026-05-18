@@ -2,6 +2,9 @@
 #include "PluginEditor.h"
 #include "Parameters.h"        // createParameterLayout (heavy include, .cpp-only)
 #include "DSP/SampleSlot.h"
+#include <BinaryData.h>        // factory WAV bank baked in by juce_add_binary_data
+#include <algorithm>
+#include <numeric>
 
 BomboProcessor::BomboProcessor()
     : juce::AudioProcessor(BusesProperties()
@@ -161,20 +164,36 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     // before the SR was known. Loading off the audio thread via callAsync.
     juce::String pendingPath;
     bool pendingIsFolder = false;
+    bool sampleAlreadyLoaded = false;
     {
         juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
         pendingPath = pendingRestorePath_;
         pendingIsFolder = pendingRestoreIsFolder_;
         pendingRestorePath_.clear();
+        sampleAlreadyLoaded = (voiceBSample_ != nullptr);
     }
     if (pendingPath.isNotEmpty())
     {
+        const bool isFactoryRestore = pendingPath.startsWith("<factory>");
         juce::MessageManager::callAsync(
-            [this, pendingPath, pendingIsFolder]()
+            [this, pendingPath, pendingIsFolder, isFactoryRestore]()
             {
-                if (pendingIsFolder) this->setVoiceBSampleFolder(juce::File(pendingPath));
-                else                 this->loadVoiceBSample      (juce::File(pendingPath));
+                if (isFactoryRestore)
+                {
+                    this->loadFactorySamples();
+                    const int savedIdx = pendingPath.fromFirstOccurrenceOf(":", false, false)
+                                                    .getIntValue();
+                    if (savedIdx > 0) this->loadVoiceBSampleByIndex(savedIdx);
+                }
+                else if (pendingIsFolder) this->setVoiceBSampleFolder(juce::File(pendingPath));
+                else                      this->loadVoiceBSample      (juce::File(pendingPath));
             });
+    }
+    else if (! sampleAlreadyLoaded)
+    {
+        // Fresh install / blank state — bootstrap the factory bank so VOICE B
+        // has something playable out of the box.
+        juce::MessageManager::callAsync([this]() { this->loadFactorySamples(); });
     }
 
     chain_.setSampleRate(currentSampleRate_);
@@ -436,6 +455,58 @@ juce::AudioProcessorEditor* BomboProcessor::createEditor()
     return new BomboEditor(*this);
 }
 
+namespace
+{
+// Discover bundled factory WAVs by scanning BinaryData's named-resource
+// list. Returns parallel arrays sorted by original filename so the
+// playback order matches the lexical order of Resources/Samples/.
+struct FactoryBank
+{
+    std::vector<juce::String> originalFilenames;  // e.g. "kick_01.wav"
+    std::vector<juce::String> resourceNames;      // e.g. "kick_01_wav"
+};
+
+FactoryBank discoverFactoryBank()
+{
+    FactoryBank b;
+    for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
+    {
+        const juce::String resName(BinaryData::namedResourceList[i]);
+        const juce::String origName(
+            BinaryData::getNamedResourceOriginalFilename(resName.toRawUTF8()));
+        if (origName.startsWith("kick_") && origName.endsWithIgnoreCase(".wav"))
+        {
+            b.originalFilenames.push_back(origName);
+            b.resourceNames.push_back(resName);
+        }
+    }
+    // Stable lexical sort over both arrays in lockstep.
+    std::vector<size_t> idx(b.originalFilenames.size());
+    std::iota(idx.begin(), idx.end(), size_t{0});
+    std::sort(idx.begin(), idx.end(),
+              [&](size_t a, size_t c) {
+                  return b.originalFilenames[a].compareIgnoreCase(b.originalFilenames[c]) < 0;
+              });
+    FactoryBank sorted;
+    sorted.originalFilenames.reserve(idx.size());
+    sorted.resourceNames.reserve(idx.size());
+    for (auto i : idx)
+    {
+        sorted.originalFilenames.push_back(b.originalFilenames[i]);
+        sorted.resourceNames.push_back(b.resourceNames[i]);
+    }
+    return sorted;
+}
+
+// JUCE's BinaryData generator mangles non-alphanumerics to '_', so
+// "kick_01.wav" → "kick_01_wav". We use this to convert a display name
+// (which we persist in voiceBFactoryNames_) back to the resource id.
+juce::String factoryResourceFromName(const juce::String& filename) noexcept
+{
+    return filename.replaceCharacter('.', '_');
+}
+} // namespace
+
 void BomboProcessor::loadVoiceBSample(const juce::File& file)
 {
     auto buf = bombo::SampleSlot::loadFromFile(
@@ -443,10 +514,12 @@ void BomboProcessor::loadVoiceBSample(const juce::File& file)
     juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
     voiceBSample_       = std::move(buf);
     voiceBSamplePath_   = (voiceBSample_ ? file.getFullPathName() : juce::String());
-    // Single-file load clears any folder browse state.
+    // Single-file load clears any folder browse state AND factory mode.
     voiceBFolderPath_.clear();
     voiceBFolderSamples_.clear();
     voiceBFolderIndex_  = -1;
+    voiceBIsFactory_    = false;
+    voiceBFactoryNames_.clear();
 }
 
 void BomboProcessor::setVoiceBSampleFolder(const juce::File& filePicked)
@@ -487,23 +560,87 @@ void BomboProcessor::setVoiceBSampleFolder(const juce::File& filePicked)
     voiceBSamplePath_  = (voiceBSample_
                           ? found.getReference(idx).getFullPathName()
                           : juce::String());
+    voiceBIsFactory_   = false;
+    voiceBFactoryNames_.clear();
 }
 
 void BomboProcessor::loadVoiceBSampleByIndex(int idx)
 {
-    juce::File file;
+    bool isFactory = false;
+    juce::String factoryRes;
+    juce::String factoryDisplay;
+    juce::File   userFile;
     {
         juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
-        if (idx < 0 || idx >= static_cast<int>(voiceBFolderSamples_.size()))
-            return;
-        file = voiceBFolderSamples_[static_cast<size_t>(idx)];
+        if (voiceBIsFactory_)
+        {
+            if (idx < 0 || idx >= static_cast<int>(voiceBFactoryNames_.size()))
+                return;
+            factoryDisplay = voiceBFactoryNames_[static_cast<size_t>(idx)];
+            factoryRes     = factoryResourceFromName(factoryDisplay);
+            isFactory      = true;
+        }
+        else
+        {
+            if (idx < 0 || idx >= static_cast<int>(voiceBFolderSamples_.size()))
+                return;
+            userFile = voiceBFolderSamples_[static_cast<size_t>(idx)];
+        }
     }
-    auto buf = bombo::SampleSlot::loadFromFile(
-        file, static_cast<double>(currentSampleRate_));
+
+    std::shared_ptr<const juce::AudioBuffer<float>> buf;
+    juce::String newPath;
+    if (isFactory)
+    {
+        int sizeBytes = 0;
+        const char* data = BinaryData::getNamedResource(factoryRes.toRawUTF8(), sizeBytes);
+        if (data == nullptr || sizeBytes <= 0) return;
+        buf = bombo::SampleSlot::loadFromMemory(
+            data, static_cast<size_t>(sizeBytes),
+            static_cast<double>(currentSampleRate_));
+        newPath = factoryDisplay;
+    }
+    else
+    {
+        buf = bombo::SampleSlot::loadFromFile(
+            userFile, static_cast<double>(currentSampleRate_));
+        newPath = buf ? userFile.getFullPathName() : juce::String();
+    }
+
     juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
     voiceBFolderIndex_ = idx;
     voiceBSample_      = std::move(buf);
-    voiceBSamplePath_  = (voiceBSample_ ? file.getFullPathName() : juce::String());
+    voiceBSamplePath_  = newPath;
+}
+
+void BomboProcessor::loadFactorySamples()
+{
+    const auto bank = discoverFactoryBank();
+    if (bank.originalFilenames.empty()) return;
+
+    int sizeBytes = 0;
+    const char* data = BinaryData::getNamedResource(bank.resourceNames[0].toRawUTF8(),
+                                                    sizeBytes);
+    auto buf = (data != nullptr && sizeBytes > 0 && currentSampleRate_ > 0.0f)
+        ? bombo::SampleSlot::loadFromMemory(
+              data, static_cast<size_t>(sizeBytes),
+              static_cast<double>(currentSampleRate_))
+        : std::shared_ptr<const juce::AudioBuffer<float>>{};
+
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    voiceBIsFactory_     = true;
+    voiceBFactoryNames_  = bank.originalFilenames;
+    voiceBFolderSamples_.clear();
+    voiceBFolderPath_    = "<factory>";   // sentinel; state save recognises this
+    voiceBFolderIndex_   = 0;
+    voiceBSample_        = std::move(buf);
+    voiceBSamplePath_    = bank.originalFilenames[0];
+}
+
+bool BomboProcessor::voiceBIsFactory() const noexcept
+{
+    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+    return voiceBIsFactory_;
 }
 
 void BomboProcessor::clearVoiceBSample()
@@ -514,6 +651,8 @@ void BomboProcessor::clearVoiceBSample()
     voiceBFolderPath_.clear();
     voiceBFolderSamples_.clear();
     voiceBFolderIndex_ = -1;
+    voiceBIsFactory_   = false;
+    voiceBFactoryNames_.clear();
 }
 
 juce::String BomboProcessor::voiceBSamplePath() const
@@ -625,9 +764,18 @@ juce::StringArray BomboProcessor::voiceBSampleNames() const
 {
     juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
     juce::StringArray out;
-    out.ensureStorageAllocated(static_cast<int>(voiceBFolderSamples_.size()));
-    for (const auto& f : voiceBFolderSamples_)
-        out.add(f.getFileNameWithoutExtension());
+    if (voiceBIsFactory_)
+    {
+        out.ensureStorageAllocated(static_cast<int>(voiceBFactoryNames_.size()));
+        for (const auto& s : voiceBFactoryNames_)
+            out.add(s.upToLastOccurrenceOf(".", false, false));
+    }
+    else
+    {
+        out.ensureStorageAllocated(static_cast<int>(voiceBFolderSamples_.size()));
+        for (const auto& f : voiceBFolderSamples_)
+            out.add(f.getFileNameWithoutExtension());
+    }
     return out;
 }
 
@@ -643,12 +791,24 @@ void BomboProcessor::getStateInformation(juce::MemoryBlock& destData)
     // child node so it round-trips through XML serialization. `folder`
     // (when present) tells the restore path to use setVoiceBSampleFolder
     // (which repopulates the cached list); `path` alone is treated as a
-    // single-file load.
+    // single-file load. Factory mode uses "<factory>" as the folder
+    // sentinel and "<factory>:<idx>" as the path so the restore can
+    // route to loadFactorySamples + loadVoiceBSampleByIndex.
     {
         juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
         auto child = apvts.state.getOrCreateChildWithName("VoiceBSample", nullptr);
-        child.setProperty("path",   voiceBSamplePath_, nullptr);
-        child.setProperty("folder", voiceBFolderPath_, nullptr);
+        if (voiceBIsFactory_)
+        {
+            child.setProperty("folder", "<factory>", nullptr);
+            child.setProperty("path",
+                juce::String("<factory>:") + juce::String(voiceBFolderIndex_),
+                nullptr);
+        }
+        else
+        {
+            child.setProperty("path",   voiceBSamplePath_, nullptr);
+            child.setProperty("folder", voiceBFolderPath_, nullptr);
+        }
     }
     if (auto xml = apvts.state.createXml())
         copyXmlToBinary(*xml, destData);
@@ -672,6 +832,8 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
             ? child.getProperty("folder", juce::String()).toString() : juce::String();
         if (path.isNotEmpty())
         {
+            const bool isFactoryRestore = path.startsWith("<factory>");
+
             // Stash for prepareToPlay if SR isn't known yet (host hasn't
             // called prepare). Either way fire an async load — if SR is
             // ready it'll succeed, otherwise prepareToPlay will replay it.
@@ -681,9 +843,16 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
                 pendingRestoreIsFolder_ = folder.isNotEmpty();
             }
             juce::MessageManager::callAsync(
-                [this, path, folder]()
+                [this, path, folder, isFactoryRestore]()
                 {
-                    if (folder.isNotEmpty())
+                    if (isFactoryRestore)
+                    {
+                        this->loadFactorySamples();
+                        const int savedIdx = path.fromFirstOccurrenceOf(":", false, false)
+                                                  .getIntValue();
+                        if (savedIdx > 0) this->loadVoiceBSampleByIndex(savedIdx);
+                    }
+                    else if (folder.isNotEmpty())
                         this->setVoiceBSampleFolder(juce::File(path));
                     else
                         this->loadVoiceBSample(juce::File(path));

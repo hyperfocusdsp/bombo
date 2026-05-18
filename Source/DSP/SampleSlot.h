@@ -29,6 +29,35 @@ struct SampleSlot
         juce::AudioFormatManager fm;
         fm.registerBasicFormats();
         std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(file));
+        return prepareReader(reader.get(), targetSampleRate);
+    }
+
+    // Variant that loads from an in-memory WAV/AIFF blob (BinaryData
+    // factory samples). Same fade/cap/resample contract as loadFromFile.
+    static std::shared_ptr<const juce::AudioBuffer<float>>
+    loadFromMemory(const void* data, size_t numBytes, double targetSampleRate)
+    {
+        if (data == nullptr || numBytes == 0 || targetSampleRate <= 0.0)
+            return nullptr;
+
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+        // JUCE 8 createReaderFor takes a unique_ptr<InputStream> and assumes
+        // ownership of the stream regardless of whether the reader is
+        // constructed successfully.
+        std::unique_ptr<juce::InputStream> stream(
+            new juce::MemoryInputStream(data, numBytes, /*keepCopy=*/ false));
+        std::unique_ptr<juce::AudioFormatReader> reader(
+            fm.createReaderFor(std::move(stream)));
+        return prepareReader(reader.get(), targetSampleRate);
+    }
+
+private:
+    // Shared post-reader pipeline: read leading slice, mono-mix, resample
+    // to target SR, hard-cap at 200 ms, bake linear fade-to-silence.
+    static std::shared_ptr<const juce::AudioBuffer<float>>
+    prepareReader(juce::AudioFormatReader* reader, double targetSampleRate)
+    {
         if (reader == nullptr || reader->lengthInSamples <= 0)
             return nullptr;
 
