@@ -140,6 +140,24 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         faceplate.setNoseProgressionLevel(newLevel);
     };
 
+    // Force-reset: DRIVE=0 + REVERB=max + 3 rapid taps resets all BBS progression.
+    faceplate.setNoseForceResetReady([this]() -> bool
+    {
+        const auto* driveParam  = processorRef.apvts.getParameter(bombo::pid::driveAmount);
+        const auto* reverbParam = processorRef.apvts.getParameter(bombo::pid::reverbSize);
+        if (driveParam == nullptr || reverbParam == nullptr) return false;
+        return driveParam->getValue() < 0.01f && reverbParam->getValue() > 0.99f;
+    });
+
+    faceplate.setNoseForceResetCallback([this]()
+    {
+        processorRef.progressionManager().forceReset();
+        faceplate.setNoseProgressionLevel(0);
+        faceplate.setNoseFirstEntryDone(false);
+        processorRef.persistentState().setBbsUnlocked(false);
+        triggerGlitch(GlitchLevel::GreenPulse, 200);
+    });
+
     // Layout-edit overlay — ported from an earlier project. F2 / Ctrl+Shift+E
     // toggles. Sits between faceplate and bbs_ in z-order so it doesn't
     // bleed through the BBS overlay.
@@ -421,16 +439,6 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
     if (layoutEditor_ && layoutEditor_->isEditMode())
     {
         if (layoutEditor_->handleKey(key)) return true;
-    }
-
-    // Dev-only BBS shortcut — replaced in Phase 2 by long-press on the
-    // central nose detonator (the Archie fuze). Use getKeyCode() rather
-    // than getTextCharacter(): under Ctrl modifiers the text character
-    // becomes a control byte (Ctrl+B = STX = 0x02), not 'b'.
-    if (mods.isCtrlDown() && mods.isShiftDown() && key.getKeyCode() == 'B')
-    {
-        if (! bbs_.isVisible()) bbs_.show();
-        return true;
     }
 
     // Transport-style keybinds:

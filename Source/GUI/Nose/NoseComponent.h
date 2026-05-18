@@ -32,6 +32,10 @@ public:
     // Fired on each tap 1-6 during the first-time sequence.
     std::function<void(int)> onGlitchTap;
 
+    // Force-reset: 3 rapid taps within 800ms when the caller says conditions are met.
+    std::function<bool()> isForceResetReady;  // set by FaceplatePanel via PluginEditor
+    std::function<void()> onForceReset;       // set by FaceplatePanel via PluginEditor
+
     void paint(juce::Graphics&) override;
     void mouseDown(const juce::MouseEvent&) override;
     juce::String getTooltip() override;
@@ -44,6 +48,12 @@ private:
 
     static constexpr int kRequiredTaps  = 7;
     static constexpr int kTapTimeoutMs  = 2000;
+
+    int        resetTapCount_   = 0;
+    juce::Time lastResetTapTime_;
+
+    static constexpr int kResetTaps    = 3;
+    static constexpr int kResetTimeout = 800;
 
     // Tooltip messages per level.
     static constexpr const char* kTooltips[5] = {

@@ -29,6 +29,20 @@ void NoseComponent::mouseDown(const juce::MouseEvent&)
     if (timedOut) tapCount_ = 0;
     lastTapTime_ = now;
 
+    // Force-reset: only available after first-time sequence is done.
+    if (firstEntryDone_ && isForceResetReady && isForceResetReady())
+    {
+        const bool fastTap = (now - lastResetTapTime_).inMilliseconds() < kResetTimeout;
+        lastResetTapTime_ = now;
+        resetTapCount_ = fastTap ? resetTapCount_ + 1 : 1;
+        if (resetTapCount_ >= kResetTaps)
+        {
+            resetTapCount_ = 0;
+            if (onForceReset) onForceReset();
+            return;  // don't also open BBS
+        }
+    }
+
     if (firstEntryDone_)
     {
         if (onActivationComplete) onActivationComplete();
