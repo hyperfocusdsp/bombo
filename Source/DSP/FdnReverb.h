@@ -148,7 +148,12 @@ public:
     {
         const int maxSamples = static_cast<int>(predelay_.size()) - 1;
         if (predelayMs < 0.0f) predelayMs = 0.0f;
-        int n = static_cast<int>(predelayMs / 1000.0f * sampleRate_);
+        // Round-to-nearest (vs. truncation) so the predelay tap doesn't
+        // bias one direction. Predelay isn't tempo-relative today so
+        // sub-sample precision is overkill; but matching the rounding
+        // strategy used everywhere else (LOOP scheduler, etc.) keeps
+        // the codebase consistent and avoids future bug-class drift.
+        int n = static_cast<int>(std::round(predelayMs * 0.001f * sampleRate_));
         if (n > maxSamples) n = maxSamples;
         predelaySamples_ = n;
     }

@@ -26,7 +26,7 @@ public:
         : buffer_(static_cast<size_t>(kMaxSamples), 0.0f)
     {
         setSampleRate(sampleRate);
-        delaySamples_ = static_cast<int>(0.25f * sampleRate); // 250 ms default
+        delaySamples_ = 0.25f * sampleRate;   // 250 ms default
     }
 
     void setSampleRate(float sr) noexcept
@@ -36,10 +36,18 @@ public:
         setSvfCoefs(300.0f, 0.707f);
     }
 
+    // Stores the tap as a float so tempo-sync delays don't quantize to
+    // integer samples. At 44.1 kHz with irrational BPM × note-value
+    // ratios the int truncation drift used to compound against the
+    // LOOP scheduler (which round-to-nearest), producing audible "delay
+    // creeping" over long loops. The process() read tap already
+    // interpolates linearly between idx0/idx1 so sub-sample taps cost
+    // nothing extra at runtime.
     void setTimeMs(float ms) noexcept
     {
-        const int n = static_cast<int>((ms < 1.0f ? 1.0f : ms) / 1000.0f * sampleRate_);
-        delaySamples_ = n < 1 ? 1 : (n > kMaxSamples - 1 ? kMaxSamples - 1 : n);
+        const float n      = (ms < 1.0f ? 1.0f : ms) * 0.001f * sampleRate_;
+        const float maxF   = static_cast<float>(kMaxSamples - 1);
+        delaySamples_ = n < 1.0f ? 1.0f : (n > maxF ? maxF : n);
     }
 
     void setFeedback(float fb) noexcept
@@ -126,7 +134,7 @@ public:
         const int bufLen = static_cast<int>(buffer_.size());
         const float bufLenF = static_cast<float>(bufLen);
         float readPosF = static_cast<float>(writePos_)
-                       - static_cast<float>(delaySamples_)
+                       - delaySamples_
                        + driftOffset
                        + bufLenF;
         // rem_euclid for floats — keep in [0, bufLen).
@@ -238,7 +246,7 @@ private:
     std::vector<float> buffer_;
     int writePos_ = 0;
     float sampleRate_ = 48000.0f;
-    int delaySamples_ = 12000;
+    float delaySamples_ = 12000.0f;
     float feedback_ = 0.45f;
     float fbDampZ_ = 0.0f;
     float fbDampCoef_ = 0.25f;
