@@ -87,6 +87,18 @@ public:
     void loadFactorySamples();
     bool voiceBIsFactory() const noexcept;
 
+    // Snapshot/install for the OfflineBouncer: bouncer takes a shared_ptr
+    // snapshot of the currently-loaded sample on the message thread, then
+    // installs it directly on a clone (skips the async file I/O). Path
+    // round-trips so the clone reports the correct sample name if asked.
+    struct VoiceBSnapshot
+    {
+        std::shared_ptr<const juce::AudioBuffer<float>> buffer;
+        juce::String path;
+    };
+    VoiceBSnapshot snapshotVoiceBSample() const;
+    void           installVoiceBSampleSnapshot(VoiceBSnapshot snap);
+
     // DICE: randomize every musically-meaningful param in one shot. Ranges
     // are deliberately bounded inside each param's domain (no full-scale
     // chaos) so the result still sounds like a kick. Excludes transport

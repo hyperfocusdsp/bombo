@@ -34,7 +34,9 @@ BomboEditor::BomboEditor(BomboProcessor& p)
       processorRef(p),
       faceplate(p.apvts, &p.waveBuffer(), makeSampleSlotCallbacks(p),
                 [&p]() { return p.hostBpm(); },
-                [&p]() { p.randomizeBombo(); })
+                [&p]() { p.randomizeBombo(); },
+                [this] { startBounceFlow(bombo::OfflineBouncer::Format::Wav); },
+                [this] { startBounceFlow(bombo::OfflineBouncer::Format::Aiff); })
 {
     // Register the three bundled themes (BANDW/PHOSPHOR/NIGHTRUN) from
     // BinaryData. Must run before any component setup so that col::xxx()
@@ -354,4 +356,83 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
         return true;
     }
     return false;
+}
+
+void BomboEditor::startBounceFlow(bombo::OfflineBouncer::Format format)
+{
+    const bool isWav = (format == bombo::OfflineBouncer::Format::Wav);
+    const juce::String ext      = isWav ? ".wav" : ".aiff";
+    const juce::String fmtLabel = isWav ? "WAV"  : "AIFF";
+    const juce::String filter   = isWav ? "*.wav" : "*.aiff;*.aif";
+
+    const juce::File startDir = persistentState_.getLastBounceDir();
+    // Timestamped default name so successive bounces don't silently
+    // overwrite each other; user can rename in the dialog.
+    const juce::String stamp = juce::Time::getCurrentTime().formatted("%Y%m%d_%H%M%S");
+    const juce::File   defaultFile = startDir.getChildFile("Bombo_" + stamp + ext);
+
+    // parentComponent (this) anchors the dialog to the editor's window
+    // owner so the OS spawns it on the same screen — without it, multi-
+    // monitor setups land the chooser on whichever screen the OS thinks
+    // is "active" (often the wrong one).
+    bounceChooser_ = std::make_unique<juce::FileChooser>(
+        "Bounce to " + fmtLabel,
+        defaultFile,
+        filter,
+        /*useOSNativeDialogBox=*/ true,
+        /*treatFilePackagesAsDirectories=*/ false,
+        /*parentComponent=*/ this);
+
+    const int flags = juce::FileBrowserComponent::saveMode
+                    | juce::FileBrowserComponent::canSelectFiles
+                    | juce::FileBrowserComponent::warnAboutOverwriting;
+
+    bounceChooser_->launchAsync(
+        flags,
+        [this, format, ext](const juce::FileChooser& chooser)
+        {
+            juce::File chosen = chooser.getResult();
+            if (chosen == juce::File()) return;   // user cancelled
+
+            // Ensure the right extension regardless of what user typed.
+            if (! chosen.hasFileExtension(ext))
+                chosen = chosen.withFileExtension(ext);
+
+            persistentState_.setLastBounceDir(chosen.getParentDirectory());
+
+            bouncer_ = bombo::OfflineBouncer::startAsync(
+                processorRef,
+                chosen,
+                format,
+                [this](bool ok, juce::String message)
+                {
+                    if (ok)
+                    {
+                        // Tooltip-style toast — the FileChooser's parent
+                        // window is already gone, so we use AlertWindow's
+                        // async ok dialog. Keep terse.
+                        juce::NativeMessageBox::showAsync(
+                            juce::MessageBoxOptions()
+                                .withIconType(juce::MessageBoxIconType::InfoIcon)
+                                .withTitle("Bombo")
+                                .withMessage("Bounced: " + message)
+                                .withButton("OK"),
+                            std::function<void(int)>{});
+                    }
+                    else
+                    {
+                        juce::NativeMessageBox::showAsync(
+                            juce::MessageBoxOptions()
+                                .withIconType(juce::MessageBoxIconType::WarningIcon)
+                                .withTitle("Bombo - bounce failed")
+                                .withMessage(message)
+                                .withButton("OK"),
+                            std::function<void(int)>{});
+                    }
+                    // Release the bouncer on the message thread after the
+                    // user dismisses; keeping it alive briefly avoids a
+                    // race where the worker thread is still unwinding.
+                    bouncer_.reset();
+                });
+        });
 }

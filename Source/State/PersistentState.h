@@ -42,6 +42,14 @@ public:
     int  getBbsLastScreen() const;
     void setBbsLastScreen(int screenEnum);
 
+    // Last directory the user bounced to. Defaults to the platform user
+    // music directory (~/Music on Linux+macOS, %USERPROFILE%/Music on
+    // Windows). Updated on every successful bounce so the next FileChooser
+    // opens where they left off. Returns the default if the persisted
+    // path no longer exists (drive unmounted, folder deleted, etc.).
+    juce::File getLastBounceDir() const;
+    void       setLastBounceDir(const juce::File& dir);
+
 private:
     std::unique_ptr<juce::PropertiesFile> props_;
 
