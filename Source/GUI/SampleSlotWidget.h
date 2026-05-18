@@ -46,6 +46,10 @@ public:
     std::function<void(int newIndex)>      onIndexChange;
     // Called when the user picks "Clear" from the right-click menu.
     std::function<void()>                  onClear;
+    // Called when the user picks "Reload factory bank" from the right-click
+    // menu — swaps the slot back to the BinaryData-bundled WAVs and resets
+    // the index to 0. Always available regardless of current source.
+    std::function<void()>                  onLoadFactory;
     // Owner returns the current sibling-sample list and the active index.
     std::function<juce::StringArray()>     getNames;
     std::function<int()>                   getCurrentIndex;
@@ -192,17 +196,20 @@ public:
     void mouseDown(const juce::MouseEvent& e) override
     {
         grabKeyboardFocus();
-        if (e.mods.isRightButtonDown() && isLoaded())
+        if (e.mods.isRightButtonDown())
         {
             juce::PopupMenu m;
             m.addItem(1, "Browse new folder…");
-            m.addItem(2, "Clear");
+            m.addItem(3, "Reload factory bank");
+            if (isLoaded())
+                m.addItem(2, "Clear");
             m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(this),
                 [safe = juce::Component::SafePointer<SampleSlotWidget>(this)] (int r)
                 {
                     if (safe == nullptr) return;
-                    if (r == 1) safe->launchChooser();
+                    if      (r == 1) safe->launchChooser();
                     else if (r == 2 && safe->onClear) { safe->onClear(); safe->refresh(); }
+                    else if (r == 3 && safe->onLoadFactory) { safe->onLoadFactory(); safe->refresh(); }
                 });
             return;
         }

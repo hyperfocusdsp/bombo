@@ -81,6 +81,12 @@ public:
     void clearVoiceBSample();
     juce::String voiceBSamplePath() const;
 
+    // Factory sample bank — bundled WAVs in BinaryData ("kick_NN.wav").
+    // Always available; user can switch to their own folder and back at
+    // will. Default state on fresh install is factory mode, index 0.
+    void loadFactorySamples();
+    bool voiceBIsFactory() const noexcept;
+
     // DICE: randomize every musically-meaningful param in one shot. Ranges
     // are deliberately bounded inside each param's domain (no full-scale
     // chaos) so the result still sounds like a kick. Excludes transport
@@ -208,6 +214,12 @@ private:
     juce::String voiceBFolderPath_;
     std::vector<juce::File> voiceBFolderSamples_;
     int voiceBFolderIndex_ = -1;
+    // Factory mode: when true, voiceBFactoryNames_ is the source of truth
+    // (BinaryData lookups) and voiceBFolderSamples_ is empty. When false,
+    // voiceBFolderSamples_ is used and voiceBFactoryNames_ is empty.
+    // voiceBFolderIndex_ indexes into whichever vector is active.
+    bool voiceBIsFactory_ = false;
+    std::vector<juce::String> voiceBFactoryNames_;  // e.g. "kick_01.wav"
     // Pending-restore queue: setStateInformation may run before
     // prepareToPlay (currentSampleRate_ is still 0), so SampleSlot::loadFromFile
     // would early-return. We stash the path here and replay it from
