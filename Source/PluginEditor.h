@@ -13,7 +13,8 @@
 
 class BomboProcessor;
 
-class BomboEditor : public juce::AudioProcessorEditor
+class BomboEditor : public juce::AudioProcessorEditor,
+                    public juce::Timer
 {
 public:
     explicit BomboEditor(BomboProcessor&);
@@ -24,6 +25,7 @@ public:
 
     bool keyPressed(const juce::KeyPress& key) override;
     void visibilityChanged() override;
+    void timerCallback() override;
 
 private:
     BomboProcessor& processorRef;
@@ -64,6 +66,14 @@ private:
     std::unique_ptr<juce::FileChooser>      bounceChooser_;
     std::unique_ptr<bombo::OfflineBouncer>  bouncer_;
     void startBounceFlow(bombo::OfflineBouncer::Format format);
+
+    // Glitch animation state for the nose 7-tap sequence.
+    enum class GlitchLevel { None, Flicker, Garble, BlackFlash, StaticNoise, RedFlash, GreenPulse };
+    GlitchLevel glitchLevel_ = GlitchLevel::None;
+    juce::Time  glitchStart_;
+
+    void triggerGlitch(GlitchLevel level, int durationMs = 300);
+    void paintGlitchOverlay(juce::Graphics& g);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };

@@ -240,6 +240,72 @@ void BomboEditor::paint(juce::Graphics& g)
     // Transparent — the faceplate's chassisPath_ fill covers everything
     // inside the bomb shape; corner wedges stay alpha=0.
     g.fillAll(juce::Colours::transparentBlack);
+    paintGlitchOverlay(g);
+}
+
+void BomboEditor::triggerGlitch(GlitchLevel level, int durationMs)
+{
+    glitchLevel_ = level;
+    glitchStart_ = juce::Time::getCurrentTime();
+    repaint();
+    startTimer(durationMs);
+}
+
+void BomboEditor::timerCallback()
+{
+    stopTimer();
+    glitchLevel_ = GlitchLevel::None;
+    repaint();
+}
+
+void BomboEditor::paintGlitchOverlay(juce::Graphics& g)
+{
+    if (glitchLevel_ == GlitchLevel::None) return;
+    const auto b = getLocalBounds();
+
+    switch (glitchLevel_)
+    {
+        case GlitchLevel::Flicker:
+            g.fillAll(juce::Colour(0xFFFFFFFFu).withAlpha(0.08f));
+            break;
+
+        case GlitchLevel::Garble:
+        {
+            juce::Random rng(static_cast<int64_t>(juce::Time::currentTimeMillis()));
+            g.setColour(juce::Colour(0xFFC8FF8Cu).withAlpha(0.15f));
+            for (int y = 0; y < b.getHeight(); y += 4)
+                if (rng.nextBool())
+                    g.fillRect(0, y, b.getWidth(), 2);
+            break;
+        }
+
+        case GlitchLevel::BlackFlash:
+            g.fillAll(juce::Colours::black.withAlpha(0.92f));
+            break;
+
+        case GlitchLevel::StaticNoise:
+        {
+            juce::Random rng(static_cast<int64_t>(juce::Time::currentTimeMillis() / 16));
+            for (int y = 0; y < b.getHeight(); y += 2)
+                for (int x = 0; x < b.getWidth(); x += 2)
+                {
+                    const float v = rng.nextFloat();
+                    g.setColour(juce::Colour::fromHSV(0.0f, 0.0f, v, 0.85f));
+                    g.fillRect(x, y, 2, 2);
+                }
+            break;
+        }
+
+        case GlitchLevel::RedFlash:
+            g.fillAll(juce::Colour(0xFFFF2222u).withAlpha(0.55f));
+            break;
+
+        case GlitchLevel::GreenPulse:
+            g.fillAll(juce::Colour(0xFFC8FF8Cu).withAlpha(0.35f));
+            break;
+
+        default: break;
+    }
 }
 
 void BomboEditor::resized()
