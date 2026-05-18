@@ -92,6 +92,12 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>   sAtt;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> cAtt;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>   bAtt;
+
+        // Out-of-line ctor/dtor so unique_ptr<SampleSlotWidget> can stay
+        // a forward-declaration here — libc++ instantiates default_delete's
+        // sizeof check at the implicit destructor site, which broke macOS CI.
+        Control();
+        ~Control();
     };
 
     struct Section
