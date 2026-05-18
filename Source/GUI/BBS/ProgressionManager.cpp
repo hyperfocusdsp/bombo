@@ -17,7 +17,7 @@ void ProgressionManager::onKickSaved()
     saveToState();
 }
 
-int ProgressionManager::currentSysopIndex() const
+int ProgressionManager::currentSysopIndex() const noexcept
 {
     if (unlockedSysops_.empty()) return 0;
     const int day = static_cast<int>(

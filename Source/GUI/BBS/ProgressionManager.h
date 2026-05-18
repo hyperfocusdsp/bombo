@@ -28,7 +28,7 @@ public:
 
     // Returns the SYSOP index active today (rotates by UTC weekday within
     // the unlocked pool). Safe to call before any kicks are saved.
-    int currentSysopIndex() const;
+    int currentSysopIndex() const noexcept;
 
     // Resets all progression state to factory defaults (level 0, 0 saves,
     // sysops {0,1,2}, bbs.unlocked = false). The secret reset gesture.
