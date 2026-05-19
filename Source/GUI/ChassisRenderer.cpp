@@ -50,12 +50,22 @@ void drawChassis(juce::Graphics& g, const Ctx& ctx)
         g.fillPath(ctx.chassisPath);
     }
 
-    // Silhouette outline — pulls the bomb shape together against any
-    // backdrop (Hyprland transparency, dark wallpaper, light wallpaper).
-    // Without this stroke the dark graphite chassis dissolves into a
-    // dark host window and the rack columns read as floating tiles.
-    g.setColour(col::bone().withAlpha(0.65f));
-    g.strokePath(ctx.chassisPath, juce::PathStrokeType(1.5f));
+    // Silhouette outline — bone stroke above the orange region only.
+    // Below redRegionTopY, the orange `noseRed` fill is full alpha and
+    // its chassisPath-clipped edge anti-aliases directly against the
+    // host bg, providing the silhouette there with no stroke. A stroke
+    // below would be visible either inside (contrast against orange,
+    // theme-dependent) or outside (darker outline against host bg) —
+    // both have been observed across all themes.
+    {
+        juce::Graphics::ScopedSaveState ss(g);
+        g.excludeClipRegion(juce::Rectangle<int>(0,
+                                                  static_cast<int>(ctx.redRegionTopY),
+                                                  ctx.panelWidth,
+                                                  ctx.panelHeight - static_cast<int>(ctx.redRegionTopY)));
+        g.setColour(col::bone().withAlpha(0.65f));
+        g.strokePath(ctx.chassisPath, juce::PathStrokeType(1.5f));
+    }
 }
 
 void drawRedRegion(juce::Graphics& g, const Ctx& ctx)
