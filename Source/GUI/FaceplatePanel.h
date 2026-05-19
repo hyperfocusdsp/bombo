@@ -102,6 +102,7 @@ public:
     // Forwards to scope_'s reset-confirmation overlay so PluginEditor doesn't
     // need direct access to the private scope_ member.
     void flashScopeResetConfirmation() { scope_.showResetConfirmation(); }
+    void refreshPresetBar() { if (presetBar_) presetBar_->refresh(); }
 
     // Inner chassis rectangle in faceplate design-space coordinates (pre-scale).
     // BomboEditor multiplies by the active scale transform to get editor-space bounds.

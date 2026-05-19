@@ -401,6 +401,8 @@ void BomboEditor::visibilityChanged()
 {
     if (! isVisible()) return;
 
+    // BBS must never open automatically — always start in FX/synth view.
+    bbs_.hide();
     grabKeyboardFocus();
 
     // Enable every available MIDI input the first time the editor becomes
@@ -500,7 +502,7 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
             {
                 const int delta = isNext ? 1 : -1;
                 bank.applyByIndex((bank.currentIndex() + delta + n) % n, processorRef.apvts);
-                faceplate.repaint();
+                faceplate.refreshPresetBar();
                 return true;
             }
         }
