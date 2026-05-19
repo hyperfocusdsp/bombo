@@ -486,6 +486,29 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
         processorRef.triggerOneShot();
         return true;
     }
+
+    // Preset navigation — left/up = prev, right/down = next, wraps around.
+    // Disabled when BBS is open (its own arrow handling takes priority) or
+    // when layout-edit mode is active (arrows move widgets there).
+    if (!bbs_.isVisible() && !(layoutEditor_ && layoutEditor_->isEditMode())
+        && !mods.isAnyModifierKeyDown())
+    {
+        const bool isPrev = (kc == juce::KeyPress::leftKey  || kc == juce::KeyPress::upKey);
+        const bool isNext = (kc == juce::KeyPress::rightKey || kc == juce::KeyPress::downKey);
+        if (isPrev || isNext)
+        {
+            auto& bank = processorRef.presetBank();
+            const int n = bank.size();
+            if (n > 0)
+            {
+                const int delta = isNext ? 1 : -1;
+                bank.applyByIndex((bank.currentIndex() + delta + n) % n, processorRef.apvts);
+                faceplate.repaint();
+                return true;
+            }
+        }
+    }
+
     return false;
 }
 

@@ -179,9 +179,21 @@ juce::String BoomFeed::snapshotToWaveform(const Snapshot& s) const
     for (const auto& [id, val] : s.values)
         if (id == pid::ampDecay) { decayNorm = val; break; }
 
-    // ASCII waveform gradient: silent -> tallest. Replaces UTF-8 block
-    // elements U+2581..U+2588 (which JUCE String(const char*) can't carry).
-    const char* blockChars[] = { " ", ".", ":", "-", "=", "~", "*", "#", "H" };
+    // Unicode lower-block elements U+2581..U+2588 (eighth to full block).
+    // Integer codepoints bypass juce::String(const char*) UTF-8 issues and
+    // the ASCII-only string-literal lint; juce_wchar constants are not
+    // string literals.
+    static const juce::juce_wchar kBlocks[] = {
+        0x0020,  // space       (silence)
+        0x2581,  // lower 1/8
+        0x2582,  // lower 2/8
+        0x2583,  // lower 3/8
+        0x2584,  // lower 4/8 (half)
+        0x2585,  // lower 5/8
+        0x2586,  // lower 6/8
+        0x2587,  // lower 7/8
+        0x2588,  // full block
+    };
     juce::String result;
     for (int i = 0; i < 18; ++i)
     {
@@ -189,7 +201,7 @@ juce::String BoomFeed::snapshotToWaveform(const Snapshot& s) const
         const float decay = 1.0f + decayNorm * 8.0f;
         const float env   = (i == 0) ? 1.0f : std::exp(-t * decay);
         const int   idx   = juce::jlimit(0, 8, static_cast<int>(env * 8.0f));
-        result += blockChars[idx];
+        result += juce::String::charToString(kBlocks[idx]);
     }
     return result;
 }

@@ -170,11 +170,27 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
             }
             return true;
         }
+        if (ch == 'r' || ch == 'R')
+        {
+            boomFeedMode_ = BoomFeed::Mode::Random;
+            repaint();
+            return true;
+        }
         if (ch == 'm' || ch == 'M')
         {
-            boomFeedMode_ = (boomFeedMode_ == BoomFeed::Mode::Random)
-                                ? BoomFeed::Mode::Mutate
-                                : BoomFeed::Mode::Random;
+            boomFeedMode_ = BoomFeed::Mode::Mutate;
+            repaint();
+            return true;
+        }
+        if (key == juce::KeyPress::leftKey)
+        {
+            boomFeedMode_ = BoomFeed::Mode::Random;
+            repaint();
+            return true;
+        }
+        if (key == juce::KeyPress::rightKey)
+        {
+            boomFeedMode_ = BoomFeed::Mode::Mutate;
             repaint();
             return true;
         }
@@ -373,7 +389,9 @@ void BBSComponent::paintBoomFeed(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xFF555555u));
     g.drawText("[ N ] NEW  [ P ] PREV  [ F ] FWD  [ SPACE ] PLAY  [ S ] SAVE",
-               area.removeFromTop(18), juce::Justification::centredLeft);
+               area.removeFromTop(16), juce::Justification::centredLeft);
+    g.drawText("[ R ] RANDOM  [ M ] MUTATE  [ < > ] SWITCH",
+               area.removeFromTop(14), juce::Justification::centredLeft);
 
     const bool isRandom = (boomFeedMode_ == BoomFeed::Mode::Random);
     g.setColour(juce::Colours::white);
@@ -386,8 +404,9 @@ void BBSComponent::paintBoomFeed(juce::Graphics& g)
     g.setColour(juce::Colour(0xFF444444u));
     g.fillRect(area.removeFromTop(1));
     g.setColour(juce::Colour(0xFFC8FF8Cu));
-    g.drawText("MOTD: " + currentMotd_,
-               area.removeFromTop(14), juce::Justification::centredLeft);
+    g.drawFittedText("MOTD: " + currentMotd_,
+                    area.removeFromTop(26),
+                    juce::Justification::topLeft, 2);
 }
 
 void BBSComponent::paintMyDownloads(juce::Graphics& g)
