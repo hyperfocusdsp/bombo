@@ -10,6 +10,7 @@ PresetBarComponent::PresetBarComponent(PresetBank& bank,
                                        juce::AudioProcessorValueTreeState& apvts)
     : bank_(bank), apvts_(apvts)
 {
+    setFocusContainerType(juce::Component::FocusContainerType::focusContainer);
     auto setupButton = [this](juce::TextButton& b)
     {
         addAndMakeVisible(b);
@@ -220,12 +221,16 @@ void PresetBarComponent::beginEdit(EditMode mode)
                         : juce::String(),
                         juce::dontSendNotification);
     nameEditor_.selectAll();
-    // Defer one message-loop tick: PopupMenu dismissal returns focus to the
-    // editor after this call returns, so a synchronous grab gets stolen.
+    // Double-defer: PopupMenu dismissal posts its own focus-return async,
+    // so a single callAsync fires before that and gets stolen. Two ticks
+    // ensures we run after the popup has fully returned focus to BomboEditor.
     juce::MessageManager::callAsync(
         [safe = juce::Component::SafePointer<juce::TextEditor>(&nameEditor_)]
         {
-            if (safe != nullptr) safe->grabKeyboardFocus();
+            juce::MessageManager::callAsync([safe]
+            {
+                if (safe != nullptr) safe->grabKeyboardFocus();
+            });
         });
 }
 
