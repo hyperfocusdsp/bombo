@@ -52,11 +52,15 @@ void drawRedRegion(juce::Graphics& g, const Ctx& ctx)
     g.saveState();
     g.reduceClipRegion(ctx.chassisPath);
 
+    // Start 3px above redRegionTopY so the orange fill overlaps the body
+    // gradient edge — prevents a 1-2px dark gap where bodyLo (#141517)
+    // meets noseRed at sub-pixel boundaries.
+    const float fillY = ctx.redRegionTopY - 3.0f;
     g.setColour(col::noseRed());
     g.fillRect(juce::Rectangle<float>(0.0f,
-                                      ctx.redRegionTopY,
+                                      fillY,
                                       static_cast<float>(ctx.panelWidth),
-                                      static_cast<float>(ctx.panelHeight) - ctx.redRegionTopY));
+                                      static_cast<float>(ctx.panelHeight) - fillY));
 
     g.restoreState();
 }
