@@ -810,6 +810,8 @@ void FaceplatePanel::resized()
     }
 
     layoutHeader(headerBounds_);
+
+    if (onRackBoundsChanged) onRackBoundsChanged();
 }
 
 void FaceplatePanel::layoutSection(Section& s)

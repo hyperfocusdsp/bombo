@@ -88,6 +88,10 @@ public:
     std::function<void()>    onNoseActivated;
     std::function<void(int)> onNoseGlitchTap;
 
+    // Fired at the end of resized() so BomboEditor can re-sync the BBS
+    // overlay bounds whenever the layout editor moves/resizes the rack.
+    std::function<void()> onRackBoundsChanged;
+
     // Forwarders so PluginEditor can set nose state without accessing the
     // private noseOverlay_ member directly.
     void setNoseProgressionLevel(int level) { noseOverlay_.setProgressionLevel(level); }

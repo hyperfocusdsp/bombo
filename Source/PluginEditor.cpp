@@ -150,6 +150,7 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     });
 
     faceplate.setNoseForceResetCallback([this]() { resetBbsProgression(); });
+    faceplate.onRackBoundsChanged = [this]() { updateBbsBounds(); };
 
     // Layout-edit overlay — ported from an earlier project. F2 / Ctrl+Shift+E
     // toggles. Sits between faceplate and bbs_ in z-order so it doesn't
@@ -369,13 +370,9 @@ void BomboEditor::resized()
     themeSelector_.setBounds(getWidth() - 110, getHeight() - 26, 100, 22);
 
     // BBS overlay covers only the "square effects section" (the FX rack
-    // columns). getRackBounds() is the union of all Section::rectBounds in
-    // faceplate design-space; transformedBy(scale) maps to editor pixels.
-    // This keeps the header, scope, and nose/macro area always visible.
-    bbs_.setBounds(faceplate.getRackBounds()
-                       .toFloat()
-                       .transformedBy(juce::AffineTransform::scale(scale))
-                       .toNearestInt());
+    // columns). Extracted to updateBbsBounds() so the layout editor can
+    // also call it when the rack moves without a full resized() cycle.
+    updateBbsBounds();
 
     // Layout editor overlay shares the FACEPLATE's transformed bounds so
     // its mouse events land in faceplate-design coords (same as the
@@ -510,6 +507,16 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
     }
 
     return false;
+}
+
+void BomboEditor::updateBbsBounds()
+{
+    const float scale = faceplate.getTransform().mat00;
+    if (scale <= 0.0f) return;
+    bbs_.setBounds(faceplate.getRackBounds()
+                       .toFloat()
+                       .transformedBy(juce::AffineTransform::scale(scale))
+                       .toNearestInt());
 }
 
 void BomboEditor::resetBbsProgression()

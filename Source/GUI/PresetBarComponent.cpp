@@ -220,7 +220,13 @@ void PresetBarComponent::beginEdit(EditMode mode)
                         : juce::String(),
                         juce::dontSendNotification);
     nameEditor_.selectAll();
-    nameEditor_.grabKeyboardFocus();
+    // Defer one message-loop tick: PopupMenu dismissal returns focus to the
+    // editor after this call returns, so a synchronous grab gets stolen.
+    juce::MessageManager::callAsync(
+        [safe = juce::Component::SafePointer<juce::TextEditor>(&nameEditor_)]
+        {
+            if (safe != nullptr) safe->grabKeyboardFocus();
+        });
 }
 
 void PresetBarComponent::commitEdit()

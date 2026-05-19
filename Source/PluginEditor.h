@@ -78,5 +78,10 @@ private:
     // and the Ctrl+Shift+R dev shortcut.
     void resetBbsProgression();
 
+    // Syncs bbs_ bounds to the current rack area + editor scale.
+    // Called from resized() and from faceplate.onRackBoundsChanged so the
+    // BBS overlay tracks the rack when the layout editor moves/resizes it.
+    void updateBbsBounds();
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };
