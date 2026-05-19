@@ -515,10 +515,13 @@ void BomboEditor::updateBbsBounds()
 {
     const float scale = faceplate.getTransform().mat00;
     if (scale <= 0.0f) return;
+    // Trim 4px from the bottom so the dark BBS fill never touches the
+    // orange nose section below the rack.
     bbs_.setBounds(faceplate.getRackBounds()
                        .toFloat()
                        .transformedBy(juce::AffineTransform::scale(scale))
-                       .toNearestInt());
+                       .toNearestInt()
+                       .withTrimmedBottom(4));
 }
 
 void BomboEditor::resetBbsProgression()

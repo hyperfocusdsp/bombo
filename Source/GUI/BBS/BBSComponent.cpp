@@ -266,7 +266,10 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 
 void BBSComponent::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xFF0A0A0Au).withAlpha(0.94f));
+    // Fill with a rounded rect inset 1px from edges so the hard dark
+    // boundary doesn't bleed into the orange nose section below.
+    g.setColour(juce::Colour(0xFF0A0A0Au).withAlpha(0.94f));
+    g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(0.0f, 1.0f), 2.0f);
 
     auto b = getLocalBounds();
 
