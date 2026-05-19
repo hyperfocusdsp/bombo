@@ -2,8 +2,7 @@ name: build
 
 on:
   push:
-    branches: [master, main]
-  pull_request:
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -19,6 +18,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Lint (ASCII-only string literals)
+        shell: bash
         run: python3 tools/check-no-utf8-strings.py
 
       - name: Linux deps
@@ -34,12 +34,21 @@ jobs:
             libcurl4-openssl-dev mesa-common-dev ninja-build
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "$RUNNER_OS" = "Linux" ]; then EXTRA="-DBOMBO_LTO=OFF"; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release $EXTRA
 
       - name: Build
-        run: cmake --build build --config Release -j
+        shell: bash
+        run: |
+          JOBS="-j"
+          if [ "$RUNNER_OS" = "Linux" ]; then JOBS="-j 2"; fi
+          cmake --build build --config Release $JOBS
 
       - name: Test
+        shell: bash
         run: ctest --test-dir build --output-on-failure -C Release
 
       - name: Stage Linux artefacts
@@ -57,7 +66,6 @@ jobs:
           if [ -d build/Bombo_artefacts/Release/AU/Bombo.component ]; then
             cp -R build/Bombo_artefacts/Release/AU/Bombo.component dist/
           fi
-          # Ad-hoc sign so Gatekeeper at least lets the user override.
           codesign --force --deep --sign - dist/Bombo.vst3 || true
           if [ -d dist/Bombo.component ]; then
             codesign --force --deep --sign - dist/Bombo.component || true
