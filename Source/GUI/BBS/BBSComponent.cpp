@@ -7,6 +7,20 @@
 namespace bombo
 {
 
+// Pick the best available terminal font at first call, cache for the session.
+// Prefers JetBrains Mono (Nerd Font Mono variant for true fixed-width cells);
+// falls back to Courier New on systems where it's not installed.
+static const juce::String& bbsFontName()
+{
+    static const juce::String name = []() -> juce::String {
+        for (const auto& n : juce::Font::findAllTypefaceNames())
+            if (n.containsIgnoreCase("JetBrainsMono") || n.startsWithIgnoreCase("JetBrains Mono"))
+                return n;
+        return bbsFontName();
+    }();
+    return name;
+}
+
 BBSComponent::BBSComponent()
 {
     setOpaque(false);
@@ -72,6 +86,8 @@ void BBSComponent::hide()
     stopTimer();
     setVisible(false);
     if (onDismissed) onDismissed();
+    if (auto* p = getParentComponent())
+        p->grabKeyboardFocus();
 }
 
 void BBSComponent::resized() {}
@@ -99,7 +115,9 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
     {
         introComplete_ = true;
         screens_.onIntroComplete();
-        return true;
+        // Don't return — N/P fall through to the BoomFeed block so one
+        // keypress both skips the intro AND applies the navigation action.
+        // Any other key is swallowed at the end of the function.
     }
 
     if (key == juce::KeyPress::tabKey)
@@ -259,7 +277,7 @@ void BBSComponent::paint(juce::Graphics& g)
     const auto footerR = getLocalBounds().removeFromBottom(14);
     g.setColour(juce::Colour(0xFF111111u));
     g.fillRect(footerR);
-    g.setFont(juce::Font(juce::FontOptions("Courier New", 10.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 10.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFF555555u));
     const juce::String hints = (screens_.current() == BBSScreen::BoomFeed)
         ? "[ TAB = MY DOWNLOADS ]  [ ESC = EXIT ]"
@@ -274,7 +292,7 @@ void BBSComponent::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
     g.setColour(juce::Colour(0xFF333333u));
     g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
 
-    g.setFont(juce::Font(juce::FontOptions("Courier New", 11.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 11.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFFFFE066u));
     g.drawText("HYPERFOCUS BBS v2.3",
                area.reduced(8, 0), juce::Justification::centredLeft);
@@ -300,7 +318,7 @@ void BBSComponent::paintScrollerBar(juce::Graphics& g, juce::Rectangle<int> area
     const juce::String visible = scrollerText_.substring(scrollOffset_)
                                + scrollerText_.substring(0, scrollOffset_);
 
-    g.setFont(juce::Font(juce::FontOptions("Courier New", 10.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 10.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFF555555u));
     g.drawText(juce::String("\xe2\x96\xb8 ") + visible,
                area.reduced(6, 0), juce::Justification::centredLeft, false);
@@ -309,7 +327,7 @@ void BBSComponent::paintScrollerBar(juce::Graphics& g, juce::Rectangle<int> area
 void BBSComponent::paintIntro(juce::Graphics& g)
 {
     const auto b = getLocalBounds().reduced(30, 20);
-    g.setFont(juce::Font(juce::FontOptions("Courier New", 12.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 12.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFFC8FF8Cu));
     g.drawMultiLineText(introText_.substring(0, introCharPos_),
                         b.getX(), b.getY() + 16, b.getWidth());
@@ -322,7 +340,7 @@ void BBSComponent::paintBoomFeed(juce::Graphics& g)
                        .withTrimmedBottom(30)
                        .reduced(12, 8);
 
-    g.setFont(juce::Font(juce::FontOptions("Courier New", 11.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 11.0f, juce::Font::plain)));
 
     auto area = b;
 
@@ -372,7 +390,7 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
                        .withTrimmedBottom(30)
                        .reduced(12, 8);
 
-    g.setFont(juce::Font(juce::FontOptions("Courier New", 11.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 11.0f, juce::Font::plain)));
 
     auto area = b;
 
