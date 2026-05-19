@@ -259,23 +259,19 @@ BomboEditor::BomboEditor(BomboProcessor& p)
                 if (auto* rw = dynamic_cast<juce::ResizableWindow*>(top))
                     rw->setBackgroundColour(juce::Colours::transparentBlack);
             }
+
+            // Second MIDI-enable pass: callAsync runs after the message loop
+            // is idle, guaranteeing StandalonePluginHolder is fully up.
+            // visibilityChanged() fires first but may race on some platforms.
+            if (auto* holder = juce::StandalonePluginHolder::getInstance())
+            {
+                auto& dm = holder->deviceManager;
+                for (const auto& dev : juce::MidiInput::getAvailableDevices())
+                    dm.setMidiInputDeviceEnabled(dev.identifier, true);
+            }
            #endif
         });
 
-    // ── Standalone-only: enable every available MIDI input on first
-    //    launch. JUCE's StandalonePluginHolder defaults MIDI inputs
-    //    off — users have had to dig through Options → Audio/MIDI
-    //    Settings. Auto-enabling matches the Rust archive's behaviour
-    //    where MIDI just worked when you launched the standalone.
-    //    The setting persists in ~/.config/Bombo/Bombo.settings.
-   #if JucePlugin_Build_Standalone
-    if (auto* holder = juce::StandalonePluginHolder::getInstance())
-    {
-        auto& dm = holder->deviceManager;
-        for (const auto& dev : juce::MidiInput::getAvailableDevices())
-            dm.setMidiInputDeviceEnabled(dev.identifier, true);
-    }
-   #endif
 }
 
 BomboEditor::~BomboEditor()
@@ -379,10 +375,14 @@ void BomboEditor::resized()
     // HeaderBar ships.
     themeSelector_.setBounds(getWidth() - 110, getHeight() - 26, 100, 22);
 
-    // BBS overlay always sized to the full editor — independent of the
-    // faceplate's scaled transform. Phase 2's chassis reshape just changes
-    // getLocalBounds(); the overlay's resized() will re-fit automatically.
-    bbs_.setBounds(getLocalBounds());
+    // BBS overlay covers only the "square effects section" (the FX rack
+    // columns). getRackBounds() is the union of all Section::rectBounds in
+    // faceplate design-space; transformedBy(scale) maps to editor pixels.
+    // This keeps the header, scope, and nose/macro area always visible.
+    bbs_.setBounds(faceplate.getRackBounds()
+                       .toFloat()
+                       .transformedBy(juce::AffineTransform::scale(scale))
+                       .toNearestInt());
 
     // Layout editor overlay shares the FACEPLATE's transformed bounds so
     // its mouse events land in faceplate-design coords (same as the
@@ -409,7 +409,24 @@ void BomboEditor::resized()
 
 void BomboEditor::visibilityChanged()
 {
-    if (isVisible()) grabKeyboardFocus();
+    if (! isVisible()) return;
+
+    grabKeyboardFocus();
+
+    // Enable every available MIDI input the first time the editor becomes
+    // visible. Moving this here from the constructor ensures
+    // StandalonePluginHolder is fully initialised (getInstance() returned
+    // null in the constructor on Windows, silently skipping MIDI setup).
+    // The setting persists in ~/.config/Bombo/Bombo.settings so it only
+    // needs to succeed once.
+   #if JucePlugin_Build_Standalone
+    if (auto* holder = juce::StandalonePluginHolder::getInstance())
+    {
+        auto& dm = holder->deviceManager;
+        for (const auto& dev : juce::MidiInput::getAvailableDevices())
+            dm.setMidiInputDeviceEnabled(dev.identifier, true);
+    }
+   #endif
 }
 
 bool BomboEditor::keyPressed(const juce::KeyPress& key)
@@ -419,6 +436,15 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
     // ── Layout-edit mode toggle (F2 or Ctrl+Shift+E) ────────────────
     // Ports an earlier project's UX: enter edit mode, drag/resize widgets,
     // Layout.json persists. Exit with the same key or Esc-via-overlay.
+    // BBS re-open (Ctrl+Shift+B) — available once unlocked; dev affordance
+    // until the HeaderBar button ships.
+    if (mods.isCtrlDown() && mods.isShiftDown() && key.getKeyCode() == 'B')
+    {
+        if (processorRef.persistentState().getBbsUnlocked())
+            bbs_.show();
+        return true;
+    }
+
     const bool isF2     = (key.getKeyCode() == juce::KeyPress::F2Key);
     const bool isCtrlShiftE = mods.isCtrlDown() && mods.isShiftDown()
                               && key.getKeyCode() == 'E';

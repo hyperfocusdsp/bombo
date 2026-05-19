@@ -28,7 +28,14 @@ public:
 
     juce::Font getPopupMenuFont() override
     {
-        return juce::Font(juce::FontOptions("Courier New", 12.0f, juce::Font::plain));
+        // Same font selection as BBSComponent — JetBrains Mono if available, else Courier New.
+        static const juce::String fontName = []() -> juce::String {
+            for (const auto& n : juce::Font::findAllTypefaceNames())
+                if (n.containsIgnoreCase("JetBrainsMono") || n.startsWithIgnoreCase("JetBrains Mono"))
+                    return n;
+            return "Courier New";
+        }();
+        return juce::Font(juce::FontOptions(fontName, 12.0f, juce::Font::plain));
     }
 
     void drawPopupMenuBackground(juce::Graphics& g, int w, int h) override

@@ -44,10 +44,7 @@ void NoseComponent::mouseDown(const juce::MouseEvent&)
     }
 
     if (firstEntryDone_)
-    {
-        if (onActivationComplete) onActivationComplete();
-        return;
-    }
+        return;  // re-open BBS via HeaderBar button (or Ctrl+Shift+B)
 
     ++tapCount_;
     if (tapCount_ < kRequiredTaps)

@@ -95,6 +95,21 @@ public:
     void setNoseForceResetReady(std::function<bool()> fn) { noseOverlay_.isForceResetReady = std::move(fn); }
     void setNoseForceResetCallback(std::function<void()> fn) { noseOverlay_.onForceReset = std::move(fn); }
 
+    // Inner chassis rectangle in faceplate design-space coordinates (pre-scale).
+    // BomboEditor multiplies by the active scale transform to get editor-space bounds.
+    juce::Rectangle<int> getChassisRectArea() const noexcept { return chassisRectArea_; }
+
+    // Union of all FX column rectBounds — the "square effects section" (rack only,
+    // excluding header, scope, and nose/macro area). Pre-scale design-space coords.
+    juce::Rectangle<int> getRackBounds() const noexcept
+    {
+        if (sections_.empty()) return {};
+        auto b = sections_.front().rectBounds;
+        for (const auto& s : sections_)
+            b = b.getUnion(s.rectBounds);
+        return b;
+    }
+
 private:
     enum class CtlKind { Knob, Choice, Toggle, SampleSlot };
 

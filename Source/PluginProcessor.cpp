@@ -373,18 +373,18 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             * static_cast<double>(currentSampleRate_);
         pendingTailKillSamples_ = static_cast<int>(std::round(spb));
     }
-    // Loop just turned off — short-circuit any pending timer and arm
-    // the kill for the END of THIS block (so the delay+reverb buffers
-    // fade + flush right away, not a full beat later). Without this
-    // override, long delay times at high feedback keep audibly ringing
-    // for the entire remainder of the beat window. THIS BEHAVIOUR MUST
-    // BE PRESERVED — user has reported the regression more than once
-    // (2026-05-17). Also gated by the tail-kill toggle.
-    if (tailKillEnabled && loopJustTurnedOff)
-        pendingTailKillSamples_ = juce::jmin(pendingTailKillSamples_ < 0
-                                                 ? numSamples
-                                                 : pendingTailKillSamples_,
-                                             numSamples);
+    // Loop just turned off — arm kill for one beat from now so the
+    // current kick's tail plays through once before silence. Only arms
+    // if no kill is already pending (the universal timer above already
+    // scheduled one if a trigger fired this block).
+    if (tailKillEnabled && loopJustTurnedOff
+        && pendingTailKillSamples_ < 0
+        && effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
+    {
+        const double spb = (60.0 / static_cast<double>(effectiveBpm))
+                           * static_cast<double>(currentSampleRate_);
+        pendingTailKillSamples_ = static_cast<int>(std::round(spb));
+    }
     // When the toggle goes from ON → OFF mid-stream, cancel any kill
     // that was already pending so it doesn't fire after the user has
     // asked the tail to keep ringing.
