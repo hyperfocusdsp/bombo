@@ -58,11 +58,6 @@ void drawRedRegion(juce::Graphics& g, const Ctx& ctx)
                                       static_cast<float>(ctx.panelWidth),
                                       static_cast<float>(ctx.panelHeight) - ctx.redRegionTopY));
 
-    // Boundary ring line — designed marker at the paint split.
-    g.setColour(col::ink().withAlpha(0.6f));
-    g.drawLine(0.0f, ctx.redRegionTopY,
-               static_cast<float>(ctx.panelWidth), ctx.redRegionTopY, 1.5f);
-
     g.restoreState();
 }
 
