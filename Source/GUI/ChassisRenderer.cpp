@@ -36,7 +36,19 @@ void drawChassis(juce::Graphics& g, const Ctx& ctx)
                               false);
     grad.addColour(0.78, col::bodyLo());
     g.setGradientFill(grad);
-    g.fillPath(ctx.chassisPath);
+    // Clip gradient fill to the body region only — prevents the near-black
+    // bodyLo from painting inside the orange nose section. Without this,
+    // the anti-aliased top edge of the orange fillRect blends with the
+    // black underneath and creates a visible dark fringe (especially in
+    // nightrun where bodyLo = #050606).
+    {
+        juce::Graphics::ScopedSaveState ss(g);
+        g.excludeClipRegion(juce::Rectangle<int>(0,
+                                                  static_cast<int>(ctx.redRegionTopY),
+                                                  ctx.panelWidth,
+                                                  ctx.panelHeight));
+        g.fillPath(ctx.chassisPath);
+    }
 
     // Silhouette outline — pulls the bomb shape together against any
     // backdrop (Hyprland transparency, dark wallpaper, light wallpaper).
