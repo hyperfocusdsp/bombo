@@ -81,10 +81,12 @@ void PresetBarComponent::paint(juce::Graphics& g)
     const auto outer = getLocalBounds().toFloat();
     const auto inner = outer.reduced(2.0f, 2.0f);
 
-    g.setColour(col::graphite().withAlpha(0.92f));
+    // Preset bar lives in the orange nose zone — use a darker tint of the
+    // nose color so it reads as a recessed panel, not a graphite intrusion.
+    g.setColour(col::noseRed().withMultipliedBrightness(0.65f).withAlpha(0.92f));
     g.fillRoundedRectangle(inner, 3.0f);
 
-    g.setColour(col::ink().withAlpha(0.60f));
+    g.setColour(col::noseRed().withMultipliedBrightness(0.45f).withAlpha(0.70f));
     g.drawRoundedRectangle(inner, 3.0f, 0.8f);
 
     // Amber hairlines top + bottom, full bar width.
