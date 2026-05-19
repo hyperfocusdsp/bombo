@@ -67,20 +67,47 @@ void BoomFeed::setTriggerCallback(std::function<void()> cb) noexcept
 
 void BoomFeed::advance(Mode mode)
 {
-    pushHistory(current_);
+    // Drop the "future" past the cursor -- pressing N after going P discards
+    // the redo stack just like every text editor does.
+    if (cursor_ + 1 < static_cast<int>(history_.size()))
+        history_.erase(history_.begin() + cursor_ + 1, history_.end());
+
     current_ = (mode == Mode::Random)
                    ? generateRandom(rng_)
                    : mutateFrom(current_, rng_);
+
+    history_.push_back(current_);
+    cursor_ = static_cast<int>(history_.size()) - 1;
+
+    // Roll the buffer once it's saturated. We trim from the front so the
+    // user keeps the most recent kPrevDepth backward steps from the new tip.
+    if (static_cast<int>(history_.size()) > kMaxHistory)
+    {
+        const int excess = static_cast<int>(history_.size()) - kMaxHistory;
+        history_.erase(history_.begin(), history_.begin() + excess);
+        cursor_ -= excess;
+    }
+
     applySnapshot(current_);
     if (triggerCb_) triggerCb_();
 }
 
 void BoomFeed::prev()
 {
-    if (historyCount_ == 0) return;
-    historyHead_ = (historyHead_ + kHistorySize - 1) % kHistorySize;
-    --historyCount_;
-    current_ = history_[static_cast<size_t>(historyHead_)];
+    if (cursor_ <= 0) return;
+    --cursor_;
+    current_ = history_[static_cast<size_t>(cursor_)];
+    applySnapshot(current_);
+    if (triggerCb_) triggerCb_();
+}
+
+void BoomFeed::next()
+{
+    if (cursor_ < 0
+        || cursor_ + 1 >= static_cast<int>(history_.size()))
+        return;
+    ++cursor_;
+    current_ = history_[static_cast<size_t>(cursor_)];
     applySnapshot(current_);
     if (triggerCb_) triggerCb_();
 }
@@ -129,12 +156,6 @@ void BoomFeed::applySnapshot(const Snapshot& s)
     }
 }
 
-void BoomFeed::pushHistory(const Snapshot& s)
-{
-    history_[static_cast<size_t>(historyHead_)] = s;
-    historyHead_ = (historyHead_ + 1) % kHistorySize;
-    if (historyCount_ < kHistorySize) ++historyCount_;
-}
 
 juce::String BoomFeed::snapshotToFilename(const Snapshot& s) const
 {
@@ -158,9 +179,9 @@ juce::String BoomFeed::snapshotToWaveform(const Snapshot& s) const
     for (const auto& [id, val] : s.values)
         if (id == pid::ampDecay) { decayNorm = val; break; }
 
-    const char* blockChars[] = { " ", "\xe2\x96\x81", "\xe2\x96\x82", "\xe2\x96\x83",
-                                  "\xe2\x96\x84", "\xe2\x96\x85", "\xe2\x96\x86",
-                                  "\xe2\x96\x87", "\xe2\x96\x88" };
+    // ASCII waveform gradient: silent -> tallest. Replaces UTF-8 block
+    // elements U+2581..U+2588 (which JUCE String(const char*) can't carry).
+    const char* blockChars[] = { " ", ".", ":", "-", "=", "~", "*", "#", "H" };
     juce::String result;
     for (int i = 0; i < 18; ++i)
     {

@@ -260,7 +260,11 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     addChildComponent(noseOverlay_);
     noseOverlay_.setVisible(true);
     noseOverlay_.onActivationComplete = [this] { if (onNoseActivated) onNoseActivated(); };
-    noseOverlay_.onGlitchTap = [this](int tap) { if (onNoseGlitchTap) onNoseGlitchTap(tap); };
+    noseOverlay_.onGlitchTap = [this](int tap)
+    {
+        scope_.showTapWarning(tap);
+        if (onNoseGlitchTap) onNoseGlitchTap(tap);
+    };
 }
 
 FaceplatePanel::Control*

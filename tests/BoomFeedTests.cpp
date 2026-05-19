@@ -67,7 +67,7 @@ public:
 
         beginTest("same snapshot produces same filename (determinism)");
         // Use a fixed seed and compare two independently-constructed feeds.
-        // Both advance once from the same Random seed → same snapshot → same hash.
+        // Both advance once from the same Random seed -> same snapshot -> same hash.
         // We can't reproduce bit-identical RNG state portably, so instead we
         // verify that calling advance twice produces two *different* filenames
         // (birthday collision here is cosmetically acceptable but extremely unlikely).
@@ -91,60 +91,79 @@ public:
         bombo::BoomFeed feed;
         feed.advance(bombo::BoomFeed::Mode::Random);
         const juce::String wf = feed.currentWaveformAscii();
-        // Each block character is a 3-byte UTF-8 sequence (or 1-byte space).
-        // Count Unicode code points by scanning: space = 1 byte, block = 3 bytes.
-        // We expect exactly 18 glyphs.
-        int glyphs = 0;
-        int pos = 0;
-        const auto* bytes = reinterpret_cast<const unsigned char*>(wf.toRawUTF8());
-        const int len = static_cast<int>(std::strlen(reinterpret_cast<const char*>(bytes)));
-        while (pos < len)
-        {
-            const unsigned char b = bytes[pos];
-            if (b < 0x80)       { ++pos; }       // ASCII (space)
-            else if (b < 0xE0)  { pos += 2; }    // 2-byte UTF-8
-            else if (b < 0xF0)  { pos += 3; }    // 3-byte UTF-8 (block chars)
-            else                { pos += 4; }    // 4-byte UTF-8
-            ++glyphs;
-        }
-        expect(glyphs == 18, "waveform must have 18 glyphs, got " + juce::String(glyphs)
-                             + " raw: " + wf);
+        // Waveform is single-byte ASCII (post-mojibake-fix 2026-05-19);
+        // glyph count == byte count == String length.
+        expect(wf.length() == 18,
+               "waveform must have 18 glyphs, got " + juce::String(wf.length())
+               + " raw: " + wf);
 
-        beginTest("waveform first glyph is full block (loud attack)");
-        // The first position should always be the maximum block because env=1.0 at i=0.
-        // Full block = UTF-8 E2 96 88 (\xe2\x96\x88).
-        const unsigned char* raw = reinterpret_cast<const unsigned char*>(wf.toRawUTF8());
-        expect(raw[0] == 0xe2 && raw[1] == 0x96 && raw[2] == 0x88,
-               "first glyph must be full block █");
+        beginTest("waveform first glyph is loudest gradient char (loud attack)");
+        // env = 1.0 at i = 0 picks the last entry in the gradient array,
+        // currently 'H' (top-of-gradient ASCII). See BoomFeed.cpp blockChars[].
+        expect(wf[0] == 'H',
+               "first glyph must be 'H' (loudest gradient), got '"
+               + juce::String::charToString(wf[0]) + "'");
     }
 };
 
 class BoomFeedHistoryTest : public juce::UnitTest
 {
 public:
-    BoomFeedHistoryTest() : juce::UnitTest("BoomFeed: prev history ring") {}
+    BoomFeedHistoryTest() : juce::UnitTest("BoomFeed: undo/redo navigation") {}
     void runTest() override
     {
-        beginTest("prev() on empty history is a no-op (no crash)");
+        beginTest("prev() / next() on empty history are no-ops (no crash)");
         bombo::BoomFeed feed;
-        feed.prev();  // should not crash or assert
+        feed.prev();
+        feed.next();
         expect(true);
 
-        beginTest("prev() after one advance restores empty snapshot");
-        // After one advance the waveform is valid; prev() should not crash.
+        beginTest("prev() at cursor==0 is a no-op; current stays valid");
         bombo::BoomFeed feed2;
         feed2.advance(bombo::BoomFeed::Mode::Random);
+        const auto before = feed2.currentFilename();
         feed2.prev();
-        expect(true);
+        const auto after  = feed2.currentFilename();
+        expect(before == after,
+               "prev() at the single-entry history must not change current");
 
-        beginTest("advance 6 times (> kHistorySize=5), then prev returns a valid snapshot");
+        beginTest("8 backward steps recoverable after 9 advances");
         bombo::BoomFeed feed3;
-        for (int i = 0; i < 6; ++i)
+        for (int i = 0; i < 9; ++i)
             feed3.advance(bombo::BoomFeed::Mode::Random);
-        feed3.prev();
-        const juce::String name = feed3.currentFilename();
-        expect(name.startsWith("KICK-") && name.endsWith(".KCK"),
-               "filename valid after prev through a full ring: " + name);
+        const auto tip = feed3.currentFilename();
+        for (int i = 0; i < 8; ++i)
+            feed3.prev();
+        const auto eightBack = feed3.currentFilename();
+        expect(tip != eightBack,
+               "after 8 prev() the current snapshot should differ from the tip");
+
+        beginTest("next() after prev() walks forward through history");
+        for (int i = 0; i < 8; ++i)
+            feed3.next();
+        expect(feed3.currentFilename() == tip,
+               "after symmetric prev/next the cursor should return to the tip");
+
+        beginTest("advance() truncates the redo stack");
+        bombo::BoomFeed feed4;
+        for (int i = 0; i < 4; ++i) feed4.advance(bombo::BoomFeed::Mode::Random);
+        for (int i = 0; i < 2; ++i) feed4.prev();
+        feed4.advance(bombo::BoomFeed::Mode::Random);
+        const auto fresh = feed4.currentFilename();
+        feed4.next();  // should be no-op: redo stack was cleared by advance
+        expect(feed4.currentFilename() == fresh,
+               "next() after advance-truncated-redo must not move the cursor");
+
+        beginTest("advance past kMaxHistory drops oldest, cursor stays valid");
+        bombo::BoomFeed feed5;
+        for (int i = 0; i < bombo::BoomFeed::kMaxHistory + 4; ++i)
+            feed5.advance(bombo::BoomFeed::Mode::Random);
+        const auto last = feed5.currentFilename();
+        expect(last.startsWith("KICK-") && last.endsWith(".KCK"),
+               "filename valid after overflowing the buffer: " + last);
+        feed5.prev();
+        expect(feed5.currentFilename().startsWith("KICK-"),
+               "prev() valid after buffer overflow");
     }
 };
 

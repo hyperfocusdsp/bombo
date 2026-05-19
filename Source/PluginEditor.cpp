@@ -149,14 +149,7 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         return driveParam->getValue() < 0.01f && reverbParam->getValue() > 0.99f;
     });
 
-    faceplate.setNoseForceResetCallback([this]()
-    {
-        processorRef.progressionManager().forceReset();
-        faceplate.setNoseProgressionLevel(0);
-        faceplate.setNoseFirstEntryDone(false);
-        processorRef.persistentState().setBbsUnlocked(false);
-        triggerGlitch(GlitchLevel::GreenPulse, 200);
-    });
+    faceplate.setNoseForceResetCallback([this]() { resetBbsProgression(); });
 
     // Layout-edit overlay — ported from an earlier project. F2 / Ctrl+Shift+E
     // toggles. Sits between faceplate and bbs_ in z-order so it doesn't
@@ -445,6 +438,15 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
         return true;
     }
 
+    // Reset BBS progression (Ctrl+Shift+R) — wipes firstEntryDone + unlocked
+    // + level, so the 7-tap nose sequence is required again. Mirrors the
+    // force-reset gesture path; intended for dev / re-testing.
+    if (mods.isCtrlDown() && mods.isShiftDown() && key.getKeyCode() == 'R')
+    {
+        resetBbsProgression();
+        return true;
+    }
+
     const bool isF2     = (key.getKeyCode() == juce::KeyPress::F2Key);
     const bool isCtrlShiftE = mods.isCtrlDown() && mods.isShiftDown()
                               && key.getKeyCode() == 'E';
@@ -485,6 +487,19 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
         return true;
     }
     return false;
+}
+
+void BomboEditor::resetBbsProgression()
+{
+    processorRef.progressionManager().forceReset();
+    faceplate.setNoseProgressionLevel(0);
+    faceplate.setNoseFirstEntryDone(false);
+    processorRef.persistentState().setBbsUnlocked(false);
+    // 600 ms so it's hard to miss as confirmation feedback. Also nudge the
+    // scope to fire its "tap 6/final" overlay so the user has two
+    // independent visual signals the reset actually fired.
+    triggerGlitch(GlitchLevel::GreenPulse, 600);
+    faceplate.flashScopeResetConfirmation();
 }
 
 void BomboEditor::startBounceFlow(bombo::OfflineBouncer::Format format)

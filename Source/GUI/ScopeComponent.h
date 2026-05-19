@@ -24,6 +24,17 @@ public:
     // Caller keeps ownership; lifetime must outlive this component.
     void setWaveBuffer(const WaveBuffer* wb) noexcept { wb_ = wb; }
 
+    // Transient overlay used during the BBS nose 7-tap sequence. Pass the
+    // tap number (1..6); the overlay fades out over ~1.2 s. The existing
+    // 30 Hz timer keeps repainting while the fade is active. Tap 7 opens
+    // BBS so no warning fires.
+    void showTapWarning(int tapNumber);
+
+    // Confirmation overlay for the BBS-progression reset (Ctrl+Shift+R /
+    // force-reset gesture). Same fade behavior as the tap warning but a
+    // distinct message + colour so the user gets unambiguous feedback.
+    void showResetConfirmation();
+
     void paint(juce::Graphics&) override;
 
 private:
@@ -37,6 +48,13 @@ private:
     int                                       displayLength_ = 0;  // X normaliser for current wave
     int                                       prevDrawnTo_   = 0;  // samples in prevSnapshot_
     int                                       prevXTotal_    = 0;  // X normaliser for prevSnapshot_
+
+    // Generic top-right overlay: tap-progression warnings, reset confirmation,
+    // etc. Empty string == no overlay.
+    juce::String overlayText_;
+    juce::Colour overlayColour_;
+    juce::Time   overlayStart_;
+    static constexpr int kOverlayDurationMs = 1200;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScopeComponent)
 };

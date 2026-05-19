@@ -313,7 +313,7 @@ void LayoutEditOverlay::paint (juce::Graphics& g)
                     (float) ln.getEndX(),   (float) ln.getEndY(), px);
 
     const int nSel = (int) selection.size();
-    auto status = juce::String ("LAYOUT EDIT  ·  F2 exits")
+    auto status = juce::String ("LAYOUT EDIT  --  F2 exits")
                       + "   sel:" + juce::String (nSel)
                       + "  undo:" + juce::String ((int) undoStack.size())
                       + "  redo:" + juce::String ((int) redoStack.size());

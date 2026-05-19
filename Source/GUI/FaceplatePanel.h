@@ -95,6 +95,10 @@ public:
     void setNoseForceResetReady(std::function<bool()> fn) { noseOverlay_.isForceResetReady = std::move(fn); }
     void setNoseForceResetCallback(std::function<void()> fn) { noseOverlay_.onForceReset = std::move(fn); }
 
+    // Forwards to scope_'s reset-confirmation overlay so PluginEditor doesn't
+    // need direct access to the private scope_ member.
+    void flashScopeResetConfirmation() { scope_.showResetConfirmation(); }
+
     // Inner chassis rectangle in faceplate design-space coordinates (pre-scale).
     // BomboEditor multiplies by the active scale transform to get editor-space bounds.
     juce::Rectangle<int> getChassisRectArea() const noexcept { return chassisRectArea_; }

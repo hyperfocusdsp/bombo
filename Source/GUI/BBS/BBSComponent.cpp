@@ -144,6 +144,15 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
             repaint();
             return true;
         }
+        if (ch == 'f' || ch == 'F')
+        {
+            // Forward through history (recover after pressing P too far).
+            // Distinct from N because N always generates a fresh kick and
+            // truncates the redo stack -- F just navigates.
+            boomFeed_.next();
+            repaint();
+            return true;
+        }
         if (key == juce::KeyPress::spaceKey)
         {
             if (triggerCb_) triggerCb_();
@@ -320,7 +329,7 @@ void BBSComponent::paintScrollerBar(juce::Graphics& g, juce::Rectangle<int> area
 
     g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 10.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFF555555u));
-    g.drawText(juce::String("\xe2\x96\xb8 ") + visible,
+    g.drawText(juce::String("> ") + visible,
                area.reduced(6, 0), juce::Justification::centredLeft, false);
 }
 
@@ -345,7 +354,7 @@ void BBSComponent::paintBoomFeed(juce::Graphics& g)
     auto area = b;
 
     g.setColour(juce::Colour(0xFF444444u));
-    g.drawText("\xe2\x94\x80\xe2\x94\x80 KICK ROM BROWSER \xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80",
+    g.drawText("-- KICK ROM BROWSER ------------",
                area.removeFromTop(14), juce::Justification::centredLeft);
 
     g.setColour(juce::Colour(0xFFC8FF8Cu));
@@ -363,7 +372,7 @@ void BBSComponent::paintBoomFeed(juce::Graphics& g)
     area.removeFromTop(8);
 
     g.setColour(juce::Colour(0xFF555555u));
-    g.drawText("[ N ] NEXT   [ P ] PREV   [ SPACE ] PLAY   [ S ] SAVE",
+    g.drawText("[ N ] NEW  [ P ] PREV  [ F ] FWD  [ SPACE ] PLAY  [ S ] SAVE",
                area.removeFromTop(18), juce::Justification::centredLeft);
 
     const bool isRandom = (boomFeedMode_ == BoomFeed::Mode::Random);
@@ -423,7 +432,7 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
             g.fillRect(area.getX(), area.getY(), area.getWidth(), rowH);
         }
 
-        const juce::String prefix = selected ? "\xe2\x96\xba " : "  ";
+        const juce::String prefix = selected ? "> " : "  ";
         const juce::String name   = juce::String(p.displayName).paddedRight(' ', 26);
         const juce::String size   = juce::String("3.1KB").paddedRight(' ', 9);
         const juce::String date   = p.filePath.exists()
@@ -442,7 +451,7 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
     if (row == 0)
     {
         g.setColour(juce::Colour(0xFF444444u));
-        g.drawText("  (NO DOWNLOADS YET \xe2\x80\x94 PRESS N IN BOOM FEED TO BROWSE)",
+        g.drawText("  (NO DOWNLOADS YET -- PRESS N IN BOOM FEED TO BROWSE)",
                    area.removeFromTop(rowH), juce::Justification::centredLeft);
     }
 }
@@ -453,7 +462,7 @@ void BBSComponent::buildIntroText()
         "ATDT 555-1992...\n"
         "CONNECT 2400\n"
         "\n"
-        "\xe2\x96\x93\xe2\x96\x92\xe2\x96\x91\xe2\x96\x93\xe2\x96\x92\xe2\x96\x91\xe2\x96\x93\xe2\x96\x92\xe2\x96\x91\n"
+        "##############\n"
         "\n"
         "  HYPERFOCUS  BBS\n"
         "  ==============\n"
@@ -467,7 +476,7 @@ void BBSComponent::buildScrollerText()
     if (currentSysopIdx_ >= 0 && currentSysopIdx_ < kSysopCount)
         scrollerText_ = kSysops[currentSysopIdx_].scrollerLine;
     else
-        scrollerText_ = "HYPERFOCUS BBS · KICK ROM ARCHIVE ·";
+        scrollerText_ = "HYPERFOCUS BBS - KICK ROM ARCHIVE -";
     scrollerText_ += "   ";
     scrollOffset_  = 0;
 }

@@ -1,4 +1,4 @@
-// tests/OfflineBouncerTests.cpp — regression guards for the bounce pipeline.
+// tests/OfflineBouncerTests.cpp -- regression guards for the bounce pipeline.
 //
 // Scope: the helpers OfflineBouncer leans on, not the full bouncer flow.
 // The full flow needs a live BomboProcessor + a pumped message loop,
@@ -6,13 +6,13 @@
 // link dependency. Instead we pin the two pieces most likely to silently
 // regress between now and the v1.1 reverb-pulsing-loop debug session:
 //
-//   1. WAV + AIFF writer roundtrip — proves AudioFormatManager+writer
+//   1. WAV + AIFF writer roundtrip -- proves AudioFormatManager+writer
 //      can encode a buffer and decode it back with the magnitude intact.
 //      If JUCE ever subtly breaks one of these formats (it has happened
 //      across major bumps), the bounce file will be empty or wrong; this
 //      test fails first.
 //
-//   2. Silence-trim arithmetic — duplicates the bouncer's writeLength
+//   2. Silence-trim arithmetic -- duplicates the bouncer's writeLength
 //      computation so a refactor of the trimming logic can't silently
 //      drop the post-roll tail or overshoot the captured length.
 //
@@ -59,7 +59,7 @@ public:
         beginTest("Silence-trim: keeps decay tail + 20 ms post-roll");
         {
             // 1 s capture at 48 kHz with 30 ms of silence at the end +
-            // 20 ms post-roll → keep 1.000 s - 0.030 s + 0.020 s = 0.990 s.
+            // 20 ms post-roll -> keep 1.000 s - 0.030 s + 0.020 s = 0.990 s.
             const int finalSampleCount  = 48000;
             const int silenceRunSamples = 1440;     // 30 ms
             const int postRollSamples   = 960;      // 20 ms
@@ -153,7 +153,7 @@ private:
                 const bool ok = writer->writeFromAudioSampleBuffer(source, 0, numSamples);
                 expect(ok, "writeFromAudioSampleBuffer succeeded");
             }
-            // writer destructs here → flushes
+            // writer destructs here -> flushes
         }
         JUCE_END_IGNORE_DEPRECATION_WARNINGS
 

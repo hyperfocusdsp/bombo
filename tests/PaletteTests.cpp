@@ -1,7 +1,7 @@
-// tests/PaletteTests.cpp — registered UnitTests for theme system.
+// tests/PaletteTests.cpp -- registered UnitTests for theme system.
 // Compiled as its own translation unit (see CMakeLists.txt). JUCE finds
 // the tests via static UnitTest registration in the anonymous namespace
-// below — the linker keeps the static instances alive across TUs.
+// below -- the linker keeps the static instances alive across TUs.
 #include "GUI/Theme/Palette.h"
 #include "GUI/Theme/ThemeLoader.h"
 #include "GUI/Theme/ThemeProvider.h"
@@ -43,7 +43,7 @@ public:
 
     void runTest() override
     {
-        beginTest("setActive(<current name>) is a no-op — no broadcast dispatched");
+        beginTest("setActive(<current name>) is a no-op -- no broadcast dispatched");
 
         CountingListener l;
         bombo::ThemeProvider::get().addChangeListener(&l);
@@ -52,14 +52,14 @@ public:
         bombo::ThemeProvider::get().setActive("bandw");
         // ChangeBroadcaster::dispatchPendingMessages flushes any pending
         // async update synchronously via AsyncUpdater::handleUpdateNowIfNeeded
-        // — no MessageManager dispatch loop required (which would need
+        // -- no MessageManager dispatch loop required (which would need
         // JUCE_MODAL_LOOPS_PERMITTED, off by default). If setActive had
         // broadcasted (e.g. someone deleted the same-name early-return),
         // this delivers the callback to `l`.
         bombo::ThemeProvider::get().dispatchPendingMessages();
         expectEquals(l.count, 0, "no broadcast when active theme is reapplied");
 
-        beginTest("setActive(<unknown name>) is a no-op — no broadcast dispatched");
+        beginTest("setActive(<unknown name>) is a no-op -- no broadcast dispatched");
         bombo::ThemeProvider::get().setActive("totally-not-a-registered-theme");
         bombo::ThemeProvider::get().dispatchPendingMessages();
         expectEquals(l.count, 0, "no broadcast for unregistered theme name");

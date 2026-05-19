@@ -20,8 +20,44 @@ ScopeComponent::~ScopeComponent()
     stopTimer();
 }
 
+void ScopeComponent::showTapWarning(int tapNumber)
+{
+    static constexpr const char* kWarnings[7] = {
+        "",
+        "[!]      ALERT 1/7",
+        "[!!]     WARNING 2/7",
+        "[!!!]    DANGER 3/7",
+        "[!!!!]   CRITICAL 4/7",
+        "[!!!!!]  ARMED 5/7",
+        "[!!!!!!] FINAL 6/7 -- 1 TAP TO IGNITION",
+    };
+    const int idx = juce::jlimit(1, 6, tapNumber);
+    overlayText_   = kWarnings[idx];
+    overlayColour_ = juce::Colour(0xFFFFC844u);  // amber warning
+    overlayStart_  = juce::Time::getCurrentTime();
+    repaint();
+}
+
+void ScopeComponent::showResetConfirmation()
+{
+    overlayText_   = "[OK]  BBS PROGRESSION CLEARED -- 7-TAP READY";
+    overlayColour_ = juce::Colour(0xFFC8FF8Cu);  // BBS phosphor green
+    overlayStart_  = juce::Time::getCurrentTime();
+    repaint();
+}
+
 void ScopeComponent::timerCallback()
 {
+    // Keep repainting while the overlay is fading so it animates even when
+    // the waveform itself is idle.
+    if (overlayText_.isNotEmpty())
+    {
+        const auto elapsed = (juce::Time::getCurrentTime() - overlayStart_).inMilliseconds();
+        if (elapsed >= kOverlayDurationMs)
+            overlayText_.clear();  // expire
+        repaint();
+    }
+
     if (wb_ == nullptr) return;
 
     const int ver = wb_->triggerVersion();
@@ -63,9 +99,27 @@ void ScopeComponent::paint(juce::Graphics& g)
     // Label
     g.setColour(col::boneDim());
     g.setFont(fonts::label(9.0f));
-    g.drawText("SCOPE  \xE2\x80\xA2  POST",
+    g.drawText("SCOPE  *  POST",
                bounds.reduced(10.0f, 6.0f).removeFromTop(14.0f),
                juce::Justification::topLeft);
+
+    // Top-right overlay: tap warnings during the 7-tap sequence, or reset
+    // confirmation on Ctrl+Shift+R. Drawn BEFORE the waveform so the live
+    // trace remains the dominant element.
+    if (overlayText_.isNotEmpty())
+    {
+        const auto elapsed = (juce::Time::getCurrentTime() - overlayStart_).inMilliseconds();
+        if (elapsed < kOverlayDurationMs)
+        {
+            const float fade = 1.0f - static_cast<float>(elapsed)
+                                       / static_cast<float>(kOverlayDurationMs);
+            g.setColour(overlayColour_.withAlpha(fade));
+            g.setFont(fonts::label(9.0f));
+            g.drawText(overlayText_,
+                       bounds.reduced(10.0f, 6.0f).removeFromTop(14.0f),
+                       juce::Justification::topRight);
+        }
+    }
 
     // Centerline hairline so an empty scope still reads as "an oscilloscope".
     g.setColour(col::bone().withAlpha(0.06f));

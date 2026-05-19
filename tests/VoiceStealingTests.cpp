@@ -1,4 +1,4 @@
-// tests/VoiceStealingTests.cpp — polyphonic load + tail-kill regression.
+// tests/VoiceStealingTests.cpp -- polyphonic load + tail-kill regression.
 //
 // Layered in 2026-05-17 before the v1.0 sprint (BBS overlay + chassis
 // reshape + preset bank) touches anything around the voice pool. The
@@ -93,7 +93,7 @@ public:
                 expect(! v.isActive(), "voice inactive after fadeout");
         }
 
-        beginTest("ALL prior voices fade out within steal window — no stragglers");
+        beginTest("ALL prior voices fade out within steal window -- no stragglers");
         {
             // Regression for the user-reported 2026-05-17 "voice A continues
             // its release past the next trig" bug. With 4 voices and long
@@ -106,9 +106,9 @@ public:
             pool.reserve(N);
             for (int i = 0; i < N; ++i) pool.emplace_back(sr);
 
-            const bombo::VoiceTrigger t;       // default — long 700 ms decay
+            const bombo::VoiceTrigger t;       // default -- long 700 ms decay
 
-            // Fire each pool voice in sequence, 100 ms apart — fills the pool.
+            // Fire each pool voice in sequence, 100 ms apart -- fills the pool.
             constexpr int gap = static_cast<int>(0.1f * 48000.0f);
             for (int i = 0; i < N; ++i)
             {
@@ -140,7 +140,7 @@ public:
 
         beginTest("voice steal mid-decay: fadeout produces no audible click");
         {
-            // A single voice, fully ringing — the 5 ms linear fadeout must
+            // A single voice, fully ringing -- the 5 ms linear fadeout must
             // ramp it down smoothly. The maximum sample-to-sample step
             // during the fadeout window must be small relative to the
             // pre-fadeout signal level.
@@ -158,7 +158,7 @@ public:
             v.startFadeout(sr);
 
             // Prime prev with the first post-fadeout sample so the very
-            // first measured jump is from sample 0 → 1, not from 0 → near-
+            // first measured jump is from sample 0 -> 1, not from 0 -> near-
             // peak. (Otherwise we'd measure the difference between the
             // arbitrary init value and the first real sample, which has
             // nothing to do with smoothness.)
@@ -171,18 +171,18 @@ public:
                 maxJump = std::max(maxJump, std::abs(cur - prev));
                 prev = cur;
             }
-            // 5 ms linear fadeout × pre-level → per-sample step ≤ preLevel/240.
+            // 5 ms linear fadeout x pre-level -> per-sample step ≤ preLevel/240.
             // Allow generous headroom for the underlying oscillator's own
             // cycle (sub-bass at ~50 Hz contributes its own slope) but
             // reject anything close to preLevel itself, which would mean
             // the fadeout was effectively a hard cut.
             expect(maxJump < preLevel * 0.5f,
-                   "fadeout slope bounded — no hard-cut click");
+                   "fadeout slope bounded -- no hard-cut click");
         }
 
         beginTest("VoiceManager: pushPending + tickPending fire at correct offsets");
         {
-            // Construct a VoiceManager standalone — no processor, no APVTS,
+            // Construct a VoiceManager standalone -- no processor, no APVTS,
             // no host. This is the win from extracting it (2026-05-17):
             // the audio-side state machine is unit-testable in isolation.
             bombo::VoiceManager vm;

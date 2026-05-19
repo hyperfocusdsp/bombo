@@ -1,4 +1,4 @@
-// tests/StateRoundTripTests.cpp — APVTS state XML round-trip.
+// tests/StateRoundTripTests.cpp -- APVTS state XML round-trip.
 //
 // Layered in 2026-05-17 before the v1.0 sprint adds the factory preset
 // bank and the BBS unlock state to the persistence surface. Both will
@@ -7,9 +7,9 @@
 // down the contract so a future preset-format change can't silently drop
 // fields.
 //
-// Scope: pure ValueTree → XML → ValueTree round-trip with the same shape
+// Scope: pure ValueTree -> XML -> ValueTree round-trip with the same shape
 // the live processor uses (parent state + a "VoiceBSample" child node
-// with path/folder properties). No BomboProcessor instantiation — that
+// with path/folder properties). No BomboProcessor instantiation -- that
 // would drag in the audio host scaffold we don't need.
 //
 // Compiled as its own translation unit (see CMakeLists.txt).
@@ -47,7 +47,7 @@ public:
             expect(restored.isValid(), "restored tree is valid");
 
             // Float comparison via var equality is exact when the same
-            // formatter is used on both ends — JUCE's XML formatter is
+            // formatter is used on both ends -- JUCE's XML formatter is
             // round-trip-safe for finite floats.
             expect(static_cast<float>(restored.getProperty("paramA")) == 0.42f,
                    "float param preserved");
@@ -90,7 +90,7 @@ public:
 
         beginTest("empty folder string round-trips as empty (not lost)");
         {
-            // Path-only (single-file load) case — folder should be present
+            // Path-only (single-file load) case -- folder should be present
             // but empty after round-trip. PluginProcessor.cpp:660 keys off
             // folder.isNotEmpty() to decide single-file vs folder restore;
             // if folder were dropped during XML round-trip the restore path
@@ -112,7 +112,7 @@ public:
                    "folder round-trips as empty");
         }
 
-        beginTest("copyXmlToBinary ↔ getXmlFromBinary survives a real DAW save");
+        beginTest("copyXmlToBinary <-> getXmlFromBinary survives a real DAW save");
         {
             // The host calls getStateInformation(MemoryBlock&) and gets back
             // a binary blob. The host hands it back via setStateInformation
@@ -128,7 +128,7 @@ public:
             // AudioPluginInstance; replicate the same pattern they use
             // (XmlDocument round-trip via UTF-8 bytes + 8-byte size header)
             // by going through writeToStream / readFromData on a memory
-            // block — equivalent guarantee.
+            // block -- equivalent guarantee.
             auto xml = state.createXml();
             const juce::String s = xml->toString();
             juce::MemoryBlock blob;

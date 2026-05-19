@@ -66,11 +66,7 @@ void PresetBarComponent::refresh()
     }
     else
     {
-        // U+2014 em-dash literal forced through CharPointer_UTF8 so
-        // narrow-string decoding on Linux/Windows doesn't render it
-        // as the latin-1 mojibake sequence 'â€"'.
-        text = juce::String(juce::CharPointer_UTF8("— "))
-             + juce::String(n) + " presets";
+        text = juce::String("-- ") + juce::String(n) + " presets";
     }
     name_.setText(text, juce::dontSendNotification);
 }
@@ -141,13 +137,9 @@ void PresetBarComponent::showMenu()
 
     juce::PopupMenu m;
     const bool onUser = bank_.isCurrentUserPreset();
-    // The ellipsis literals are forced through CharPointer_UTF8 so JUCE
-    // decodes them as UTF-8 regardless of the host platform's narrow-
-    // string default. Without this, "…" (U+2026, 0xE2 0x80 0xA6) renders
-    // as the latin-1 mojibake string 'â€¦' on Linux + most Windows builds.
     m.addItem(1, "Save",       onUser);
-    m.addItem(2, juce::String(juce::CharPointer_UTF8("Save As…")));
-    m.addItem(3, juce::String(juce::CharPointer_UTF8("Rename…")), onUser);
+    m.addItem(2, "Save As...");
+    m.addItem(3, "Rename...", onUser);
     m.addItem(4, "Delete",      onUser);
     m.addSeparator();
     m.addItem(5, "Init (reset to defaults)");

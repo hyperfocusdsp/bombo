@@ -1,4 +1,4 @@
-// tests/BbsPersistenceTests.cpp — registered UnitTests for the BBS
+// tests/BbsPersistenceTests.cpp -- registered UnitTests for the BBS
 // hidden-terminal persistence keys on PersistentState.
 //
 // Compiled as its own translation unit (see CMakeLists.txt). JUCE finds

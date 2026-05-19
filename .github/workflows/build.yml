@@ -18,6 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lint (ASCII-only string literals)
+        run: python3 tools/check-no-utf8-strings.py
+
       - name: Linux deps
         if: runner.os == 'Linux'
         run: |

@@ -229,4 +229,11 @@ if(BOMBO_BUILD_TESTS)
         target_link_libraries(Bombo_Tests PUBLIC juce::juce_recommended_lto_flags)
     endif()
     add_test(NAME bombo_unit_tests COMMAND Bombo_Tests)
+
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME bombo_ascii_lint
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/check-no-utf8-strings.py)
+    endif()
 endif()

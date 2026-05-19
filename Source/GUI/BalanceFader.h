@@ -93,10 +93,10 @@ public:
         g.setColour(col::bone());
         g.fillPath(stem);
 
-        // "A·B" cap label.
+        // "A:B" cap label.
         g.setColour(col::bone().withAlpha(0.85f));
         g.setFont(fonts::value(juce::jlimit(7.0f, 9.0f, coreR * 0.55f)));
-        g.drawText("A·B",
+        g.drawText("A:B",
                    juce::Rectangle<float>(cx - coreR, cy - coreR,
                                           coreR * 2.0f, coreR * 2.0f),
                    juce::Justification::centred);

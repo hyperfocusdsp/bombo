@@ -18,7 +18,17 @@ void NoseComponent::setProgressionLevel(int level)
 
 juce::String NoseComponent::getTooltip()
 {
-    return kTooltips[juce::jlimit(0, 4, level_)];
+    // After first BBS unlock the tooltip reflects the persistent progression
+    // level. Before unlock it ratchets through tap-progression warnings so
+    // a curious user gets escalating dread feedback during the 7-tap sequence.
+    if (firstEntryDone_)
+        return kTooltips[juce::jlimit(0, 4, level_)];
+
+    const auto sinceTap = (juce::Time::getCurrentTime() - lastTapTime_).inMilliseconds();
+    const int idx = (sinceTap > kTapTimeoutMs)
+                    ? 0
+                    : juce::jlimit(0, 6, tapCount_);
+    return kTapTooltips[idx];
 }
 
 void NoseComponent::mouseDown(const juce::MouseEvent&)

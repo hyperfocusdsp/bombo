@@ -55,13 +55,27 @@ private:
     static constexpr int kResetTaps    = 3;
     static constexpr int kResetTimeout = 800;
 
-    // Tooltip messages per level.
+    // Tooltip messages per progression level (used after first BBS unlock).
     static constexpr const char* kTooltips[5] = {
-        "\xe2\x9a\xa0  WARNING: DO NOT TOUCH",
-        "\xe2\x9a\xa0  ARMED \xe2\x80\x94 CLEARANCE LVL 1",
-        "\xe2\x9a\xa0  ARMED \xe2\x80\x94 CLEARANCE LVL 2",
-        "\xe2\x9a\xa0  ARMED \xe2\x80\x94 CLEARANCE LVL 3",
-        "\xe2\x9a\xa0  ARMED \xe2\x80\x94 CLEARANCE LVL 4 \xe2\x80\x94 SYSTEM IGNITED",
+        "[!]  WARNING: DO NOT TOUCH",
+        "[!]  ARMED -- CLEARANCE LVL 1",
+        "[!]  ARMED -- CLEARANCE LVL 2",
+        "[!]  ARMED -- CLEARANCE LVL 3",
+        "[!]  ARMED -- CLEARANCE LVL 4 -- SYSTEM IGNITED",
+    };
+
+    // Tap-in-progress warnings shown BEFORE first BBS unlock. Indexed by
+    // tapCount_ (0..6). Resets to entry 0 after kTapTimeoutMs idle. Entry 0
+    // is intentionally distinct from kTooltips[0] so the active branch is
+    // visually identifiable when debugging.
+    static constexpr const char* kTapTooltips[7] = {
+        "[?]       UNKNOWN DEVICE -- TAP TO INSPECT",
+        "[!]       ALERT 1/7 -- STAND DOWN",
+        "[!!]      WARNING 2/7 -- LAST CHANCE",
+        "[!!!]     DANGER 3/7 -- BREACH IMMINENT",
+        "[!!!!]    CRITICAL 4/7 -- OVERLOAD",
+        "[!!!!!]   ARMED 5/7 -- POINT OF NO RETURN",
+        "[!!!!!!]  FINAL 6/7 -- 1 TAP TO IGNITION",
     };
 
     void paintCracks(juce::Graphics& g, juce::Rectangle<float> bounds, int level);

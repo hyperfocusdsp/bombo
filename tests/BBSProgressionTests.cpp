@@ -153,12 +153,12 @@ public:
             int lastLevel = -1;
             pm.onLevelUp = [&](int newLevel) { ++callbackCount; lastLevel = newLevel; };
 
-            // 5 saves → level 1 → callback fires once
+            // 5 saves -> level 1 -> callback fires once
             for (int i = 0; i < 5; ++i) pm.onKickSaved();
             expectEquals(callbackCount, 1, "callback fires once at L1");
             expectEquals(lastLevel, 1, "callback receives level 1");
 
-            // 10 more saves → level 2 → callback fires once more
+            // 10 more saves -> level 2 -> callback fires once more
             for (int i = 0; i < 10; ++i) pm.onKickSaved();
             expectEquals(callbackCount, 2, "callback fires again at L2");
             expectEquals(lastLevel, 2, "callback receives level 2");
@@ -171,7 +171,7 @@ public:
             int callbackCount = 0;
             pm.onLevelUp = [&](int) { ++callbackCount; };
 
-            pm.onKickSaved();  // 1 save — still level 0
+            pm.onKickSaved();  // 1 save -- still level 0
             expectEquals(callbackCount, 0, "no callback below threshold");
         }
 

@@ -44,9 +44,11 @@ private:
     juce::ComboBox themeSelector_;
 
     // BBS hidden terminal overlay. Sibling of `faceplate`, sized to the
-    // full editor bounds, invisible by default. Dev affordance:
-    // Ctrl+Shift+B in keyPressed() calls bbs_.show(); the nose 7-tap
-    // sequence activates it via faceplate.onNoseActivated.
+    // full editor bounds, invisible by default. Dev affordances:
+    //   Ctrl+Shift+B in keyPressed() re-opens BBS (only when unlocked);
+    //   Ctrl+Shift+R resets progression so the 7-tap sequence is required
+    //     again (mirrors the DRIVE=0+REVERB=max+3-tap force-reset gesture).
+    // The nose 7-tap sequence activates BBS via faceplate.onNoseActivated.
     bombo::BBSComponent bbs_;
 
     // Layout-edit overlay (ported from an earlier project 2026-05-17). Toggled
@@ -70,6 +72,11 @@ private:
 
     void triggerGlitch(GlitchLevel level, int durationMs = 300);
     void paintGlitchOverlay(juce::Graphics& g);
+
+    // Resets BBS progression so the 7-tap sequence is required again.
+    // Shared by the force-reset gesture (DRIVE=0+REVERB=max+3 nose taps)
+    // and the Ctrl+Shift+R dev shortcut.
+    void resetBbsProgression();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboEditor)
 };

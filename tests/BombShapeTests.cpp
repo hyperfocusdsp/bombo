@@ -1,4 +1,4 @@
-// tests/BombShapeTests.cpp — geometry invariants for the parametric
+// tests/BombShapeTests.cpp -- geometry invariants for the parametric
 // Mini-Nuke silhouette generator.
 //
 // Phase 2 safety net: locks the R4B-CLASSIC silhouette's geometric
@@ -30,7 +30,7 @@ public:
             const auto path  = bombo::BombShape::buildBombPath(bounds);
             const auto pb    = path.getBounds();
             // Tolerance: 6 px because the silhouette is inscribed inside
-            // the bounds — left/right edges are at body_bulge_w/2, not at
+            // the bounds -- left/right edges are at body_bulge_w/2, not at
             // bounds.getRight(). Just assert it's well within bounds.
             expect(pb.getX() >= bounds.getX() - 1.0f, "left within bounds");
             expect(pb.getRight() <= bounds.getRight() + 1.0f, "right within bounds");
@@ -59,14 +59,14 @@ public:
         const float bulgeY = p.bodyTopY + (p.bodyBotY - p.bodyTopY) * p.bodyBulgeYFrac;
         const float cx     = bombo::BombShape::kRefW * 0.5f;
 
-        // Center of body bulge — must be inside path
+        // Center of body bulge -- must be inside path
         expect(path.contains(cx, bulgeY), "body bulge center is inside silhouette");
-        // Corners of bounds — must be outside path (silhouette is inscribed)
+        // Corners of bounds -- must be outside path (silhouette is inscribed)
         expect(! path.contains(2.0f, 2.0f),                 "top-left corner outside");
         expect(! path.contains(358.0f, 2.0f),               "top-right corner outside");
         expect(! path.contains(2.0f, 638.0f),               "bottom-left corner outside");
         expect(! path.contains(358.0f, 638.0f),             "bottom-right corner outside");
-        // Tip area — center-bottom must be inside (or on edge) at refY just above tipY
+        // Tip area -- center-bottom must be inside (or on edge) at refY just above tipY
         expect(path.contains(cx, p.tipY - 8.0f), "just above tip is inside");
     }
 };
@@ -135,7 +135,7 @@ public:
         expect(rb.getRight() <= maxRefX + 0.5f,
                "right-fin extent matches body_bulge_w/2 + fin_out_x");
         // Inner edge of the right fin sits at the body's right shoulder
-        // (right of center), within the body's bulge half-width — i.e.
+        // (right of center), within the body's bulge half-width -- i.e.
         // the fin attaches to the body, not floating in space.
         const float cx = bombo::BombShape::kRefW * 0.5f;
         const float bodyHalfBulge = p.bodyBulgeW * 0.5f;
@@ -181,7 +181,7 @@ class BombShapeDeterminismTest : public juce::UnitTest
 {
 public:
     BombShapeDeterminismTest()
-        : juce::UnitTest("BombShape: same params → same path (pure function)") {}
+        : juce::UnitTest("BombShape: same params -> same path (pure function)") {}
 
     void runTest() override
     {
@@ -190,7 +190,7 @@ public:
         const auto p1 = bombo::BombShape::buildBombPath(bounds);
         const auto p2 = bombo::BombShape::buildBombPath(bounds);
         expect(p1.getBounds() == p2.getBounds(),
-               "pure function — same input, same path bounds");
+               "pure function -- same input, same path bounds");
     }
 };
 

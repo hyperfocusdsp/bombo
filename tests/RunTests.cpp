@@ -26,7 +26,7 @@
 
 namespace
 {
-// Single-bin Goertzel — fundamental-bin power only. See plugindev skill
+// Single-bin Goertzel -- fundamental-bin power only. See plugindev skill
 // notes on why this beats wideband RMS through nonlinear stages.
 float fundamentalPower(const std::vector<float>& samples, float sr, float freq)
 {
@@ -289,7 +289,7 @@ public:
 
     void runTest() override
     {
-        beginTest("100 Hz fundamental has ≥30 dB more energy than 110 Hz");
+        beginTest("100 Hz fundamental has >=30 dB more energy than 110 Hz");
         {
             const float sr = 48000.0f;
             bombo::SineOsc osc(sr);
@@ -340,7 +340,7 @@ public:
             expect(peak > 0.1f);
         }
 
-        beginTest("inactive after 1.5× decay_ms");
+        beginTest("inactive after 1.5x decay_ms");
         {
             const float sr = 48000.0f;
             bombo::BombVoice v(sr);
@@ -353,7 +353,7 @@ public:
 
         beginTest("two voices with identical triggers produce identical output");
         {
-            // Drift jitter was removed when DRIFT → sample slot landed.
+            // Drift jitter was removed when DRIFT -> sample slot landed.
             // The voice path is now fully deterministic for a given trigger.
             const float sr = 48000.0f;
             bombo::VoiceTrigger t;
@@ -390,7 +390,7 @@ public:
 
     void runTest() override
     {
-        beginTest("no kill_tail → silent input → silent output");
+        beginTest("no kill_tail -> silent input -> silent output");
         {
             const float sr = 48000.0f;
             bombo::FdnReverb r(sr);
@@ -441,7 +441,7 @@ public:
             expect(e < 1e-3f);
         }
 
-        beginTest("killTail clears predelay — no rebuild from stale content");
+        beginTest("killTail clears predelay -- no rebuild from stale content");
         {
             // Regression for the user-reported 2026-05-17 "20-second
             // ringing after one trigger" bug. predelay was NOT being
@@ -456,7 +456,7 @@ public:
             r.setParams(0.85f, 0.3f);
             r.setSize(0.5f);
             r.setDiffusion(0.5f);
-            r.setPredelayMs(400.0f);   // long predelay — exposes the bug
+            r.setPredelayMs(400.0f);   // long predelay -- exposes the bug
             r.hardReset();
             // Pump sustained input into predelay + FDN for 500 ms so both
             // are well-populated when killTail fires.
@@ -468,7 +468,7 @@ public:
             const int waitSamples = static_cast<int>(0.05f * sr)        // kill-fade
                                   + static_cast<int>(0.45f * sr);       // predelay drain
             for (int i = 0; i < waitSamples; ++i) r.process(0.0f);
-            // Probe a 200 ms window — any residual tail from un-cleared
+            // Probe a 200 ms window -- any residual tail from un-cleared
             // predelay would show up here as the FDN rebuilds.
             float peak = 0.0f;
             for (int i = 0; i < static_cast<int>(0.2f * sr); ++i)
@@ -494,7 +494,7 @@ public:
                 preKillPeak = std::max(preKillPeak, std::abs(r.process(0.0f)));
             expect(preKillPeak > 1e-3f);
 
-            // Trigger fade — wet should slope down rather than jump to 0.
+            // Trigger fade -- wet should slope down rather than jump to 0.
             r.killTail();
             float prev = std::abs(r.process(0.0f));
             float maxJump = 0.0f;
@@ -504,7 +504,7 @@ public:
                 maxJump = std::max(maxJump, std::abs(cur - prev));
                 prev = cur;
             }
-            // Sample-to-sample jump bounded — the ramp shouldn't produce
+            // Sample-to-sample jump bounded -- the ramp shouldn't produce
             // anything close to the pre-kill peak in a single step.
             expect(maxJump < preKillPeak * 0.5f);
 
@@ -525,7 +525,7 @@ public:
 
     void runTest() override
     {
-        beginTest("killTail flushes buffer — wet silent after kill+delay");
+        beginTest("killTail flushes buffer -- wet silent after kill+delay");
         {
             const float sr = 48000.0f;
             bombo::Delay d(sr);
@@ -562,7 +562,7 @@ public:
             expect(postPeak < 1e-3f);
         }
 
-        beginTest("killTail @ max feedback — no residual ring during fade input");
+        beginTest("killTail @ max feedback -- no residual ring during fade input");
         {
             // Regression for the user-reported 2026-05-17 "delay tail
             // very slightly keeps moving... even with max feedback" bug.
@@ -572,13 +572,13 @@ public:
             const float sr = 48000.0f;
             bombo::Delay d(sr);
             d.setTimeMs(120.0f);
-            d.setFeedback(0.98f);       // near-max feedback — worst case
+            d.setFeedback(0.98f);       // near-max feedback -- worst case
             d.setFilterMorph(0.0f);
             // Populate buffer with sustained input so feedback is active.
             for (int i = 0; i < static_cast<int>(0.4f * sr); ++i)
                 d.process(0.4f);
             // Trigger kill, then feed non-zero input ONLY during the
-            // exact kill-fade window — simulates the voice's startFadeout
+            // exact kill-fade window -- simulates the voice's startFadeout
             // overlapping with the chain killTail. After that, input is
             // silent. With the bug, the fade-window input gets written
             // into the buffer and rings out at the delay-cycle period;
@@ -587,7 +587,7 @@ public:
             d.killTail();
             const int fadeSamples = static_cast<int>(bombo::Delay::kKillFadeMs * 0.001f * sr);
             for (int i = 0; i < fadeSamples; ++i) d.process(0.3f);
-            // Input is now silent. Run past 5× delay period (= 600 ms).
+            // Input is now silent. Run past 5x delay period (= 600 ms).
             for (int i = 0; i < static_cast<int>(0.6f * sr); ++i) d.process(0.0f);
             float peak = 0.0f;
             for (int i = 0; i < static_cast<int>(0.2f * sr); ++i)
@@ -609,7 +609,7 @@ public:
                 d.killTail();
             }
             // After 4 quick hits, run silence for delay+killfade window;
-            // wet must be silent — confirms each kill flushed cleanly.
+            // wet must be silent -- confirms each kill flushed cleanly.
             const int waitSamples = static_cast<int>(0.080f * sr);
             for (int i = 0; i < waitSamples; ++i) d.process(0.0f);
             float peak = 0.0f;
@@ -620,7 +620,7 @@ public:
     }
 };
 
-// Static test instances — JUCE finds them via the UnitTest registry.
+// Static test instances -- JUCE finds them via the UnitTest registry.
 // Palette/ThemeProvider tests live in tests/PaletteTests.cpp, which is
 // compiled as its own translation unit (see CMakeLists.txt) and registers
 // its own static UnitTest instances in an anonymous namespace.

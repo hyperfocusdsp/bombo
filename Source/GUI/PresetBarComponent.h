@@ -52,7 +52,7 @@ private:
 
     juce::TextButton prev_   { "<" };
     juce::TextButton next_   { ">" };
-    juce::TextButton menu_   { juce::CharPointer_UTF8("\xe2\x89\xa1") };  // ≡
+    juce::TextButton menu_   { "=" };  // hidden hamburger; label kept ASCII per ascii-only rule
     juce::Label      name_;
     juce::TextEditor nameEditor_;
 
