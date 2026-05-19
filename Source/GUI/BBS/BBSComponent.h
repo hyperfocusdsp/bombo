@@ -83,6 +83,10 @@ private:
     int          currentSysopIdx_ = 0;
     juce::String currentMotd_;
 
+    // Save confirmation — shown in place of MOTD for ~2 seconds after S
+    juce::String saveStatusMsg_;
+    juce::Time   saveStatusTime_;
+
     // My Downloads selection
     int myDownloadsSelected_ = 0;
 

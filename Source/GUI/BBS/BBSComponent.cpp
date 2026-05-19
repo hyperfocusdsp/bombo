@@ -16,7 +16,7 @@ static const juce::String& bbsFontName()
         for (const auto& n : juce::Font::findAllTypefaceNames())
             if (n.containsIgnoreCase("JetBrainsMono") || n.startsWithIgnoreCase("JetBrains Mono"))
                 return n;
-        return bbsFontName();
+        return "Courier New";  // safe ASCII fallback, no recursion
     }();
     return name;
 }
@@ -166,13 +166,16 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
                                       .upToLastOccurrenceOf(".KCK", false, true);
                 presetBank_->saveAs(name, *apvts_);
                 if (progression_ != nullptr) progression_->onKickSaved();
+                saveStatusMsg_ = ">> PRESET SAVED: " + name + " <<";
+                saveStatusTime_ = juce::Time::getCurrentTime();
                 repaint();
             }
             return true;
         }
         if (ch == 'r' || ch == 'R')
         {
-            boomFeedMode_ = BoomFeed::Mode::Random;
+            // R = generate a new purely random kick (ignores current mode setting)
+            boomFeed_.advance(BoomFeed::Mode::Random);
             repaint();
             return true;
         }
@@ -302,7 +305,7 @@ void BBSComponent::paint(juce::Graphics& g)
     const auto footerR = getLocalBounds().removeFromBottom(14);
     g.setColour(juce::Colour(0xFF111111u));
     g.fillRect(footerR);
-    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 10.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 13.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFF555555u));
     const juce::String hints = (screens_.current() == BBSScreen::BoomFeed)
         ? "[ TAB = MY DOWNLOADS ]  [ ESC = EXIT ]"
@@ -317,7 +320,7 @@ void BBSComponent::paintHeader(juce::Graphics& g, juce::Rectangle<int> area)
     g.setColour(juce::Colour(0xFF333333u));
     g.fillRect(area.getX(), area.getBottom() - 1, area.getWidth(), 1);
 
-    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 11.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 14.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFFFFE066u));
     g.drawText("HYPERFOCUS BBS v2.3",
                area.reduced(8, 0), juce::Justification::centredLeft);
@@ -343,7 +346,7 @@ void BBSComponent::paintScrollerBar(juce::Graphics& g, juce::Rectangle<int> area
     const juce::String visible = scrollerText_.substring(scrollOffset_)
                                + scrollerText_.substring(0, scrollOffset_);
 
-    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 10.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 13.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFF555555u));
     g.drawText(juce::String("> ") + visible,
                area.reduced(6, 0), juce::Justification::centredLeft, false);
@@ -352,7 +355,7 @@ void BBSComponent::paintScrollerBar(juce::Graphics& g, juce::Rectangle<int> area
 void BBSComponent::paintIntro(juce::Graphics& g)
 {
     const auto b = getLocalBounds().reduced(30, 20);
-    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 12.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 15.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFFC8FF8Cu));
     g.drawMultiLineText(introText_.substring(0, introCharPos_),
                         b.getX(), b.getY() + 16, b.getWidth());
@@ -365,48 +368,62 @@ void BBSComponent::paintBoomFeed(juce::Graphics& g)
                        .withTrimmedBottom(30)
                        .reduced(12, 8);
 
-    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 11.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 14.0f, juce::Font::plain)));
 
     auto area = b;
 
     g.setColour(juce::Colour(0xFF444444u));
     g.drawText("-- KICK ROM BROWSER ------------",
-               area.removeFromTop(14), juce::Justification::centredLeft);
+               area.removeFromTop(18), juce::Justification::centredLeft);
 
     g.setColour(juce::Colour(0xFFC8FF8Cu));
     g.drawText("FILENAME : " + boomFeed_.currentFilename(),
-               area.removeFromTop(16), juce::Justification::centredLeft);
+               area.removeFromTop(20), juce::Justification::centredLeft);
 
     g.setColour(juce::Colour(0xFF888888u));
     g.drawText("SIZE     : 3.1 KB",
-               area.removeFromTop(16), juce::Justification::centredLeft);
+               area.removeFromTop(20), juce::Justification::centredLeft);
 
     g.setColour(juce::Colour(0xFFFFE066u));
     g.drawText("WAVEFORM : " + boomFeed_.currentWaveformAscii(),
-               area.removeFromTop(16), juce::Justification::centredLeft);
+               area.removeFromTop(20), juce::Justification::centredLeft);
 
     area.removeFromTop(8);
 
     g.setColour(juce::Colour(0xFF555555u));
     g.drawText("[ N ] NEW  [ P ] PREV  [ F ] FWD  [ SPACE ] PLAY  [ S ] SAVE",
-               area.removeFromTop(16), juce::Justification::centredLeft);
+               area.removeFromTop(18), juce::Justification::centredLeft);
     g.drawText("[ R ] RANDOM  [ M ] MUTATE  [ < > ] SWITCH",
-               area.removeFromTop(14), juce::Justification::centredLeft);
+               area.removeFromTop(18), juce::Justification::centredLeft);
 
     const bool isRandom = (boomFeedMode_ == BoomFeed::Mode::Random);
     g.setColour(juce::Colours::white);
     g.drawText(juce::String("MODE: ")
                + (isRandom ? "[> RANDOM] / [ MUTATE]"
                            : "[ RANDOM] / [> MUTATE]"),
-               area.removeFromTop(16), juce::Justification::centredLeft);
+               area.removeFromTop(20), juce::Justification::centredLeft);
 
     area.removeFromTop(8);
     g.setColour(juce::Colour(0xFF444444u));
     g.fillRect(area.removeFromTop(1));
     g.setColour(juce::Colour(0xFFC8FF8Cu));
-    g.drawFittedText("MOTD: " + currentMotd_,
-                    area.removeFromTop(26),
-                    juce::Justification::topLeft, 2);
+    // Show save confirmation for 2s, then revert to MOTD.
+    const bool showSave = !saveStatusMsg_.isEmpty()
+        && (juce::Time::getCurrentTime() - saveStatusTime_).inSeconds() < 2.0;
+    if (showSave)
+    {
+        g.setColour(juce::Colour(0xFF88FF88u));  // bright green ACK
+        g.drawFittedText(saveStatusMsg_, area.removeFromTop(26),
+                         juce::Justification::topLeft, 2);
+    }
+    else
+    {
+        if (showSave == false && !saveStatusMsg_.isEmpty())
+            saveStatusMsg_ = {};
+        g.drawFittedText("MOTD: " + currentMotd_,
+                         area.removeFromTop(26),
+                         juce::Justification::topLeft, 2);
+    }
 }
 
 void BBSComponent::paintMyDownloads(juce::Graphics& g)
@@ -418,7 +435,7 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
                        .withTrimmedBottom(30)
                        .reduced(12, 8);
 
-    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 11.0f, juce::Font::plain)));
+    g.setFont(juce::Font(juce::FontOptions(bbsFontName(), 14.0f, juce::Font::plain)));
 
     auto area = b;
 
