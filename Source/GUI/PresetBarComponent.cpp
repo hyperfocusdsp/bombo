@@ -74,25 +74,13 @@ void PresetBarComponent::refresh()
 
 void PresetBarComponent::paint(juce::Graphics& g)
 {
-    // Preset bar lives in the footprint where the yellow cartouche band
-    // used to sit (since 2026-05-17). The amber top-and-bottom hairlines
-    // are an echo of the cartouche so the strip reads as a designed
-    // control surface rather than an empty stripe of chassis.
-    const auto outer = getLocalBounds().toFloat();
-    const auto inner = outer.reduced(2.0f, 2.0f);
-
-    // Preset bar lives in the orange nose zone — use a darker tint of the
-    // nose color so it reads as a recessed panel, not a graphite intrusion.
-    g.setColour(col::noseRed().withMultipliedBrightness(0.65f).withAlpha(0.92f));
-    g.fillRoundedRectangle(inner, 3.0f);
-
-    g.setColour(col::noseRed().withMultipliedBrightness(0.45f).withAlpha(0.70f));
-    g.drawRoundedRectangle(inner, 3.0f, 0.8f);
-
-    // Amber hairlines top + bottom, full bar width.
-    g.setColour(col::accentAmber().withAlpha(0.55f));
-    g.fillRect(outer.getX(), outer.getY(),                     outer.getWidth(), 1.0f);
-    g.fillRect(outer.getX(), outer.getBottom() - 1.0f,         outer.getWidth(), 1.0f);
+    // Same amber-tint pill style as the fin controls — translucent so the
+    // body background shows through rather than a flat opaque slab.
+    const auto r = getLocalBounds().toFloat().reduced(1.5f);
+    g.setColour(col::accentAmber().withAlpha(0.22f));
+    g.fillRoundedRectangle(r, 4.0f);
+    g.setColour(col::accentAmber().withAlpha(0.60f));
+    g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
 }
 
 void PresetBarComponent::mouseDown(const juce::MouseEvent& e)

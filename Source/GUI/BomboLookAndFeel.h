@@ -71,11 +71,13 @@ public:
     {
         const auto r = btn.getLocalBounds().toFloat();
         const bool on = shouldDrawButtonAsDown || btn.getToggleState();
-        g.setColour(on ? col::accentAmber().withAlpha(0.3f)
-                       : col::graphite().withAlpha(0.88f));
+        // Off-state: translucent amber tint so the orange fin shows through
+        // and the button reads as part of the fin, not a dark intrusion.
+        g.setColour(on ? col::accentAmber().withAlpha(0.50f)
+                       : col::accentAmber().withAlpha(0.22f));
         g.fillRoundedRectangle(r, kPillCorner);
         g.setColour(on ? col::accentAmber()
-                       : col::boneDim().withAlpha(0.45f));
+                       : col::accentAmber().withAlpha(0.60f));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
     }
 
@@ -96,11 +98,11 @@ public:
     {
         const auto r = btn.getLocalBounds().toFloat();
         const bool on = btn.getToggleState();
-        g.setColour(on ? col::accentAmber().withAlpha(0.3f)
-                       : col::graphite().withAlpha(0.88f));
+        g.setColour(on ? col::accentAmber().withAlpha(0.50f)
+                       : col::accentAmber().withAlpha(0.22f));
         g.fillRoundedRectangle(r, kPillCorner);
         g.setColour(on ? col::accentAmber()
-                       : col::boneDim().withAlpha(0.45f));
+                       : col::accentAmber().withAlpha(0.60f));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
         g.setColour(on ? col::accentAmber() : col::bone());
         g.setFont(fonts::value(9.0f));

@@ -340,6 +340,14 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
         g.reduceClipRegion (faceplate.getChassisPath());
         g.excludeClipRegion (aboveRack);    // #1: header/scope/preset/macro
         g.excludeClipRegion (rackExclude);  // #2: rack knob content
+        // #3: nose — macro controls live below the chassis rect; don't
+        // repaint drawChassis() over them or they disappear.
+        {
+            const int noseY = rackExclude.getBottom();
+            g.excludeClipRegion ({ 0, noseY,
+                                   faceplate.getWidth(),
+                                   faceplate.getHeight() - noseY });
+        }
 
         bombo::chassisRenderer::drawCapAndFins (g, ctx);
         bombo::chassisRenderer::drawChassis    (g, ctx);

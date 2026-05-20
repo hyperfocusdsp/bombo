@@ -881,55 +881,54 @@ void FaceplatePanel::layoutSection(Section& s)
 
 void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
 {
-    // Controls are split symmetrically between the left and right fins.
-    // Left fin:  BNC WAV · BNC AIF · DICE   (I/O + randomise)
-    // Right fin: LIM · TAIL · LOOP           (playback toggles, row 1)
-    //            BPM display                  (tempo display,   row 2)
+    // 2+1 layout per fin:
+    //   Left  fin row1: BNC WAV | BNC AIF   row2: DICE (centred)
+    //   Right fin row1: LIM     | TAIL       row2: LOOP + BPM display
     //
-    // All toggle pills share kPillW × kPillH for visual uniformity.
-    // Controls sit in the lower fin zone (y ≈ 160) — below the scope
-    // strip (scope ends ≈ y 142) so there is no overlap.
-    constexpr int kPillW = 60;   // unified width for all pill buttons
+    // 90 px pills let two fit side-by-side within the ~193 px fin width.
+    // Rows are placed below the scope strip (scope ends ~y 150 design)
+    // and within the fin vertical range (design ~57–213).
+    constexpr int kPillW = 90;
     constexpr int kPillH = 22;
-    constexpr int kGap   = 4;    // gap between pills in a row
-    constexpr int kBpmW  = 78;   // BPM display is slightly wider
+    constexpr int kGap   = 4;
+    constexpr int kLoopW = 50;
+    constexpr int kBpmW  = 76;
 
-    const float sx = (float)getWidth()  / bombo::BombShape::kRefW;
-    const float sy = (float)getHeight() / bombo::BombShape::kRefH;
+    const float sx = (float)getWidth() / bombo::BombShape::kRefW;
 
-    // Fin Y range (ref: finTopY=34, finBotY=128) for X-centre calculations.
-    // Rows are placed in design-pixel coords below the scope strip
-    // (scope occupies design y = kHeaderH..kHeaderH+kScopeH = 50..150).
-    // At design y=155, we are inside the orange fin zone (fin: 57–213 design)
-    // but below the scope child component — so pills land on orange, not dark scope.
-    const int row1Y = kHeaderH + kScopeH + 5;  // 155 design px
-    const int row2Y = row1Y + kPillH + kGap;
+    const int row1Y = kHeaderH + kScopeH + 8;   // ≈ 158 design px
+    const int row2Y = row1Y + kPillH + kGap;     // ≈ 184 design px
 
-    // Left fin X: fin outer (ref 13) to body inner at finTopY (ref 130)
-    const int leftFinCx = static_cast<int>((13.0f + 130.0f) * 0.5f * sx);
-    // Right fin X: body inner right at finTopY (ref 230) to fin outer (ref 347)
+    // Fin X centres (ref → design): left fin midpoint between outer (13)
+    // and body inner (130); right fin midpoint between body inner (230) and outer (347).
+    const int leftFinCx  = static_cast<int>((13.0f  + 130.0f) * 0.5f * sx);
     const int rightFinCx = static_cast<int>((230.0f + 347.0f) * 0.5f * sx);
 
-    // ── Left fin: 3 pills centred on leftFinCx ────────────────────────
-    const int leftTotal = 3 * kPillW + 2 * kGap;
-    int lx = leftFinCx - leftTotal / 2;
-    if (bncWavPill_) bncWavPill_->setBounds(lx,             row1Y, kPillW, kPillH);
-    lx += kPillW + kGap;
-    if (bncAifPill_) bncAifPill_->setBounds(lx,             row1Y, kPillW, kPillH);
-    lx += kPillW + kGap;
-    if (diceButton_) diceButton_->setBounds(lx,             row1Y, kPillW, kPillH);
+    // ── Left fin ────────────────────────────────────────────────────────
+    {
+        const int pairW = 2 * kPillW + kGap;
+        int lx = leftFinCx - pairW / 2;
+        if (bncWavPill_) bncWavPill_->setBounds(lx, row1Y, kPillW, kPillH);
+        lx += kPillW + kGap;
+        if (bncAifPill_) bncAifPill_->setBounds(lx, row1Y, kPillW, kPillH);
+        // DICE centred on the fin, same height as pills
+        if (diceButton_) diceButton_->setBounds(leftFinCx - kPillW / 2, row2Y, kPillW, kPillH);
+    }
 
-    // ── Right fin: 3 toggle pills (row 1) + BPM display (row 2) ──────
-    const int rightTotal = 3 * kPillW + 2 * kGap;
-    int rx = rightFinCx - rightTotal / 2;
-    if (limPill_)  limPill_ ->setBounds(rx,             row1Y, kPillW, kPillH);
-    rx += kPillW + kGap;
-    if (tailPill_) tailPill_->setBounds(rx,             row1Y, kPillW, kPillH);
-    rx += kPillW + kGap;
-    if (loopBtn_)  loopBtn_ ->setBounds(rx,             row1Y, kPillW, kPillH);
-
-    if (bpmDisplay_)
-        bpmDisplay_->setBounds(rightFinCx - kBpmW / 2, row2Y, kBpmW, kPillH);
+    // ── Right fin ────────────────────────────────────────────────────────
+    {
+        const int pairW = 2 * kPillW + kGap;
+        int rx = rightFinCx - pairW / 2;
+        if (limPill_)  limPill_ ->setBounds(rx, row1Y, kPillW, kPillH);
+        rx += kPillW + kGap;
+        if (tailPill_) tailPill_->setBounds(rx, row1Y, kPillW, kPillH);
+        // Row 2: LOOP + BPM side-by-side, centred on rightFinCx
+        const int row2W = kLoopW + kGap + kBpmW;
+        int rx2 = rightFinCx - row2W / 2;
+        if (loopBtn_)    loopBtn_   ->setBounds(rx2, row2Y, kLoopW, kPillH);
+        rx2 += kLoopW + kGap;
+        if (bpmDisplay_) bpmDisplay_->setBounds(rx2, row2Y, kBpmW,  kPillH);
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────
