@@ -102,8 +102,10 @@ public:
         g.setColour(on ? col::accentAmber().withAlpha(0.40f)
                        : col::graphite().withAlpha(0.88f));
         g.fillRoundedRectangle(r, kPillCorner);
+        // Toggle buttons always have an amber border (dim when OFF, full when ON)
+        // so they're visually distinct from action TextButtons (bone border).
         g.setColour(on ? col::accentAmber()
-                       : col::boneDim().withAlpha(0.45f));
+                       : col::accentAmber().withAlpha(0.50f));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
         g.setColour(on ? col::ink() : col::bone());
         g.setFont(fonts::value(9.0f));

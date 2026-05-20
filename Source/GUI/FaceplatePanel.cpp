@@ -885,13 +885,12 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
     //   Left  fin row1: BNC WAV | BNC AIF   row2: DICE (centred)
     //   Right fin row1: LIM     | TAIL       row2: LOOP + BPM display
     //
-    // 90 px pills let two fit side-by-side within the ~193 px fin width.
-    // Rows are placed below the scope strip (scope ends ~y 150 design)
-    // and within the fin vertical range (design ~57–213).
-    constexpr int kPillW = 90;
+    // kPillW sized to the widest label ("BNC WAV", ~42 px at 9 pt) plus
+    // 10 px padding each side → 62 px. All pills share this width.
+    constexpr int kPillW = 62;
     constexpr int kPillH = 22;
     constexpr int kGap   = 4;
-    constexpr int kLoopW = 50;
+    constexpr int kLoopW = 44;
     constexpr int kBpmW  = 76;
 
     const float sx = (float)getWidth() / bombo::BombShape::kRefW;
