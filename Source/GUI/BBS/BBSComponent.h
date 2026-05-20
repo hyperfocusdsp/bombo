@@ -50,6 +50,10 @@ public:
     // Expose screens for external state queries.
     BBSScreen currentScreen() const noexcept { return screens_.current(); }
 
+    // Called by BomboEditor when bounds change — passes the chassis outline
+    // in BBS-local coordinates so paint() can clip corners to the silhouette.
+    void setLocalChassisClip(const juce::Path& p) { localChassisClip_ = p; repaint(); }
+
 private:
     void timerCallback() override;
 
@@ -75,9 +79,15 @@ private:
     bool         introComplete_ = false;
     juce::String introText_;
 
-    // Scroller
-    int          scrollOffset_ = 0;
+    // Scroller — advances 1 char every 2 timer ticks (half the tick rate)
+    int          scrollOffset_  = 0;
+    int          scrollSubtick_ = 0;
     juce::String scrollerText_;
+
+    // Chassis clip path in BBS-local coords — set by BomboEditor so paint()
+    // can clip itself to the bomb silhouette (BBS rect can extend past the
+    // chassis at the top-left/right corners where the egg-shape narrows).
+    juce::Path   localChassisClip_;
 
     // SYSOP state
     int          currentSysopIdx_ = 0;

@@ -705,6 +705,17 @@ void BomboEditor::updateBbsBounds()
         b.setBottom (chassisBot);
 
     bbs_.setBounds (b);
+
+    // Build chassis path in BBS-local coords so BBSComponent::paint()
+    // can clip itself to the bomb silhouette (top corners of the rack
+    // rect extend outside the chassis egg-shape and leak through).
+    {
+        auto clip = faceplate.getChassisPath();
+        clip.applyTransform (fullT);   // design → editor
+        clip.applyTransform (juce::AffineTransform::translation (
+            -(float) b.getX(), -(float) b.getY()));  // editor → BBS-local
+        bbs_.setLocalChassisClip (clip);
+    }
 }
 
 void BomboEditor::resetBbsProgression()

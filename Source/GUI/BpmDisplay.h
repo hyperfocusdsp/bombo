@@ -65,7 +65,7 @@ public:
         const int displayed = static_cast<int>(std::round(
             hostLocked ? hostBpmDisplayed_ : static_cast<float>(slider_.getValue())));
         g.setColour(hostLocked ? col::accentAmber() : col::bone());
-        g.setFont(fonts::value(9.0f));
+        g.setFont(fonts::value(16.0f));
         g.drawText(juce::String(displayed) + " BPM", r,
                    juce::Justification::centred, false);
     }

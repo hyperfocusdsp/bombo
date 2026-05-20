@@ -88,7 +88,7 @@ public:
         const bool on = shouldDrawButtonAsDown || btn.getToggleState();
         // Dark text on amber fill, light text on dark graphite.
         g.setColour(on ? col::ink() : col::bone());
-        g.setFont(fonts::value(9.0f));
+        g.setFont(fonts::value(16.0f));
         g.drawText(btn.getButtonText(), btn.getLocalBounds(),
                    juce::Justification::centred, false);
     }
@@ -108,7 +108,7 @@ public:
                        : col::accentAmber().withAlpha(0.50f));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
         g.setColour(on ? col::ink() : col::bone());
-        g.setFont(fonts::value(9.0f));
+        g.setFont(fonts::value(16.0f));
         g.drawText(btn.getButtonText(), r, juce::Justification::centred, false);
     }
 

@@ -103,7 +103,12 @@ void BBSComponent::timerCallback()
             screens_.onIntroComplete();
         }
     }
-    scrollOffset_ = (scrollOffset_ + 1) % juce::jmax(1, scrollerText_.length());
+    // Advance scroller every other tick (half speed — 80 ms per character).
+    if (++scrollSubtick_ >= 2)
+    {
+        scrollSubtick_ = 0;
+        scrollOffset_ = (scrollOffset_ + 1) % juce::jmax(1, scrollerText_.length());
+    }
     repaint();
 }
 
@@ -287,6 +292,11 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 
 void BBSComponent::paint(juce::Graphics& g)
 {
+    // Clip to the bomb silhouette so the BBS rect corners (which can
+    // extend outside the chassis egg-shape at the top) stay hidden.
+    if (! localChassisClip_.isEmpty())
+        g.reduceClipRegion(localChassisClip_);
+
     // Fill with a rounded rect inset 1px from edges so the hard dark
     // boundary doesn't bleed into the orange nose section below.
     g.setColour(juce::Colour(0xFF0A0A0Au).withAlpha(0.94f));
