@@ -23,6 +23,7 @@ class SampleSlotWidget;
 class BpmDisplay;
 class BalanceFader;
 class DiceButton;
+class LoopButton;
 
 // Bombo faceplate. Four bands stacked top-to-bottom:
 //   1. Header  — BOMBO logo, DICE/LIM/LOOP/BPM pills (always-visible, no pages)
@@ -257,15 +258,16 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> limAtt_;
     std::unique_ptr<juce::ToggleButton> tailPill_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tailAtt_;
-    std::unique_ptr<juce::ToggleButton> loopBtn_;
+    std::unique_ptr<LoopButton>         loopBtn_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> loopAtt_;
     std::unique_ptr<BpmDisplay>         bpmDisplay_;
     std::unique_ptr<BalanceFader>       balanceFader_;
     std::unique_ptr<DiceButton>         diceButton_;
-    // Bounce pills — momentary TextButtons (not toggle-attached). Sit in
-    // the header row between DICE and the rack, left of LIM.
-    std::unique_ptr<juce::TextButton>   bncWavPill_;
-    std::unique_ptr<juce::TextButton>   bncAifPill_;
+    // Single BNC bounce pill — popup on click selects WAV or AIFF, remembers choice.
+    std::unique_ptr<juce::TextButton>   bncPill_;
+    BounceFn bounceWavCb_;
+    BounceFn bounceAiffCb_;
+    bool lastBounceIsAiff_ = false;
     juce::Rectangle<int> headerBounds_;
 
     // Scope.

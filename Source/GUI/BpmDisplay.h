@@ -53,11 +53,12 @@ public:
         const bool on = hostLocked;
 
         // Background + border — mirrors BomboLookAndFeel pill style.
-        g.setColour(on ? col::accentAmber().withAlpha(0.3f)
+        g.setColour(on ? col::accentAmber().withAlpha(0.40f)
                        : col::graphite().withAlpha(0.88f));
         g.fillRoundedRectangle(r, kR);
+        // Amber border always (dim when unlocked) — same as LoopButton / toggle pills.
         g.setColour(on ? col::accentAmber()
-                       : col::boneDim().withAlpha(0.45f));
+                       : col::accentAmber().withAlpha(0.50f));
         g.drawRoundedRectangle(r.reduced(0.5f), kR, 1.0f);
 
         // "149 BPM" centred — same monospaced font as the other fin pills.

@@ -6,6 +6,7 @@
 #include "ChassisRenderer.h"
 #include "Colours.h"
 #include "DiceButton.h"
+#include "LoopButton.h"
 #include "Fonts.h"
 #include "HeaderRenderer.h"
 #include "SampleSlotWidget.h"
@@ -209,9 +210,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         apvts_, pid::tailKillOn, *tailPill_);
     addAndMakeVisible(*tailPill_);
 
-    // ── Loop toggle (small "↻" pill) ────────────────────────────────
-    loopBtn_ = std::make_unique<juce::ToggleButton>("LOOP");
-    loopBtn_->setColour(juce::ToggleButton::textColourId, col::bone());
+    // ── Loop toggle — icon-only circular-arrow button ──────────────
+    loopBtn_ = std::make_unique<LoopButton>();
     loopBtn_->setWantsKeyboardFocus(false);
     loopBtn_->setMouseClickGrabsKeyboardFocus(false);
     loopAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
@@ -232,27 +232,30 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     diceButton_->onClick = std::move(randomizeCb);
     addAndMakeVisible(*diceButton_);
 
-    // ── BNC WAV / BNC AIF pills (offline bounce) ───────────────────
-    // Momentary TextButtons (not APVTS-attached). Editor wires onClick
-    // to a FileChooser + OfflineBouncer flow. Callback may be empty in
-    // headless/test contexts — guard so the click is a no-op.
-    bncWavPill_ = std::make_unique<juce::TextButton>("BNC WAV");
-    bncWavPill_->setColour(juce::TextButton::textColourOnId,  col::bone());
-    bncWavPill_->setColour(juce::TextButton::textColourOffId, col::bone());
-    bncWavPill_->setTooltip("Bounce the current sound to a .wav file");
-    bncWavPill_->setWantsKeyboardFocus(false);
-    bncWavPill_->setMouseClickGrabsKeyboardFocus(false);
-    bncWavPill_->onClick = [cb = std::move(bounceWavCb)] { if (cb) cb(); };
-    addAndMakeVisible(*bncWavPill_);
+    // ── BNC pill — single bounce button with format popup ──────────
+    // Click shows WAV / AIFF choice; ticks the last-used format.
+    // Callbacks stored as members so the popup lambda can reach them.
+    bounceWavCb_  = std::move(bounceWavCb);
+    bounceAiffCb_ = std::move(bounceAiffCb);
 
-    bncAifPill_ = std::make_unique<juce::TextButton>("BNC AIF");
-    bncAifPill_->setColour(juce::TextButton::textColourOnId,  col::bone());
-    bncAifPill_->setColour(juce::TextButton::textColourOffId, col::bone());
-    bncAifPill_->setTooltip("Bounce the current sound to an .aiff file");
-    bncAifPill_->setWantsKeyboardFocus(false);
-    bncAifPill_->setMouseClickGrabsKeyboardFocus(false);
-    bncAifPill_->onClick = [cb = std::move(bounceAiffCb)] { if (cb) cb(); };
-    addAndMakeVisible(*bncAifPill_);
+    bncPill_ = std::make_unique<juce::TextButton>("BNC");
+    bncPill_->setTooltip("Bounce to WAV or AIFF — click to choose format");
+    bncPill_->setWantsKeyboardFocus(false);
+    bncPill_->setMouseClickGrabsKeyboardFocus(false);
+    bncPill_->onClick = [this]
+    {
+        juce::PopupMenu m;
+        m.addItem(1, "Bounce WAV",  true, !lastBounceIsAiff_);
+        m.addItem(2, "Bounce AIFF", true,  lastBounceIsAiff_);
+        m.showMenuAsync(
+            juce::PopupMenu::Options().withTargetComponent(bncPill_.get()),
+            [this](int result)
+            {
+                if (result == 1) { lastBounceIsAiff_ = false; if (bounceWavCb_)  bounceWavCb_();  }
+                if (result == 2) { lastBounceIsAiff_ = true;  if (bounceAiffCb_) bounceAiffCb_(); }
+            });
+    };
+    addAndMakeVisible(*bncPill_);
 
     // ── Nose overlay ────────────────────────────────────────────────
     // Transparent component over the nose region; handles 7-tap
@@ -881,16 +884,16 @@ void FaceplatePanel::layoutSection(Section& s)
 
 void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
 {
-    // 2+1 layout per fin:
-    //   Left  fin row1: BNC WAV | BNC AIF   row2: DICE (centred)
-    //   Right fin row1: LIM     | TAIL       row2: LOOP + BPM display
+    // Left  fin row1: BNC (pill) | DICE (square icon)   — one row only
+    // Right fin row1: LIM (pill) | TAIL (pill)
+    //         row2:  LOOP (square icon) | BPM display
     //
-    // kPillW sized to the widest label ("BNC WAV", ~42 px at 9 pt) plus
-    // 10 px padding each side → 62 px. All pills share this width.
+    // kPillW = 62 px (fits "BNC" and "LIM"/"TAIL" with comfortable margins).
+    // kSq    = 22 px — square side used for DICE and LOOP icons.
     constexpr int kPillW = 62;
     constexpr int kPillH = 22;
+    constexpr int kSq    = 22;   // square icon size
     constexpr int kGap   = 4;
-    constexpr int kLoopW = 44;
     constexpr int kBpmW  = 76;
 
     const float sx = (float)getWidth() / bombo::BombShape::kRefW;
@@ -898,35 +901,35 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
     const int row1Y = kHeaderH + kScopeH + 8;   // ≈ 158 design px
     const int row2Y = row1Y + kPillH + kGap;     // ≈ 184 design px
 
-    // Fin X centres (ref → design): left fin midpoint between outer (13)
-    // and body inner (130); right fin midpoint between body inner (230) and outer (347).
     const int leftFinCx  = static_cast<int>((13.0f  + 130.0f) * 0.5f * sx);
     const int rightFinCx = static_cast<int>((230.0f + 347.0f) * 0.5f * sx);
 
-    // ── Left fin ────────────────────────────────────────────────────────
+    // ── Left fin: BNC pill + DICE square, single row ─────────────────
     {
-        const int pairW = 2 * kPillW + kGap;
-        int lx = leftFinCx - pairW / 2;
-        if (bncWavPill_) bncWavPill_->setBounds(lx, row1Y, kPillW, kPillH);
+        const int totalW = kPillW + kGap + kSq;
+        int lx = leftFinCx - totalW / 2;
+        if (bncPill_)    bncPill_   ->setBounds(lx,           row1Y, kPillW, kPillH);
         lx += kPillW + kGap;
-        if (bncAifPill_) bncAifPill_->setBounds(lx, row1Y, kPillW, kPillH);
-        // DICE centred on the fin, same height as pills
-        if (diceButton_) diceButton_->setBounds(leftFinCx - kPillW / 2, row2Y, kPillW, kPillH);
+        // DICE is square — centre it vertically in the pill height
+        const int diceY = row1Y + (kPillH - kSq) / 2;
+        if (diceButton_) diceButton_->setBounds(lx,           diceY, kSq,    kSq);
     }
 
-    // ── Right fin ────────────────────────────────────────────────────────
+    // ── Right fin: row1 LIM+TAIL, row2 LOOP-icon+BPM ─────────────────
     {
         const int pairW = 2 * kPillW + kGap;
         int rx = rightFinCx - pairW / 2;
         if (limPill_)  limPill_ ->setBounds(rx, row1Y, kPillW, kPillH);
         rx += kPillW + kGap;
         if (tailPill_) tailPill_->setBounds(rx, row1Y, kPillW, kPillH);
-        // Row 2: LOOP + BPM side-by-side, centred on rightFinCx
-        const int row2W = kLoopW + kGap + kBpmW;
+
+        // Row 2: LOOP icon (square) + BPM display, centred on rightFinCx
+        const int row2W = kSq + kGap + kBpmW;
         int rx2 = rightFinCx - row2W / 2;
-        if (loopBtn_)    loopBtn_   ->setBounds(rx2, row2Y, kLoopW, kPillH);
-        rx2 += kLoopW + kGap;
-        if (bpmDisplay_) bpmDisplay_->setBounds(rx2, row2Y, kBpmW,  kPillH);
+        const int loopY = row2Y + (kPillH - kSq) / 2;
+        if (loopBtn_)    loopBtn_   ->setBounds(rx2, loopY, kSq,   kSq);
+        rx2 += kSq + kGap;
+        if (bpmDisplay_) bpmDisplay_->setBounds(rx2, row2Y, kBpmW, kPillH);
     }
 }
 

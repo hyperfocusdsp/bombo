@@ -36,22 +36,27 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        const auto bounds = getLocalBounds().toFloat().reduced(1.5f);
+        // Die is always square — use the smaller axis, centred in component.
+        const auto full   = getLocalBounds().toFloat();
+        const float side  = juce::jmin(full.getWidth(), full.getHeight()) - 3.0f;
+        const auto bounds = juce::Rectangle<float>(
+            full.getCentreX() - side * 0.5f, full.getCentreY() - side * 0.5f,
+            side, side);
         const bool hot = isMouseOver(true);
 
-        // Body — rounded square. Amber when hovered, bone-on-graphite at rest.
-        g.setColour(hot ? col::accentAmber() : col::graphite());
+        // Body — rounded square. Amber when hovered, dark graphite at rest
+        // (action button: bone border, not amber, to distinguish from toggles).
+        g.setColour(hot ? col::accentAmber() : col::graphite().withAlpha(0.88f));
         g.fillRoundedRectangle(bounds, 3.5f);
-        g.setColour(hot ? col::ink() : col::boneDim().withAlpha(0.75f));
+        g.setColour(hot ? col::ink() : col::boneDim().withAlpha(0.45f));
         g.drawRoundedRectangle(bounds.reduced(0.5f), 3.5f, 1.0f);
 
-        // Pips — classic die face pattern on a 3×3 grid (with corner +
-        // mid-side + center cells filled per face number).
+        // Pips — die face pattern. Grid spacing 22% so pips never touch walls.
         const float cx = bounds.getCentreX();
         const float cy = bounds.getCentreY();
-        const float gx = bounds.getWidth()  * 0.27f;
-        const float gy = bounds.getHeight() * 0.27f;
-        const float pipR = juce::jmax(1.2f, bounds.getWidth() * 0.085f);
+        const float gx = side * 0.22f;
+        const float gy = side * 0.22f;
+        const float pipR = juce::jmax(1.0f, side * 0.065f);
 
         auto drawPip = [&](float x, float y)
         {
