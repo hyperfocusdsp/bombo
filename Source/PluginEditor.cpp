@@ -1,6 +1,7 @@
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 
+#include "GUI/BombShape.h"
 #include "GUI/Theme/ThemeProvider.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
@@ -286,69 +287,87 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
     const float scale = faceplate.getTransform().mat00;
     if (scale <= 0.0f) return;
 
+    // Rack bounds in screen coords, clamped to chassis body bottom.
     auto rack = faceplate.getRackBounds()
                     .toFloat()
-                    .transformedBy(juce::AffineTransform::scale(scale));
-
-    // Mirror the same chassis-bottom clamp used in updateBbsBounds() so
-    // the frame never extends into the orange nose region.
+                    .transformedBy (juce::AffineTransform::scale (scale));
     const float chassisBot =
         (float) faceplate.getChassisRectArea().getBottom() * scale;
-    rack = rack.withBottom(juce::jmin(rack.getBottom(), chassisBot));
-
+    rack = rack.withBottom (juce::jmin (rack.getBottom(), chassisBot));
     if (rack.isEmpty()) return;
 
-    // Chassis interior in screen space — nothing can paint outside this.
-    const auto chassis = faceplate.getChassisRectArea()
-                             .toFloat()
-                             .transformedBy (juce::AffineTransform::scale (scale));
+    // Bomb silhouette path in screen coords.
+    // buildBombPath works in faceplate design-space (same as faceplate.getBounds()),
+    // then we apply the same scale transform to land in editor (screen) coords.
+    auto bombPath = bombo::BombShape::buildBombPath (faceplate.getBounds().toFloat());
+    bombPath.applyTransform (juce::AffineTransform::scale (scale));
 
-    // ── Amber outer lip (1 px) ────────────────────────────────────────
-    // The rack fills the chassis interior edge-to-edge, so there is no
-    // room to expand outward without bleeding into the bomb body walls.
-    // Draw at exactly the rack boundary — this is the inner lip of the
-    // cutout opening, sitting right at the chassis wall surface.
-    g.setColour (juce::Colour (0xFFFFB800).withAlpha (0.80f));
-    g.drawRect (rack, 1.0f);
+    // ── Hull mask ─────────────────────────────────────────────────────
+    // Fill the rack area that falls OUTSIDE the bomb silhouette with
+    // solid black so the hull appears to be on top of the rack/BBS
+    // content. Even-odd rule: inside rack only → 1 crossing → filled;
+    // inside both rack and bomb → 2 crossings → unfilled (content shows).
+    // Clip to rack prevents accidentally painting over the bomb body.
+    {
+        juce::Graphics::ScopedSaveState ss (g);
+        g.reduceClipRegion (rack.toNearestInt());
+        juce::Path mask;
+        mask.setUsingNonZeroWinding (false);
+        mask.addRectangle (rack);
+        mask.addPath (bombPath);
+        g.setColour (juce::Colours::black);
+        g.fillPath (mask);
+    }
 
-    // ── Inner bevel — top shadow (light source from above) ────────────
-    // Shadow cast by the far lip of the cutout down onto the electronics.
-    const float bW = 5.0f * scale;
+    // ── Frame (clipped to bomb silhouette) ────────────────────────────
+    // All frame drawing is clipped to the bomb path so amber and bevel
+    // gradients are cleanly cut at the hull silhouette edge.
     {
-        juce::ColourGradient cg (juce::Colours::black.withAlpha (0.48f),
-                                  rack.getX(), rack.getY(),
-                                  juce::Colours::transparentBlack,
-                                  rack.getX(), rack.getY() + bW, false);
-        g.setGradientFill (cg);
-        g.fillRect (rack.withBottom (rack.getY() + bW).getIntersection (chassis));
-    }
-    // ── Inner bevel — left shadow ────────────────────────────────────
-    {
-        juce::ColourGradient cg (juce::Colours::black.withAlpha (0.30f),
-                                  rack.getX(), rack.getY(),
-                                  juce::Colours::transparentBlack,
-                                  rack.getX() + bW, rack.getY(), false);
-        g.setGradientFill (cg);
-        g.fillRect (rack.withRight (rack.getX() + bW).getIntersection (chassis));
-    }
-    // ── Inner bevel — bottom highlight (ambient bounce) ───────────────
-    const float hW = 3.0f * scale;
-    {
-        juce::ColourGradient cg (juce::Colours::white.withAlpha (0.06f),
-                                  rack.getX(), rack.getBottom(),
-                                  juce::Colours::transparentBlack,
-                                  rack.getX(), rack.getBottom() - hW, false);
-        g.setGradientFill (cg);
-        g.fillRect (rack.withTop (rack.getBottom() - hW).getIntersection (chassis));
-    }
-    // ── Inner bevel — right highlight ────────────────────────────────
-    {
-        juce::ColourGradient cg (juce::Colours::white.withAlpha (0.04f),
-                                  rack.getRight(), rack.getY(),
-                                  juce::Colours::transparentBlack,
-                                  rack.getRight() - hW, rack.getY(), false);
-        g.setGradientFill (cg);
-        g.fillRect (rack.withLeft (rack.getRight() - hW).getIntersection (chassis));
+        juce::Graphics::ScopedSaveState ss (g);
+        g.reduceClipRegion (bombPath);
+
+        // Amber inner lip — marks the edge of the cutout opening
+        g.setColour (juce::Colour (0xFFFFB800).withAlpha (0.80f));
+        g.drawRect (rack, 1.0f);
+
+        // Inner bevel — top shadow (far lip casts shadow down into the opening)
+        const float bW = 5.0f * scale;
+        {
+            juce::ColourGradient cg (juce::Colours::black.withAlpha (0.48f),
+                                      rack.getX(), rack.getY(),
+                                      juce::Colours::transparentBlack,
+                                      rack.getX(), rack.getY() + bW, false);
+            g.setGradientFill (cg);
+            g.fillRect (rack.withBottom (rack.getY() + bW));
+        }
+        // Inner bevel — left shadow
+        {
+            juce::ColourGradient cg (juce::Colours::black.withAlpha (0.30f),
+                                      rack.getX(), rack.getY(),
+                                      juce::Colours::transparentBlack,
+                                      rack.getX() + bW, rack.getY(), false);
+            g.setGradientFill (cg);
+            g.fillRect (rack.withRight (rack.getX() + bW));
+        }
+        // Inner bevel — bottom highlight (ambient bounce)
+        const float hW = 3.0f * scale;
+        {
+            juce::ColourGradient cg (juce::Colours::white.withAlpha (0.06f),
+                                      rack.getX(), rack.getBottom(),
+                                      juce::Colours::transparentBlack,
+                                      rack.getX(), rack.getBottom() - hW, false);
+            g.setGradientFill (cg);
+            g.fillRect (rack.withTop (rack.getBottom() - hW));
+        }
+        // Inner bevel — right highlight
+        {
+            juce::ColourGradient cg (juce::Colours::white.withAlpha (0.04f),
+                                      rack.getRight(), rack.getY(),
+                                      juce::Colours::transparentBlack,
+                                      rack.getRight() - hW, rack.getY(), false);
+            g.setGradientFill (cg);
+            g.fillRect (rack.withLeft (rack.getRight() - hW));
+        }
     }
 }
 
