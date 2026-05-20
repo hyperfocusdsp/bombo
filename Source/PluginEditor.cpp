@@ -281,6 +281,69 @@ void BomboEditor::paint(juce::Graphics& g)
     paintGlitchOverlay(g);
 }
 
+void BomboEditor::paintOverChildren(juce::Graphics& g)
+{
+    const float scale = faceplate.getTransform().mat00;
+    if (scale <= 0.0f) return;
+
+    auto rack = faceplate.getRackBounds()
+                    .toFloat()
+                    .transformedBy(juce::AffineTransform::scale(scale));
+
+    // Mirror the same chassis-bottom clamp used in updateBbsBounds() so
+    // the frame never extends into the orange nose region.
+    const float chassisBot =
+        (float) faceplate.getChassisRectArea().getBottom() * scale;
+    rack = rack.withBottom(juce::jmin(rack.getBottom(), chassisBot));
+
+    if (rack.isEmpty()) return;
+
+    // ── Amber outer lip (1 px) ────────────────────────────────────────
+    // Sits on the chassis metal just outside the opening.
+    g.setColour(juce::Colour(0xFFFFB800).withAlpha(0.80f));
+    g.drawRect(rack.expanded(1.5f), 1.0f);
+
+    // ── Inner bevel — top shadow (light source from above) ────────────
+    // Shadow cast by the far lip of the cutout down onto the electronics.
+    const float bW = 5.0f * scale;
+    {
+        juce::ColourGradient cg (juce::Colours::black.withAlpha (0.48f),
+                                  rack.getX(), rack.getY(),
+                                  juce::Colours::transparentBlack,
+                                  rack.getX(), rack.getY() + bW, false);
+        g.setGradientFill (cg);
+        g.fillRect (rack.withBottom (rack.getY() + bW));
+    }
+    // ── Inner bevel — left shadow ────────────────────────────────────
+    {
+        juce::ColourGradient cg (juce::Colours::black.withAlpha (0.30f),
+                                  rack.getX(), rack.getY(),
+                                  juce::Colours::transparentBlack,
+                                  rack.getX() + bW, rack.getY(), false);
+        g.setGradientFill (cg);
+        g.fillRect (rack.withRight (rack.getX() + bW));
+    }
+    // ── Inner bevel — bottom highlight (ambient bounce) ───────────────
+    const float hW = 3.0f * scale;
+    {
+        juce::ColourGradient cg (juce::Colours::white.withAlpha (0.06f),
+                                  rack.getX(), rack.getBottom(),
+                                  juce::Colours::transparentBlack,
+                                  rack.getX(), rack.getBottom() - hW, false);
+        g.setGradientFill (cg);
+        g.fillRect (rack.withTop (rack.getBottom() - hW));
+    }
+    // ── Inner bevel — right highlight ────────────────────────────────
+    {
+        juce::ColourGradient cg (juce::Colours::white.withAlpha (0.04f),
+                                  rack.getRight(), rack.getY(),
+                                  juce::Colours::transparentBlack,
+                                  rack.getRight() - hW, rack.getY(), false);
+        g.setGradientFill (cg);
+        g.fillRect (rack.withLeft (rack.getRight() - hW));
+    }
+}
+
 void BomboEditor::triggerGlitch(GlitchLevel level, int durationMs)
 {
     glitchLevel_ = level;
@@ -529,13 +592,22 @@ void BomboEditor::updateBbsBounds()
 {
     const float scale = faceplate.getTransform().mat00;
     if (scale <= 0.0f) return;
-    // Trim 4px from the bottom so the dark BBS fill never touches the
-    // orange nose section below the rack.
-    bbs_.setBounds(faceplate.getRackBounds()
-                       .toFloat()
-                       .transformedBy(juce::AffineTransform::scale(scale))
-                       .toNearestInt()
-                       .withTrimmedBottom(4));
+
+    auto b = faceplate.getRackBounds()
+                 .toFloat()
+                 .transformedBy(juce::AffineTransform::scale(scale))
+                 .toNearestInt();
+
+    // Clamp bottom to the chassis body boundary so BBS never bleeds into
+    // the orange nose section below. getChassisRectArea().getBottom() is
+    // the last row of the body interior in design-space; multiply by scale
+    // to get screen pixels.
+    const int chassisBot = static_cast<int>(
+        (float) faceplate.getChassisRectArea().getBottom() * scale);
+    if (b.getBottom() > chassisBot)
+        b.setBottom (chassisBot);
+
+    bbs_.setBounds (b);
 }
 
 void BomboEditor::resetBbsProgression()
