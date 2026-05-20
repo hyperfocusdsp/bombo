@@ -425,6 +425,20 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
 {
     const auto mods = key.getModifiers();
 
+    // When BBS is visible, route all keys through its handler regardless of
+    // focus. JUCE only delivers keyPressed to the focused component, so if
+    // the user clicks back on the faceplate while BBS is open, ESC / S / T /
+    // N-P-F etc. would otherwise bypass BBS entirely. The Ctrl+Shift+*
+    // dev shortcuts below stay handled here so they remain reachable when
+    // BBS is dismissed via the in-BBS ESC handler. Modifier-bearing keys
+    // (Ctrl+Shift+B/R/E) fall through to the editor's own handlers — BBS
+    // doesn't claim them.
+    if (bbs_.isVisible() && ! mods.isAnyModifierKeyDown()
+        && key.getKeyCode() != juce::KeyPress::F2Key)
+    {
+        if (bbs_.keyPressed(key)) return true;
+    }
+
     // ── Layout-edit mode toggle (F2 or Ctrl+Shift+E) ────────────────
     // Ports an earlier project's UX: enter edit mode, drag/resize widgets,
     // Layout.json persists. Exit with the same key or Esc-via-overlay.

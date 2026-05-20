@@ -111,6 +111,17 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 {
     if (key == juce::KeyPress::escapeKey) { hide(); return true; }
 
+    // T fires the kick from any BBS screen — Intro/BoomFeed/MyDownloads.
+    // Mirrors the main editor's T shortcut so muscle memory carries over.
+    {
+        const auto chTop = juce::CharacterFunctions::toLowerCase(key.getTextCharacter());
+        if (chTop == 't')
+        {
+            if (triggerCb_) triggerCb_();
+            return true;
+        }
+    }
+
     if (screens_.current() == BBSScreen::Intro)
     {
         introComplete_ = true;
@@ -158,20 +169,25 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
             if (triggerCb_) triggerCb_();
             return true;
         }
-        if (ch == 't' || ch == 'T')
-        {
-            if (triggerCb_) triggerCb_();
-            return true;
-        }
         if (ch == 's' || ch == 'S')
         {
             if (apvts_ != nullptr && presetBank_ != nullptr)
             {
                 const auto name = boomFeed_.currentFilename()
                                       .upToLastOccurrenceOf(".KCK", false, true);
-                presetBank_->saveAs(name, *apvts_);
-                if (progression_ != nullptr) progression_->onKickSaved();
-                saveStatusMsg_ = ">> PRESET SAVED: " + name + " <<";
+                const int newIdx = presetBank_->saveAs(name, *apvts_);
+                if (newIdx >= 0)
+                {
+                    if (progression_ != nullptr) progression_->onKickSaved();
+                    saveStatusMsg_ = ">> PRESET SAVED: " + name + " <<";
+                }
+                else
+                {
+                    // saveAs returns -1 for: empty sanitised name, name clash
+                    // with an existing user preset, or any disk-write failure.
+                    saveStatusMsg_ = ">> SAVE FAILED: " + name
+                                   + " -- ALREADY EXISTS OR DISK ERROR <<";
+                }
                 saveStatusTime_ = juce::Time::getCurrentTime();
                 repaint();
             }

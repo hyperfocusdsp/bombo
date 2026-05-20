@@ -246,6 +246,14 @@ int PresetBank::saveAs(const juce::String& displayName,
     const auto safeStem = sanitizeFilename(displayName);
     if (safeStem.isEmpty()) return -1;
     const auto dir  = userPresetsDir();
+    // First-save on a fresh install — the directory doesn't exist yet, so
+    // writePresetJson would fail silently. Create it (and any parents) up
+    // front so the JSON write below has somewhere to land.
+    if (! dir.isDirectory())
+    {
+        const auto res = dir.createDirectory();
+        if (res.failed()) return -1;
+    }
     const auto file = dir.getChildFile(safeStem + ".json");
     if (file.existsAsFile()) return -1;   // refuse to clobber
 
