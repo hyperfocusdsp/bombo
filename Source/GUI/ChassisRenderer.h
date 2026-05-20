@@ -31,10 +31,12 @@ namespace bombo::chassisRenderer
     // tools/bombshape_gen.py render order).
     void drawCapAndFins(juce::Graphics& g, const Ctx& ctx);
 
-    // Body gradient (bodyHi → bodyLo) filled into chassisPath.
+    // Single-pass fill of the chassis silhouette: vertical gradient
+    // bodyHi → bodyLo with a sharp transition to noseRed at redRegionTopY.
+    // Plus the bone silhouette stroke (above the nose region only).
     void drawChassis(juce::Graphics& g, const Ctx& ctx);
 
-    // Red nose region: a rectangle fill clipped to chassisPath, with a
-    // thin dark ring line at redRegionTopY marking the paint split.
+    // No-op since 2026-05-20 — body and nose are now painted by drawChassis()
+    // in a single fillPath. Kept for paint-order call-site compatibility.
     void drawRedRegion(juce::Graphics& g, const Ctx& ctx);
 }
