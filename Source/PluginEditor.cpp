@@ -168,11 +168,14 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // sprint plan at internal notes).
     constexpr double kDesignW    = 600.0;
     constexpr double kDesignH    = 1066.0;
-    constexpr double kAspect     = kDesignW / kDesignH;
+    // Visible window = bomb bounding box (fin outer tips → nose tip, R4B-CLASSIC)
+    constexpr double kBombW      = (347.0 - 13.0) / 360.0 * kDesignW; // ≈ 556.67
+    constexpr double kBombH      = (600.0 - 22.0) / 640.0 * kDesignH; // ≈ 962.73
+    constexpr double kAspect     = kBombW / kBombH;                    // ≈ 0.578
     constexpr int    kMinWidth   = 360;
     constexpr int    kMaxWidth   = 900;
 
-    setSize(static_cast<int>(kDesignW), static_cast<int>(kDesignH));
+    setSize(static_cast<int>(kBombW), static_cast<int>(kBombH));
     setResizable(true, true);
     setResizeLimits(kMinWidth, static_cast<int>(kMinWidth / kAspect),
                     kMaxWidth, static_cast<int>(kMaxWidth / kAspect));
@@ -210,7 +213,7 @@ BomboEditor::BomboEditor(BomboProcessor& p)
             {
                 if (auto* props = holder->settings.get())
                 {
-                    const int saved = props->getIntValue("bombo-editor-width-v2", -1);
+                    const int saved = props->getIntValue("bombo-editor-width-v3", -1);
                     if (saved >= kMinWidth && saved <= kMaxWidth) w = saved;
                 }
             }
@@ -233,8 +236,8 @@ BomboEditor::BomboEditor(BomboProcessor& p)
                 constexpr int kChromePad = 60;
                 const double padW = juce::jmax(1, area.getWidth()  - kChromePad);
                 const double padH = juce::jmax(1, area.getHeight() - kChromePad);
-                const double scale = std::min(padW / kDesignW, padH / kDesignH);
-                w = static_cast<int>(std::round(kDesignW * scale));
+                const double scale = std::min(padW / kBombW, padH / kBombH);
+                w = static_cast<int>(std::round(kBombW * scale));
                 w = juce::jlimit(kMinWidth, kMaxWidth, w);
             }
             const int h = static_cast<int>(std::round(w / kAspect));
@@ -288,12 +291,15 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
     const float scale = faceplate.getTransform().mat00;
     if (scale <= 0.0f) return;
 
-    // Rack bounds in screen coords, clamped to chassis body bottom.
-    auto rack = faceplate.getRackBounds()
-                    .toFloat()
-                    .transformedBy (juce::AffineTransform::scale (scale));
+    // Full transform: scale then faceplate position offset (bakes in bomb crop).
+    const auto fullT = faceplate.getTransform()
+                           .translated ((float) faceplate.getX(),
+                                        (float) faceplate.getY());
+
+    // Rack and chassis bottom in editor (window) coords.
+    auto rack = faceplate.getRackBounds().toFloat().transformedBy (fullT);
     const float chassisBot =
-        (float) faceplate.getChassisRectArea().getBottom() * scale;
+        faceplate.getChassisRectArea().toFloat().transformedBy (fullT).getBottom();
     rack = rack.withBottom (juce::jmin (rack.getBottom(), chassisBot));
     if (rack.isEmpty()) return;
 
@@ -305,7 +311,7 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
     // no hardcoded colours; no solid-black corners; works across all themes.
     {
         juce::Graphics::ScopedSaveState ss (g);
-        g.addTransform (faceplate.getTransform()); // switch to design-space coords
+        g.addTransform (fullT); // switch to design-space coords (scale + crop offset)
 
         const bombo::chassisRenderer::Ctx ctx {
             faceplate.getChassisPath(),
@@ -343,8 +349,8 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
     // Amber lip + inner bevel, hard-clipped to the bomb path.
     {
         juce::Graphics::ScopedSaveState ss (g);
-        auto bombScreenPath = bombo::BombShape::buildBombPath (faceplate.getBounds().toFloat());
-        bombScreenPath.applyTransform (juce::AffineTransform::scale (scale));
+        auto bombScreenPath = bombo::BombShape::buildBombPath (faceplate.getLocalBounds().toFloat());
+        bombScreenPath.applyTransform (fullT);
         g.reduceClipRegion (bombScreenPath);
 
         // Amber inner lip — marks the edge of the cutout opening
@@ -459,22 +465,30 @@ void BomboEditor::paintGlitchOverlay(juce::Graphics& g)
 
 void BomboEditor::resized()
 {
-    // Faceplate paints in fixed 600×1066 design coordinates (9:16 IG-Reels
-    // native, locked 2026-05-17) and we apply a uniform scale transform so
-    // every child scales together. The constrainer keeps width/height
-    // locked to design aspect, so both scale factors come out equal in
-    // practice — `jmin` covers the rounding-gap case. Bounds are set to
-    // `editor / scale` (rounded up) so the transformed faceplate fully
-    // covers the editor, even when the scale isn't an exact integer ratio.
+    // Faceplate paints in fixed 600×1066 design coordinates. The window is
+    // cropped to the bomb's bounding box (fin outer tips to nose tip) so the
+    // bomb fills the window edge-to-edge with no dead margins.
+    // Scale is derived from the bomb bbox, not the full design canvas.
+    // Faceplate is positioned with a negative offset so its bomb top-left
+    // aligns with the window (0,0); faceplate.getTransform() stays as pure
+    // scale so getTransform().mat00 == scale everywhere it is read.
     constexpr float kDesignW = 600.0f;
     constexpr float kDesignH = 1066.0f;
-    const float scale = juce::jmin(static_cast<float>(getWidth())  / kDesignW,
-                                   static_cast<float>(getHeight()) / kDesignH);
+    // Bomb bounding box in design coords (R4B-CLASSIC, fin outer=13 ref,
+    // cap top=22 ref, fin outer right=347 ref, nose tip=600 ref)
+    constexpr float kBombL = 13.0f / 360.0f * kDesignW;    // ≈ 21.67
+    constexpr float kBombT = 22.0f / 640.0f * kDesignH;    // ≈ 36.64
+    constexpr float kBombW = (347.0f - 13.0f) / 360.0f * kDesignW; // ≈ 556.67
+    constexpr float kBombH = (600.0f - 22.0f) / 640.0f * kDesignH; // ≈ 962.73
+    const float scale = juce::jmin(static_cast<float>(getWidth())  / kBombW,
+                                   static_cast<float>(getHeight()) / kBombH);
     if (scale <= 0.0f) return;
     faceplate.setTransform(juce::AffineTransform::scale(scale));
-    const int boundsW = static_cast<int>(std::ceil(static_cast<float>(getWidth())  / scale));
-    const int boundsH = static_cast<int>(std::ceil(static_cast<float>(getHeight()) / scale));
-    faceplate.setBounds(0, 0, boundsW, boundsH);
+    // Negative position shifts faceplate so bomb left/top coincides with (0,0).
+    faceplate.setBounds(juce::roundToInt(-kBombL * scale),
+                        juce::roundToInt(-kBombT * scale),
+                        static_cast<int>(kDesignW),
+                        static_cast<int>(kDesignH));
 
     // Temporary theme selector — bottom-right; goes away when Plan B's
     // HeaderBar ships.
@@ -641,17 +655,20 @@ void BomboEditor::updateBbsBounds()
     const float scale = faceplate.getTransform().mat00;
     if (scale <= 0.0f) return;
 
+    // Full transform: scale + faceplate position offset (bakes in the bomb crop).
+    const auto fullT = faceplate.getTransform()
+                           .translated ((float) faceplate.getX(),
+                                        (float) faceplate.getY());
+
     auto b = faceplate.getRackBounds()
                  .toFloat()
-                 .transformedBy(juce::AffineTransform::scale(scale))
+                 .transformedBy (fullT)
                  .toNearestInt();
 
-    // Clamp bottom to the chassis body boundary so BBS never bleeds into
-    // the orange nose section below. getChassisRectArea().getBottom() is
-    // the last row of the body interior in design-space; multiply by scale
-    // to get screen pixels.
     const int chassisBot = static_cast<int>(
-        (float) faceplate.getChassisRectArea().getBottom() * scale);
+        faceplate.getChassisRectArea().toFloat()
+            .transformedBy (fullT)
+            .getBottom());
     if (b.getBottom() > chassisBot)
         b.setBottom (chassisBot);
 

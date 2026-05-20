@@ -879,38 +879,58 @@ void FaceplatePanel::layoutSection(Section& s)
     }
 }
 
-void FaceplatePanel::layoutHeader(juce::Rectangle<int> area)
+void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
 {
-    constexpr int kPillH    = 22;
-    constexpr int kLimW     = 50;
-    constexpr int kTailW    = 50;
-    constexpr int kLoopW    = 60;
-    constexpr int kBpmW     = 78;
-    constexpr int kDiceW    = 22; // square
-    constexpr int kBncW     = 52; // "BNC WAV" / "BNC AIF"
-    constexpr int kPad      = 8;
-    constexpr int kPadSmall = 4;
+    // Controls are split symmetrically between the left and right fins.
+    // Left fin:  BNC WAV · BNC AIF · DICE   (I/O + randomise)
+    // Right fin: LIM · TAIL · LOOP           (playback toggles, row 1)
+    //            BPM display                  (tempo display,   row 2)
+    //
+    // All toggle pills share kPillW × kPillH for visual uniformity.
+    // Controls sit in the lower fin zone (y ≈ 160) — below the scope
+    // strip (scope ends ≈ y 142) so there is no overlap.
+    constexpr int kPillW = 60;   // unified width for all pill buttons
+    constexpr int kPillH = 22;
+    constexpr int kGap   = 4;    // gap between pills in a row
+    constexpr int kBpmW  = 78;   // BPM display is slightly wider
 
-    const int y = (area.getHeight() - kPillH) / 2 + area.getY();
-    int xCursor = area.getRight() - 14;
+    const float sx = (float)getWidth()  / bombo::BombShape::kRefW;
+    const float sy = (float)getHeight() / bombo::BombShape::kRefH;
 
-    // Right-to-left: BPM, loop, TAIL, LIM, DICE, AIF, WAV. The two BNC
-    // pills cluster on the left edge of the row — they're actions, not
-    // toggle state, so they sit apart from the LIM/TAIL behaviour cluster
-    // and adjacent to DICE (another action).
-    if (bpmDisplay_) bpmDisplay_->setBounds(xCursor - kBpmW, y, kBpmW, kPillH);
-    xCursor -= kBpmW + kPad;
-    if (loopBtn_)    loopBtn_   ->setBounds(xCursor - kLoopW, y, kLoopW, kPillH);
-    xCursor -= kLoopW + kPad;
-    if (tailPill_)   tailPill_  ->setBounds(xCursor - kTailW, y, kTailW, kPillH);
-    xCursor -= kTailW + kPadSmall;
-    if (limPill_)    limPill_   ->setBounds(xCursor - kLimW,  y, kLimW,  kPillH);
-    xCursor -= kLimW + kPad;
-    if (diceButton_) diceButton_->setBounds(xCursor - kDiceW, y, kDiceW, kPillH);
-    xCursor -= kDiceW + kPadSmall;
-    if (bncAifPill_) bncAifPill_->setBounds(xCursor - kBncW,  y, kBncW,  kPillH);
-    xCursor -= kBncW + kPadSmall;
-    if (bncWavPill_) bncWavPill_->setBounds(xCursor - kBncW,  y, kBncW,  kPillH);
+    // Fin Y range (ref: finTopY=34, finBotY=128)
+    const int finTop = static_cast<int>(34.0f * sy);
+    const int finBot = static_cast<int>(128.0f * sy);
+
+    // Row 1 at 55 % of the way down the fin (below scope strip)
+    const int row1Y = finTop + (finBot - finTop) * 55 / 100 - kPillH / 2;
+    // Row 2 (BPM) just below row 1
+    const int row2Y = row1Y + kPillH + kGap;
+
+    // Left fin X: fin outer (ref 13) to body inner at finTopY (ref 130)
+    const int leftFinCx = static_cast<int>((13.0f + 130.0f) * 0.5f * sx);
+    // Right fin X: body inner right at finTopY (ref 230) to fin outer (ref 347)
+    const int rightFinCx = static_cast<int>((230.0f + 347.0f) * 0.5f * sx);
+
+    // ── Left fin: 3 pills centred on leftFinCx ────────────────────────
+    const int leftTotal = 3 * kPillW + 2 * kGap;
+    int lx = leftFinCx - leftTotal / 2;
+    if (bncWavPill_) bncWavPill_->setBounds(lx,             row1Y, kPillW, kPillH);
+    lx += kPillW + kGap;
+    if (bncAifPill_) bncAifPill_->setBounds(lx,             row1Y, kPillW, kPillH);
+    lx += kPillW + kGap;
+    if (diceButton_) diceButton_->setBounds(lx,             row1Y, kPillW, kPillH);
+
+    // ── Right fin: 3 toggle pills (row 1) + BPM display (row 2) ──────
+    const int rightTotal = 3 * kPillW + 2 * kGap;
+    int rx = rightFinCx - rightTotal / 2;
+    if (limPill_)  limPill_ ->setBounds(rx,             row1Y, kPillW, kPillH);
+    rx += kPillW + kGap;
+    if (tailPill_) tailPill_->setBounds(rx,             row1Y, kPillW, kPillH);
+    rx += kPillW + kGap;
+    if (loopBtn_)  loopBtn_ ->setBounds(rx,             row1Y, kPillW, kPillH);
+
+    if (bpmDisplay_)
+        bpmDisplay_->setBounds(rightFinCx - kBpmW / 2, row2Y, kBpmW, kPillH);
 }
 
 // ────────────────────────────────────────────────────────────────────
