@@ -298,10 +298,16 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
 
     if (rack.isEmpty()) return;
 
+    // Chassis interior in screen space — nothing can paint outside this.
+    const auto chassis = faceplate.getChassisRectArea()
+                             .toFloat()
+                             .transformedBy (juce::AffineTransform::scale (scale));
+
     // ── Amber outer lip (1 px) ────────────────────────────────────────
-    // Sits on the chassis metal just outside the opening.
-    g.setColour(juce::Colour(0xFFFFB800).withAlpha(0.80f));
-    g.drawRect(rack.expanded(1.5f), 1.0f);
+    // Sits on the chassis metal at the edge of the opening. Clamped to
+    // the chassis interior so it never bleeds past the body walls.
+    g.setColour (juce::Colour (0xFFFFB800).withAlpha (0.80f));
+    g.drawRect (rack.expanded (1.5f).getIntersection (chassis), 1.0f);
 
     // ── Inner bevel — top shadow (light source from above) ────────────
     // Shadow cast by the far lip of the cutout down onto the electronics.
@@ -312,7 +318,7 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
                                   juce::Colours::transparentBlack,
                                   rack.getX(), rack.getY() + bW, false);
         g.setGradientFill (cg);
-        g.fillRect (rack.withBottom (rack.getY() + bW));
+        g.fillRect (rack.withBottom (rack.getY() + bW).getIntersection (chassis));
     }
     // ── Inner bevel — left shadow ────────────────────────────────────
     {
@@ -321,7 +327,7 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
                                   juce::Colours::transparentBlack,
                                   rack.getX() + bW, rack.getY(), false);
         g.setGradientFill (cg);
-        g.fillRect (rack.withRight (rack.getX() + bW));
+        g.fillRect (rack.withRight (rack.getX() + bW).getIntersection (chassis));
     }
     // ── Inner bevel — bottom highlight (ambient bounce) ───────────────
     const float hW = 3.0f * scale;
@@ -331,7 +337,7 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
                                   juce::Colours::transparentBlack,
                                   rack.getX(), rack.getBottom() - hW, false);
         g.setGradientFill (cg);
-        g.fillRect (rack.withTop (rack.getBottom() - hW));
+        g.fillRect (rack.withTop (rack.getBottom() - hW).getIntersection (chassis));
     }
     // ── Inner bevel — right highlight ────────────────────────────────
     {
@@ -340,7 +346,7 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
                                   juce::Colours::transparentBlack,
                                   rack.getRight() - hW, rack.getY(), false);
         g.setGradientFill (cg);
-        g.fillRect (rack.withLeft (rack.getRight() - hW));
+        g.fillRect (rack.withLeft (rack.getRight() - hW).getIntersection (chassis));
     }
 }
 
