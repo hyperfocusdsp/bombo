@@ -149,7 +149,13 @@ target_compile_definitions(Bombo
         # Linux X11: enable XRender so JUCE selects an ARGB visual when
         # setOpaque(false) is set on the top-level window. Required for
         # the bomb-tail corner wedges to be truly transparent.
-        JUCE_USE_XRENDER=1)
+        JUCE_USE_XRENDER=1
+        # Disable JACK on Linux. PipeWire's JACK emulation silently
+        # "succeeds" (device object created, no error returned) but
+        # never fires the processBlock callback. ALSA via pipewire-alsa
+        # is the reliable path on every PipeWire system. Users who
+        # specifically need JACK can re-enable via -DBOMBO_JACK=ON.
+        $<$<AND:$<BOOL:${UNIX}>,$<NOT:$<BOOL:${APPLE}>>,$<NOT:$<BOOL:${BOMBO_JACK}>>>:JUCE_JACK=0>)
 
 # LTO is a big build-time RAM hog (lto1 can take >4GB on the
 # Standalone link with -flto). Default ON for release builds; flip

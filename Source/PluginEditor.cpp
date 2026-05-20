@@ -538,16 +538,40 @@ void BomboEditor::visibilityChanged()
     bbs_.hide();
     grabKeyboardFocus();
 
-    // Enable every available MIDI input the first time the editor becomes
-    // visible. Moving this here from the constructor ensures
-    // StandalonePluginHolder is fully initialised (getInstance() returned
-    // null in the constructor on Windows, silently skipping MIDI setup).
-    // The setting persists in ~/.config/Bombo/Bombo.settings so it only
-    // needs to succeed once.
    #if JucePlugin_Build_Standalone
     if (auto* holder = juce::StandalonePluginHolder::getInstance())
     {
         auto& dm = holder->deviceManager;
+
+       #if JUCE_LINUX
+        // Belt-and-suspenders: if JUCE opened JACK (possible when libjack.so
+        // is on the path even with JUCE_JACK=0 suppressed in some edge builds)
+        // or has no device at all, force ALSA. PipeWire's JACK emulation
+        // registers a device object but never fires processBlock — ALSA via
+        // pipewire-alsa is reliable on all PipeWire systems.
+        // Also initialise with 48 kHz: DJ controllers and many PipeWire
+        // configurations reject JUCE's 44100 default, causing open failure
+        // and a silent fallback. 48000 is PipeWire's universal default.
+        {
+            const bool noDevice = (dm.getCurrentAudioDevice() == nullptr);
+            const bool jackChosen = juce::String(dm.getCurrentAudioDeviceType())
+                                        .containsIgnoreCase("JACK");
+            if (noDevice || jackChosen)
+            {
+                dm.setCurrentAudioDeviceType("ALSA", true);
+                juce::AudioDeviceManager::AudioDeviceSetup setup;
+                dm.getAudioDeviceSetup(setup);
+                if (setup.sampleRate < 1.0)
+                    setup.sampleRate = 48000.0;
+                setup.outputDeviceName = {};  // let JUCE pick the system default
+                dm.setAudioDeviceSetup(setup, /*treatAsChosenDevice=*/true);
+            }
+        }
+       #endif
+
+        // Enable every available MIDI input. Moved here from the constructor
+        // so StandalonePluginHolder is fully initialised on all platforms.
+        // Persists in ~/.config/Bombo/Bombo.settings — only needs to succeed once.
         for (const auto& dev : juce::MidiInput::getAvailableDevices())
             dm.setMidiInputDeviceEnabled(dev.identifier, true);
     }
