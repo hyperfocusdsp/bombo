@@ -98,6 +98,16 @@ bool LayoutEditOverlay::handleKey (const juce::KeyPress& key)
         return true;
     }
 
+    if (key.getModifiers().isCtrlDown() && ! key.getModifiers().isShiftDown()
+        && key.getKeyCode() == 'A')
+    {
+        for (int i = 0; i < (int) elements.size(); ++i)
+            if (! elements[(size_t) i].locked)
+                selection.insert (i);
+        repaint();
+        return true;
+    }
+
     const int kc = key.getKeyCode();
     const bool isArrow = (kc == juce::KeyPress::leftKey  || kc == juce::KeyPress::rightKey
                        || kc == juce::KeyPress::upKey    || kc == juce::KeyPress::downKey);
@@ -312,8 +322,21 @@ void LayoutEditOverlay::paint (juce::Graphics& g)
         g.drawLine ((float) ln.getStartX(), (float) ln.getStartY(),
                     (float) ln.getEndX(),   (float) ln.getEndY(), px);
 
+    if (rubberBanding && (rubberBand.getWidth() > 0 || rubberBand.getHeight() > 0))
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.12f));
+        g.fillRect (rubberBand.toFloat());
+        float rbDashes[] = { 2.0f * px, 4.0f * px };
+        juce::Path rbPath;
+        rbPath.addRectangle (rubberBand.toFloat());
+        juce::Path rbDashed;
+        juce::PathStrokeType (px).createDashedStroke (rbDashed, rbPath, rbDashes, 2);
+        g.setColour (juce::Colours::white.withAlpha (0.75f));
+        g.strokePath (rbDashed, juce::PathStrokeType (px));
+    }
+
     const int nSel = (int) selection.size();
-    auto status = juce::String ("LAYOUT EDIT  --  F2 exits")
+    auto status = juce::String ("LAYOUT EDIT  --  F2 exits  drag=marquee  Ctrl+A=all")
                       + "   sel:" + juce::String (nSel)
                       + "  undo:" + juce::String ((int) undoStack.size())
                       + "  redo:" + juce::String ((int) redoStack.size());
@@ -383,6 +406,9 @@ void LayoutEditOverlay::mouseDown (const juce::MouseEvent& e)
     {
         if (! e.mods.isCtrlDown()) selection.clear();
         draggingIndex = -1;
+        rubberBanding = true;
+        rubberOrigin = p;
+        rubberBand = {};
         repaint();
         return;
     }
@@ -423,7 +449,20 @@ void LayoutEditOverlay::mouseDown (const juce::MouseEvent& e)
 
 void LayoutEditOverlay::mouseDrag (const juce::MouseEvent& e)
 {
-    if (! editMode || draggingIndex < 0) return;
+    if (! editMode) return;
+
+    if (rubberBanding)
+    {
+        auto p = e.getPosition();
+        rubberBand = juce::Rectangle<int> (juce::jmin (rubberOrigin.x, p.x),
+                                           juce::jmin (rubberOrigin.y, p.y),
+                                           std::abs (p.x - rubberOrigin.x),
+                                           std::abs (p.y - rubberOrigin.y));
+        repaint();
+        return;
+    }
+
+    if (draggingIndex < 0) return;
 
     const bool snapOn = ! e.mods.isAltDown();
     auto delta = e.getPosition() - dragAnchor;
@@ -534,9 +573,26 @@ void LayoutEditOverlay::mouseDrag (const juce::MouseEvent& e)
     repaint();
 }
 
-void LayoutEditOverlay::mouseUp (const juce::MouseEvent&)
+void LayoutEditOverlay::mouseUp (const juce::MouseEvent& e)
 {
-    if (! editMode || draggingIndex < 0) return;
+    if (! editMode) return;
+
+    if (rubberBanding)
+    {
+        rubberBanding = false;
+        if (rubberBand.getWidth() > 4 || rubberBand.getHeight() > 4)
+        {
+            if (! e.mods.isCtrlDown()) selection.clear();
+            for (int i = 0; i < (int) elements.size(); ++i)
+                if (! elements[(size_t) i].locked && rubberBand.intersects (elements[(size_t) i].bounds))
+                    selection.insert (i);
+        }
+        rubberBand = {};
+        repaint();
+        return;
+    }
+
+    if (draggingIndex < 0) return;
     auto& lm = faceplate.getLayoutManager();
     lm.save();
     draggingIndex = -1;

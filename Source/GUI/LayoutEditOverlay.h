@@ -15,13 +15,16 @@ class FaceplatePanel;
 
     Mouse:
       Click select · Ctrl+click toggle · Esc clear · drag to move ·
+      Drag on empty space = marquee (rubber-band) select ·
+      Ctrl+drag marquee = add to existing selection ·
       Shift+drag or bottom-right handle resize (Shift unlocks aspect lock) ·
       Alt disables snap · right-click for per-element lock menu
 
     Keys:
-      Arrows nudge 1px (Shift = 10px) · L toggle lock · Ctrl+L lock all ·
-      Shift+L unlock all · Ctrl+Z undo · Ctrl+Shift+Z redo · Delete/Backspace
-      hide selection (0×0) · Ctrl+Shift+D dump all to Layout.json
+      Ctrl+A select all unlocked · Arrows nudge 1px (Shift = 10px) ·
+      L toggle lock · Ctrl+L lock all · Shift+L unlock all ·
+      Ctrl+Z undo · Ctrl+Shift+Z redo · Delete/Backspace hide selection (0×0) ·
+      Ctrl+Shift+D dump all to Layout.json
 */
 class LayoutEditOverlay : public juce::Component
 {
@@ -61,6 +64,10 @@ private:
     std::vector<LayoutElem> elements;
 
     bool editMode = false;
+
+    bool rubberBanding = false;
+    juce::Point<int> rubberOrigin;
+    juce::Rectangle<int> rubberBand;
 
     std::set<int> selection;
     int  draggingIndex = -1;
