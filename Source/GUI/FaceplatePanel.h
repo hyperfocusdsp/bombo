@@ -108,6 +108,15 @@ public:
     // BomboEditor multiplies by the active scale transform to get editor-space bounds.
     juce::Rectangle<int> getChassisRectArea() const noexcept { return chassisRectArea_; }
 
+    // Chassis geometry accessors — used by BomboEditor::paintOverChildren() to
+    // re-paint the hull on top of any children that leaked past the bomb silhouette.
+    const juce::Path& getChassisPath() const noexcept { return chassisPath_; }
+    const juce::Path& getCapPath()     const noexcept { return capPath_; }
+    const juce::Path& getFinPathL()    const noexcept { return finPathL_; }
+    const juce::Path& getFinPathR()    const noexcept { return finPathR_; }
+    int   getChassisApexY()  const noexcept { return chassisApexY_; }
+    float getRedRegionTopY() const noexcept { return redRegionTopY_; }
+
     // Union of all FX column rectBounds — the "square effects section" (rack only,
     // excluding header, scope, and nose/macro area). Pre-scale design-space coords.
     juce::Rectangle<int> getRackBounds() const noexcept

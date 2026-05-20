@@ -2,6 +2,7 @@
 #include "PluginProcessor.h"
 
 #include "GUI/BombShape.h"
+#include "GUI/ChassisRenderer.h"
 #include "GUI/Theme/ThemeProvider.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
@@ -296,35 +297,55 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
     rack = rack.withBottom (juce::jmin (rack.getBottom(), chassisBot));
     if (rack.isEmpty()) return;
 
-    // Bomb silhouette path in screen coords.
-    // buildBombPath works in faceplate design-space (same as faceplate.getBounds()),
-    // then we apply the same scale transform to land in editor (screen) coords.
-    auto bombPath = bombo::BombShape::buildBombPath (faceplate.getBounds().toFloat());
-    bombPath.applyTransform (juce::AffineTransform::scale (scale));
-
-    // ── Hull mask ─────────────────────────────────────────────────────
-    // Fill the rack area that falls OUTSIDE the bomb silhouette with
-    // solid black so the hull appears to be on top of the rack/BBS
-    // content. Even-odd rule: inside rack only → 1 crossing → filled;
-    // inside both rack and bomb → 2 crossings → unfilled (content shows).
-    // Clip to rack prevents accidentally painting over the bomb body.
+    // ── Hull re-paint (design-space coords via addTransform) ──────────
+    // Re-draw the bomb hull (cap, fins, chassis gradient) on top of any
+    // rack children or BBS content that painted into the hull wall region
+    // (inside bomb silhouette but outside the chassis interior rectangle).
+    // Uses the exact same draw calls and theme colours as FaceplatePanel —
+    // no hardcoded colours; no solid-black corners; works across all themes.
     {
         juce::Graphics::ScopedSaveState ss (g);
-        g.reduceClipRegion (rack.toNearestInt());
-        juce::Path mask;
-        mask.setUsingNonZeroWinding (false);
-        mask.addRectangle (rack);
-        mask.addPath (bombPath);
-        g.setColour (juce::Colours::black);
-        g.fillPath (mask);
+        g.addTransform (faceplate.getTransform()); // switch to design-space coords
+
+        const bombo::chassisRenderer::Ctx ctx {
+            faceplate.getChassisPath(),
+            faceplate.getCapPath(),
+            faceplate.getFinPathL(),
+            faceplate.getFinPathR(),
+            faceplate.getChassisRectArea(),
+            faceplate.getChassisApexY(),
+            faceplate.getRedRegionTopY(),
+            faceplate.getWidth(),
+            faceplate.getHeight()
+        };
+
+        // Clip to hull exterior: inside bomb silhouette, outside the rack
+        // content area, and outside the content above the rack (scope, preset
+        // bar, macro row, header). Two exclusions:
+        //   1. Everything above the rack — prevents painting over scope/header
+        //   2. The rack section area itself — preserves the knob content
+        // What remains: side margins at rack Y, plus the nose cone.
+        auto rackExclude = faceplate.getRackBounds();
+        rackExclude.setBottom (juce::jmin (rackExclude.getBottom(),
+                                           faceplate.getChassisRectArea().getBottom()));
+        const juce::Rectangle<int> aboveRack { 0, 0,
+                                               faceplate.getWidth(),
+                                               rackExclude.getY() };
+        g.reduceClipRegion (faceplate.getChassisPath());
+        g.excludeClipRegion (aboveRack);    // #1: header/scope/preset/macro
+        g.excludeClipRegion (rackExclude);  // #2: rack knob content
+
+        bombo::chassisRenderer::drawCapAndFins (g, ctx);
+        bombo::chassisRenderer::drawChassis    (g, ctx);
     }
 
-    // ── Frame (clipped to bomb silhouette) ────────────────────────────
-    // All frame drawing is clipped to the bomb path so amber and bevel
-    // gradients are cleanly cut at the hull silhouette edge.
+    // ── Frame (screen-space, clipped to bomb silhouette) ──────────────
+    // Amber lip + inner bevel, hard-clipped to the bomb path.
     {
         juce::Graphics::ScopedSaveState ss (g);
-        g.reduceClipRegion (bombPath);
+        auto bombScreenPath = bombo::BombShape::buildBombPath (faceplate.getBounds().toFloat());
+        bombScreenPath.applyTransform (juce::AffineTransform::scale (scale));
+        g.reduceClipRegion (bombScreenPath);
 
         // Amber inner lip — marks the edge of the cutout opening
         g.setColour (juce::Colour (0xFFFFB800).withAlpha (0.80f));
