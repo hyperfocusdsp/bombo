@@ -304,10 +304,12 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
                              .transformedBy (juce::AffineTransform::scale (scale));
 
     // ── Amber outer lip (1 px) ────────────────────────────────────────
-    // Sits on the chassis metal at the edge of the opening. Clamped to
-    // the chassis interior so it never bleeds past the body walls.
+    // The rack fills the chassis interior edge-to-edge, so there is no
+    // room to expand outward without bleeding into the bomb body walls.
+    // Draw at exactly the rack boundary — this is the inner lip of the
+    // cutout opening, sitting right at the chassis wall surface.
     g.setColour (juce::Colour (0xFFFFB800).withAlpha (0.80f));
-    g.drawRect (rack.expanded (1.5f).getIntersection (chassis), 1.0f);
+    g.drawRect (rack, 1.0f);
 
     // ── Inner bevel — top shadow (light source from above) ────────────
     // Shadow cast by the far lip of the cutout down onto the electronics.
