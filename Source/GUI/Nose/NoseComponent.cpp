@@ -85,7 +85,12 @@ void NoseComponent::mouseDown(const juce::MouseEvent&)
 
 void NoseComponent::paint(juce::Graphics& g)
 {
-    if (level_ <= 0) return;  // level 0 = no overlay; faceplate paints the nose
+    // Level 0/1: nose is clean — faceplate paints it, macros are readable.
+    // Level 2+: progressive damage cracks + glow as BBS advancement deepens.
+    // (Level 1 cracks were previously hidden by the hull-repaint in
+    //  paintOverChildren; now that the nose is no longer repainted we
+    //  suppress them here to avoid a visible dark hairline over the macros.)
+    if (level_ <= 1) return;
     const auto b = getLocalBounds().toFloat();
     paintCracks(g, b, level_);
     if (level_ >= 2) paintGlow(g, b, level_);

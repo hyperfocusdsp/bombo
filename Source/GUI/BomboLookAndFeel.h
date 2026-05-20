@@ -71,13 +71,13 @@ public:
     {
         const auto r = btn.getLocalBounds().toFloat();
         const bool on = shouldDrawButtonAsDown || btn.getToggleState();
-        // Off-state: translucent amber tint so the orange fin shows through
-        // and the button reads as part of the fin, not a dark intrusion.
-        g.setColour(on ? col::accentAmber().withAlpha(0.50f)
-                       : col::accentAmber().withAlpha(0.22f));
+        // Off: dark graphite fill so bone text is legible on the orange fin.
+        // On:  amber fill; text switches to ink (dark) for contrast.
+        g.setColour(on ? col::accentAmber().withAlpha(0.40f)
+                       : col::graphite().withAlpha(0.88f));
         g.fillRoundedRectangle(r, kPillCorner);
         g.setColour(on ? col::accentAmber()
-                       : col::accentAmber().withAlpha(0.60f));
+                       : col::boneDim().withAlpha(0.45f));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
     }
 
@@ -86,7 +86,8 @@ public:
                         bool shouldDrawButtonAsDown) override
     {
         const bool on = shouldDrawButtonAsDown || btn.getToggleState();
-        g.setColour(on ? col::accentAmber() : col::bone());
+        // Dark text on amber fill, light text on dark graphite.
+        g.setColour(on ? col::ink() : col::bone());
         g.setFont(fonts::value(9.0f));
         g.drawText(btn.getButtonText(), btn.getLocalBounds(),
                    juce::Justification::centred, false);
@@ -98,13 +99,13 @@ public:
     {
         const auto r = btn.getLocalBounds().toFloat();
         const bool on = btn.getToggleState();
-        g.setColour(on ? col::accentAmber().withAlpha(0.50f)
-                       : col::accentAmber().withAlpha(0.22f));
+        g.setColour(on ? col::accentAmber().withAlpha(0.40f)
+                       : col::graphite().withAlpha(0.88f));
         g.fillRoundedRectangle(r, kPillCorner);
         g.setColour(on ? col::accentAmber()
-                       : col::accentAmber().withAlpha(0.60f));
+                       : col::boneDim().withAlpha(0.45f));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
-        g.setColour(on ? col::accentAmber() : col::bone());
+        g.setColour(on ? col::ink() : col::bone());
         g.setFont(fonts::value(9.0f));
         g.drawText(btn.getButtonText(), r, juce::Justification::centred, false);
     }
