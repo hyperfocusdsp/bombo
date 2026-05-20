@@ -47,32 +47,26 @@ public:
     void paint(juce::Graphics& g) override
     {
         const auto r = getLocalBounds().toFloat();
-        const float radius = r.getHeight() * 0.5f;
+        // Same corner radius as the pill buttons in BomboLookAndFeel.
+        constexpr float kR = 4.0f;
         const bool hostLocked = hostBpmDisplayed_ > 0.5f;
+        const bool on = hostLocked;
 
-        g.setColour(col::graphite());
-        g.fillRoundedRectangle(r, radius);
-        g.setColour(hostLocked ? col::accentAmber().withAlpha(0.55f)
-                                : col::boneDim().withAlpha(0.65f));
-        g.drawRoundedRectangle(r.reduced(0.5f), radius, 1.0f);
+        // Background + border — mirrors BomboLookAndFeel pill style.
+        g.setColour(on ? col::accentAmber().withAlpha(0.3f)
+                       : col::graphite().withAlpha(0.88f));
+        g.fillRoundedRectangle(r, kR);
+        g.setColour(on ? col::accentAmber()
+                       : col::boneDim().withAlpha(0.45f));
+        g.drawRoundedRectangle(r.reduced(0.5f), kR, 1.0f);
 
-        // "BPM <value>" — host-locked rows draw amber-tinted so the user
-        // can see at a glance that the rate is being driven externally.
+        // "149 BPM" centred — same monospaced font as the other fin pills.
         const int displayed = static_cast<int>(std::round(
             hostLocked ? hostBpmDisplayed_ : static_cast<float>(slider_.getValue())));
-        const juce::String label = juce::String(displayed).paddedLeft(' ', 3);
-
         g.setColour(hostLocked ? col::accentAmber() : col::bone());
-        g.setFont(fonts::value(10.0f));
-        g.drawText(label,
-                   r.withTrimmedRight(r.getWidth() * 0.42f),
-                   juce::Justification::centredRight);
-
-        g.setColour(col::boneDim());
-        g.setFont(fonts::label(8.5f));
-        g.drawText("BPM",
-                   r.withTrimmedLeft(r.getWidth() * 0.62f).translated(-2.0f, 0.0f),
-                   juce::Justification::centredLeft);
+        g.setFont(fonts::value(9.0f));
+        g.drawText(juce::String(displayed) + " BPM", r,
+                   juce::Justification::centred, false);
     }
 
     void mouseDown(const juce::MouseEvent& e) override

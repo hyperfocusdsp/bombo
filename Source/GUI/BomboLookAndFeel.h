@@ -58,6 +58,55 @@ public:
         // gradients). Per-component repaint is handled by ThemedComponent.
     }
 
+    // ── Pill-style buttons ────────────────────────────────────────────
+    // All TextButtons and ToggleButtons use a uniform dark-graphite pill
+    // with an amber accent for the active/pressed state. Matches the fin
+    // control look (dark on orange background = good contrast).
+    static constexpr float kPillCorner = 4.0f;
+
+    void drawButtonBackground(juce::Graphics& g, juce::Button& btn,
+                              const juce::Colour& /*backgroundColour*/,
+                              bool /*shouldDrawButtonAsHighlighted*/,
+                              bool shouldDrawButtonAsDown) override
+    {
+        const auto r = btn.getLocalBounds().toFloat();
+        const bool on = shouldDrawButtonAsDown || btn.getToggleState();
+        g.setColour(on ? col::accentAmber().withAlpha(0.3f)
+                       : col::graphite().withAlpha(0.88f));
+        g.fillRoundedRectangle(r, kPillCorner);
+        g.setColour(on ? col::accentAmber()
+                       : col::boneDim().withAlpha(0.45f));
+        g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
+    }
+
+    void drawButtonText(juce::Graphics& g, juce::TextButton& btn,
+                        bool /*shouldDrawButtonAsHighlighted*/,
+                        bool shouldDrawButtonAsDown) override
+    {
+        const bool on = shouldDrawButtonAsDown || btn.getToggleState();
+        g.setColour(on ? col::accentAmber() : col::bone());
+        g.setFont(fonts::value(9.0f));
+        g.drawText(btn.getButtonText(), btn.getLocalBounds(),
+                   juce::Justification::centred, false);
+    }
+
+    void drawToggleButton(juce::Graphics& g, juce::ToggleButton& btn,
+                          bool /*shouldDrawButtonAsHighlighted*/,
+                          bool /*shouldDrawButtonAsDown*/) override
+    {
+        const auto r = btn.getLocalBounds().toFloat();
+        const bool on = btn.getToggleState();
+        g.setColour(on ? col::accentAmber().withAlpha(0.3f)
+                       : col::graphite().withAlpha(0.88f));
+        g.fillRoundedRectangle(r, kPillCorner);
+        g.setColour(on ? col::accentAmber()
+                       : col::boneDim().withAlpha(0.45f));
+        g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
+        g.setColour(on ? col::accentAmber() : col::bone());
+        g.setFont(fonts::value(9.0f));
+        g.drawText(btn.getButtonText(), r, juce::Justification::centred, false);
+    }
+
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
                           float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
                           juce::Slider& slider) override

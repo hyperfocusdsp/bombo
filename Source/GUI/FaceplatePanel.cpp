@@ -897,13 +897,12 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
     const float sx = (float)getWidth()  / bombo::BombShape::kRefW;
     const float sy = (float)getHeight() / bombo::BombShape::kRefH;
 
-    // Fin Y range (ref: finTopY=34, finBotY=128)
-    const int finTop = static_cast<int>(34.0f * sy);
-    const int finBot = static_cast<int>(128.0f * sy);
-
-    // Row 1 at 55 % of the way down the fin (below scope strip)
-    const int row1Y = finTop + (finBot - finTop) * 55 / 100 - kPillH / 2;
-    // Row 2 (BPM) just below row 1
+    // Fin Y range (ref: finTopY=34, finBotY=128) for X-centre calculations.
+    // Rows are placed in design-pixel coords below the scope strip
+    // (scope occupies design y = kHeaderH..kHeaderH+kScopeH = 50..150).
+    // At design y=155, we are inside the orange fin zone (fin: 57–213 design)
+    // but below the scope child component — so pills land on orange, not dark scope.
+    const int row1Y = kHeaderH + kScopeH + 5;  // 155 design px
     const int row2Y = row1Y + kPillH + kGap;
 
     // Left fin X: fin outer (ref 13) to body inner at finTopY (ref 130)
