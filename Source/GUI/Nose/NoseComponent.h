@@ -36,7 +36,13 @@ public:
     std::function<bool()> isForceResetReady;  // set by FaceplatePanel via PluginEditor
     std::function<void()> onForceReset;       // set by FaceplatePanel via PluginEditor
 
+    // Click-through hit-test: when set and it returns true for a local-coord
+    // point, NoseComponent's hitTest returns false so the click reaches the
+    // underlying component (the 7 macro knobs that share the nose region).
+    std::function<bool(juce::Point<int>)> macroHitTester;
+
     void paint(juce::Graphics&) override;
+    bool hitTest(int x, int y) override;
     void mouseDown(const juce::MouseEvent&) override;
     juce::String getTooltip() override;
 

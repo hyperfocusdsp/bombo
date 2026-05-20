@@ -158,6 +158,11 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
             if (triggerCb_) triggerCb_();
             return true;
         }
+        if (ch == 't' || ch == 'T')
+        {
+            if (triggerCb_) triggerCb_();
+            return true;
+        }
         if (ch == 's' || ch == 'S')
         {
             if (apvts_ != nullptr && presetBank_ != nullptr)

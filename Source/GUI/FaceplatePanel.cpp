@@ -265,6 +265,19 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         scope_.showTapWarning(tap);
         if (onNoseGlitchTap) onNoseGlitchTap(tap);
     };
+    // Click-through over the macro cluster: the nose overlay covers the
+    // OUT hero + 6 satellite knobs. Without this, every macro click is
+    // swallowed by the overlay's 7-tap/reopen handler. Lambda receives a
+    // point in noseOverlay_ local coords; we translate to FaceplatePanel
+    // coords (the macro sliders' parent) before testing each slider's bounds.
+    noseOverlay_.macroHitTester = [this](juce::Point<int> p) -> bool
+    {
+        const juce::Point<int> pFace = p + noseOverlay_.getBounds().getPosition();
+        for (const auto& m : macro_)
+            if (m && m->slider && m->slider->getBounds().contains(pFace))
+                return true;
+        return false;
+    };
 }
 
 FaceplatePanel::Control*

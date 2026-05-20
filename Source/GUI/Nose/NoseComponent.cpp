@@ -31,6 +31,18 @@ juce::String NoseComponent::getTooltip()
     return kTapTooltips[idx];
 }
 
+bool NoseComponent::hitTest(int x, int y)
+{
+    // The overlay covers the macro cluster (OUT + 6 satellites). Without this
+    // pass-through, the overlay's full-bounds mouse interception eats every
+    // knob click. macroHitTester (installed by FaceplatePanel) returns true
+    // when the point sits on a macro slider; we then return false so JUCE
+    // dispatches the click to the slider beneath.
+    if (macroHitTester && macroHitTester(juce::Point<int>(x, y)))
+        return false;
+    return true;
+}
+
 void NoseComponent::mouseDown(const juce::MouseEvent&)
 {
     const auto now = juce::Time::getCurrentTime();
