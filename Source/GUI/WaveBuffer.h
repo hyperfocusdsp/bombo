@@ -32,13 +32,18 @@ public:
     static constexpr int   kDecim       = 24;
     static constexpr float kSilenceFloor = 0.002f;  // ≈ −54 dBFS
     static constexpr int   kSilencePad  = 80;       // ≈ 40 ms of grace after last loud sample
+    // Cap on prevLength_ — ≈ 750 ms at 48 kHz / kDecim=24. Without this a
+    // long reverb tail bleeding above kSilenceFloor pushes prevLength_ into
+    // multi-second territory, which compresses the next dry kick to 5-15 %
+    // of the scope's X axis.
+    static constexpr int   kMaxPrevLength = 1500;
 
     // Audio thread: call once when a new trigger fires. RT-safe.
     void triggerReset() noexcept
     {
         // Compute effective tail length from the just-finished capture cycle.
         const int tail = lastLoudIdx_ > 0
-                       ? std::min(lastLoudIdx_ + kSilencePad, kCapture)
+                       ? std::min({lastLoudIdx_ + kSilencePad, kCapture, kMaxPrevLength})
                        : 0;
         prevLength_.store(tail, std::memory_order_release);
 
