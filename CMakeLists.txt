@@ -44,9 +44,11 @@ juce_add_binary_data(BomboResources
     SOURCES
         Resources/Fonts/AllertaStencil-Regular.ttf
         Resources/Themes/bandw.json
-        Resources/Themes/phosphor.json
         Resources/Themes/nightrun.json
         Resources/Themes/vault.json
+        Resources/Themes/matrix.json
+        Resources/Themes/cyber.json
+        Resources/Themes/plasma.json
         Resources/Presets/01_pulse.json
         Resources/Presets/02_echo_chamber.json
         Resources/Presets/03_acid_tape.json

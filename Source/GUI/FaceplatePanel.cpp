@@ -62,6 +62,27 @@ constexpr int kNCols        = 7;
 
 FaceplatePanel::~FaceplatePanel() = default;
 
+void FaceplatePanel::changeListenerCallback(juce::ChangeBroadcaster* bc)
+{
+    ThemedComponent::changeListenerCallback(bc); // calls repaint()
+
+    // Refresh section label colors for the new theme. VOICE sections use
+    // bone (accent text on dark voice bg); FX sections use ink. Identified
+    // by mutePid because accent color captured at build time is stale.
+    for (auto& s : sections_)
+    {
+        const bool isVoice = (s.mutePid == pid::voiceAMute
+                           || s.mutePid == pid::voiceBMute);
+        const juce::Colour newLabel = isVoice ? col::bone() : col::ink();
+        s.labelOnBg = newLabel;
+        for (auto& c : s.controls)
+        {
+            if (c && c->label)
+                c->label->setColour(juce::Label::textColourId, newLabel);
+        }
+    }
+}
+
 FaceplatePanel::Control::Control()  = default;
 FaceplatePanel::Control::~Control() = default;
 

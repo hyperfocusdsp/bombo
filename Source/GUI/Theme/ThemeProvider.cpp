@@ -71,9 +71,11 @@ void ThemeProvider::loadBundledThemes()
     JUCE_ASSERT_MESSAGE_THREAD;
 
     registerFromBlob(*this, BinaryData::bandw_json,    BinaryData::bandw_jsonSize,    "bandw");
-    registerFromBlob(*this, BinaryData::phosphor_json, BinaryData::phosphor_jsonSize, "phosphor");
     registerFromBlob(*this, BinaryData::nightrun_json, BinaryData::nightrun_jsonSize, "nightrun");
     registerFromBlob(*this, BinaryData::vault_json,    BinaryData::vault_jsonSize,    "vault");
+    registerFromBlob(*this, BinaryData::matrix_json,   BinaryData::matrix_jsonSize,   "matrix");
+    registerFromBlob(*this, BinaryData::cyber_json,    BinaryData::cyber_jsonSize,    "cyber");
+    registerFromBlob(*this, BinaryData::plasma_json,   BinaryData::plasma_jsonSize,   "plasma");
 
     // Refresh active_ from the (now possibly newly-registered) registry so the
     // JSON-loaded BANDW replaces the hard-coded ctor default. No broadcast.

@@ -78,6 +78,9 @@ public:
     void mouseDown(const juce::MouseEvent&) override;
     void mouseMove(const juce::MouseEvent&) override;
 
+    // Override theme-change handler to also refresh section label colors.
+    void changeListenerCallback(juce::ChangeBroadcaster* bc) override;
+
     // Layout-edit hooks (Phase 2 — ported from an earlier project 2026-05-17).
     // BomboEditor owns the LayoutEditOverlay; FaceplatePanel exposes the
     // editable element list + a reference to its LayoutManager so the

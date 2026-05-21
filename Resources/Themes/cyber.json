@@ -1,0 +1,26 @@
+{
+  "name": "cyber",
+  "displayName": "CYBER",
+  "palette": {
+    "graphite":    "#02080E",
+    "graphiteHi":  "#060E18",
+    "ink":         "#C8D8E0",
+    "bone":        "#00E5FF",
+    "boneDim":     "#006A80",
+    "voice":       "#04101A",
+    "drive":       "#04101A",
+    "delayC":      "#04101A",
+    "reverb":      "#04101A",
+    "filterC":     "#04101A",
+    "duck":        "#04101A",
+    "knobCap":     "#030810",
+    "knobBevel":   "#00E5FF",
+    "knobRubber":  "#0A1820",
+    "accentAmber": "#00E5FF",
+    "bodyHi":      "#040C14",
+    "bodyLo":      "#020608",
+    "cap":         "#020608",
+    "noseRed":     "#00AACC",
+    "bandYellow":  "#00E5FF"
+  }
+}

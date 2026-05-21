@@ -1,0 +1,26 @@
+{
+  "name": "matrix",
+  "displayName": "MATRIX",
+  "palette": {
+    "graphite":    "#060A04",
+    "graphiteHi":  "#0C1408",
+    "ink":         "#D0D8CC",
+    "bone":        "#00FF41",
+    "boneDim":     "#007A20",
+    "voice":       "#0A1208",
+    "drive":       "#0A1208",
+    "delayC":      "#0A1208",
+    "reverb":      "#0A1208",
+    "filterC":     "#0A1208",
+    "duck":        "#0A1208",
+    "knobCap":     "#050806",
+    "knobBevel":   "#00FF41",
+    "knobRubber":  "#141C10",
+    "accentAmber": "#00FF41",
+    "bodyHi":      "#080E06",
+    "bodyLo":      "#040604",
+    "cap":         "#040604",
+    "noseRed":     "#00CC34",
+    "bandYellow":  "#00FF41"
+  }
+}

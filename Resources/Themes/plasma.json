@@ -1,0 +1,26 @@
+{
+  "name": "plasma",
+  "displayName": "PLASMA",
+  "palette": {
+    "graphite":    "#0C0408",
+    "graphiteHi":  "#180810",
+    "ink":         "#E0C8D8",
+    "bone":        "#FF00BB",
+    "boneDim":     "#800060",
+    "voice":       "#1A0814",
+    "drive":       "#1A0814",
+    "delayC":      "#1A0814",
+    "reverb":      "#1A0814",
+    "filterC":     "#1A0814",
+    "duck":        "#1A0814",
+    "knobCap":     "#0E0410",
+    "knobBevel":   "#FF00BB",
+    "knobRubber":  "#28101E",
+    "accentAmber": "#FF00BB",
+    "bodyHi":      "#120610",
+    "bodyLo":      "#080208",
+    "cap":         "#080208",
+    "noseRed":     "#CC0090",
+    "bandYellow":  "#FF00BB"
+  }
+}
