@@ -1,6 +1,7 @@
 #pragma once
 #include "BBSScreens.h"
 #include "BBSLookAndFeel.h"
+#include "BombImpactGame.h"
 #include "ProgressionManager.h"
 #include "BoomFeed.h"
 #include "SysopContent.h"
@@ -64,6 +65,9 @@ private:
     void paintHeader      (juce::Graphics&, juce::Rectangle<int> area);
     void paintScrollerBar (juce::Graphics&, juce::Rectangle<int> area);
 
+    void launchGame();
+    void exitGame();
+
     ProgressionManager*         progression_ = nullptr;
     BBSScreens                  screens_;
     BBSLookAndFeel              lnf_;
@@ -97,6 +101,15 @@ private:
     // Save confirmation — shown in place of MOTD for ~2 seconds after S
     juce::String saveStatusMsg_;
     juce::Time   saveStatusTime_;
+
+    // Game
+    BombImpactGame game_;
+    juce::String   commandBuffer_;  // accumulates typed chars for "GAME" command
+
+    // Konami code detector — runs in parallel, doesn't consume individual keys
+    static constexpr int kKonamiLen = 8;
+    static const int kKonamiSeq[kKonamiLen]; // defined in .cpp
+    int konamiPos_ = 0;
 
     // My Downloads selection
     int myDownloadsSelected_ = 0;

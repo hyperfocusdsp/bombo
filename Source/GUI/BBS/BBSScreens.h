@@ -4,7 +4,7 @@
 namespace bombo
 {
 
-enum class BBSScreen { Intro, BoomFeed, MyDownloads };
+enum class BBSScreen { Intro, BoomFeed, MyDownloads, Game };
 
 // Minimal state machine. BBSComponent drives it; sub-screen components
 // own their own paint + keyboard logic.

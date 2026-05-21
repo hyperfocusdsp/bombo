@@ -7,6 +7,14 @@
 namespace bombo
 {
 
+// Konami sequence: ↑↑↓↓←→←→
+const int BBSComponent::kKonamiSeq[BBSComponent::kKonamiLen] = {
+    juce::KeyPress::upKey, juce::KeyPress::upKey,
+    juce::KeyPress::downKey, juce::KeyPress::downKey,
+    juce::KeyPress::leftKey, juce::KeyPress::rightKey,
+    juce::KeyPress::leftKey, juce::KeyPress::rightKey,
+};
+
 // Pick the best available terminal font at first call, cache for the session.
 // Prefers JetBrains Mono (Nerd Font Mono variant for true fixed-width cells);
 // falls back to Courier New on systems where it's not installed.
@@ -94,6 +102,14 @@ void BBSComponent::resized() {}
 
 void BBSComponent::timerCallback()
 {
+    if (screens_.current() == BBSScreen::Game)
+    {
+        game_.tick();
+        if (game_.wantsExit()) exitGame();
+        repaint();
+        return;
+    }
+
     if (screens_.current() == BBSScreen::Intro && !introComplete_)
     {
         introCharPos_ += 2;
@@ -114,7 +130,31 @@ void BBSComponent::timerCallback()
 
 bool BBSComponent::keyPressed(const juce::KeyPress& key)
 {
+    // Game screen intercepts all input. ESC exits game (not the whole BBS).
+    if (screens_.current() == BBSScreen::Game)
+    {
+        if (key == juce::KeyPress::escapeKey) { exitGame(); return true; }
+        return game_.keyPressed(key);
+    }
+
     if (key == juce::KeyPress::escapeKey) { hide(); return true; }
+
+    // Konami detector (↑↑↓↓←→←→) — only on BoomFeed, before other handlers.
+    // Matched keys are consumed so ←→ don't flip BoomFeed mode mid-sequence.
+    if (screens_.current() == BBSScreen::BoomFeed)
+    {
+        if (key.getKeyCode() == kKonamiSeq[konamiPos_])
+        {
+            if (++konamiPos_ >= kKonamiLen)
+            {
+                konamiPos_ = 0;
+                game_.hyperfocusModeActive = true;
+                launchGame();
+            }
+            return true; // consume matched key
+        }
+        konamiPos_ = 0; // mismatch — reset, fall through
+    }
 
     // T fires the kick from any BBS screen — Intro/BoomFeed/MyDownloads.
     // Mirrors the main editor's T shortcut so muscle memory carries over.
@@ -147,6 +187,21 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 
     if (screens_.current() == BBSScreen::BoomFeed)
     {
+        // Accumulate typed chars — "GAME" + any key launches the game.
+        const auto chUp = juce::CharacterFunctions::toUpperCase(key.getTextCharacter());
+        if (chUp >= 'A' && chUp <= 'Z')
+        {
+            commandBuffer_ += chUp;
+            if (commandBuffer_.length() > 8)
+                commandBuffer_ = commandBuffer_.substring(commandBuffer_.length() - 8);
+            if (commandBuffer_.endsWith("GAME"))
+            {
+                commandBuffer_.clear();
+                launchGame();
+                return true;
+            }
+        }
+
         const auto ch = key.getTextCharacter();
         if (ch == 'n' || ch == 'N')
         {
@@ -332,6 +387,14 @@ void BBSComponent::paint(juce::Graphics& g)
             b.removeFromBottom(footerH);
             paintScrollerBar(g, b.removeFromBottom(scrollerH));
             paintMyDownloads(g);
+            break;
+        }
+
+        case BBSScreen::Game:
+        {
+            const int headerH = 22;
+            paintHeader(g, b.removeFromTop(headerH));
+            game_.paint(g, b);
             break;
         }
     }
@@ -525,6 +588,22 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
         g.drawText("  (NO DOWNLOADS YET -- PRESS N IN BOOM FEED TO BROWSE)",
                    area.removeFromTop(rowH), juce::Justification::centredLeft);
     }
+}
+
+void BBSComponent::launchGame()
+{
+    game_.onKick = triggerCb_;
+    game_.startGame();
+    screens_.transitionTo(BBSScreen::Game);
+    commandBuffer_.clear();
+    konamiPos_ = 0;
+}
+
+void BBSComponent::exitGame()
+{
+    game_.stopGame();
+    screens_.transitionTo(BBSScreen::BoomFeed);
+    commandBuffer_.clear();
 }
 
 void BBSComponent::buildIntroText()
