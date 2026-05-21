@@ -174,10 +174,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         0));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMorph, 1},
         "Delay Tone", Range(0.0f, 1.0f, 0.001f), 0.4f, normFormat));
-    // CRUMBLE: bit-depth reduction in the feedback path — repeats degrade
-    // progressively. 0 = clean, 1 = lo-fi rubble.
-    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayCrumble, 1},
-        "Crumble", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
+    // SMEAR: tape-warble LFO on the delay read tap. 0 = static, 1 = heavy pitch wobble.
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delaySmear, 1},
+        "Smear", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMix, 1},
         "Delay Mix", Range(0.0f, 1.0f, 0.001f), 0.25f, normFormat));
 
@@ -205,9 +204,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // SHAPE: envelope curve. -1 = exponential (tight/punchy), 0 = linear, +1 = log (smooth).
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckShape, 1},
         "Duck Shape", Range(-1.0f, 1.0f, 0.001f), 0.0f, normFormat));
-    // SNAP: brief gain overshoot above unity on duck release — the "air rushing back".
-    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckSnap, 1},
-        "Duck Snap", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
+    // FLUTTER: 10 Hz tremolo during duck release — gain oscillates as the duck releases.
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckFlutter, 1},
+        "Duck Flutter", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
 
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::limiterOn, 1}, "Limiter On", true));

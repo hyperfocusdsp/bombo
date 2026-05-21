@@ -175,7 +175,7 @@ private:
     juce::AudioParameterFloat*  pDelayFeedback = nullptr;
     juce::AudioParameterChoice* pDelayTimeMode = nullptr;
     juce::AudioParameterFloat*  pDelayMorph = nullptr;
-    juce::AudioParameterFloat*  pDelayCrumble = nullptr;
+    juce::AudioParameterFloat*  pDelaySmear = nullptr;
     juce::AudioParameterFloat*  pDelayMix = nullptr;
     juce::AudioParameterFloat*  pReverbSize = nullptr;
     juce::AudioParameterFloat*  pReverbDecay = nullptr;
@@ -188,7 +188,7 @@ private:
     juce::AudioParameterFloat*  pDuckRel = nullptr;
     juce::AudioParameterFloat*  pDuckDepth = nullptr;
     juce::AudioParameterFloat*  pDuckShape = nullptr;
-    juce::AudioParameterFloat*  pDuckSnap = nullptr;
+    juce::AudioParameterFloat*  pDuckFlutter = nullptr;
     juce::AudioParameterBool*   pLimiterOn = nullptr;
     juce::AudioParameterFloat*  pLimiterAmount = nullptr;
     juce::AudioParameterBool*   pTailKillOn = nullptr;

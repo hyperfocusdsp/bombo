@@ -62,7 +62,7 @@ namespace pid
     // value; the TIME knob value is ignored.
     inline constexpr const char* delayTimeMode   = "delay_time_mode";
     inline constexpr const char* delayMorph      = "delay_morph";
-    inline constexpr const char* delayCrumble    = "delay_crumble";
+    inline constexpr const char* delaySmear      = "delay_smear";
     inline constexpr const char* delayMix        = "delay_mix";
     inline constexpr const char* reverbSize      = "reverb_size";
     inline constexpr const char* reverbDecay     = "reverb_decay";
@@ -75,7 +75,7 @@ namespace pid
     inline constexpr const char* duckRel         = "duck_rel";
     inline constexpr const char* duckDepth       = "duck_depth";
     inline constexpr const char* duckShape       = "duck_shape";
-    inline constexpr const char* duckSnap        = "duck_snap";
+    inline constexpr const char* duckFlutter     = "duck_flutter";
     inline constexpr const char* limiterOn       = "limiter_on";
     inline constexpr const char* limiterAmount   = "limiter_amount";
     // TRANSPORT (standalone-only knobs the host doesn't drive). loopOn =

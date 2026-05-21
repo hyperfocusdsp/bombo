@@ -9,17 +9,16 @@ namespace bombo
 // kick onset. duck_gain = 1 - depth * env. depth=0 is bypass.
 //
 // HOLD: after each attack peak the env is pinned at the new peak for
-// `holdMs` before release coefficient takes over. Lets the user dial in
-// a rhythmic "pump" that stays committed past the natural release —
-// essential for groove ducking when the trigger transient is shorter
-// than the desired duck duration.
+// `holdMs` before release coefficient takes over.
 class Ducker
 {
 public:
+    static constexpr float kFlutterHz = 10.0f; // fixed tremolo rate during release
+
     explicit Ducker(float sampleRate = 48000.0f) : sampleRate_(sampleRate)
     {
         setTimesMs(2.0f, 250.0f);
-        snapCoef_ = std::exp(-1.0f / (0.05f * sampleRate)); // ~50 ms snap decay
+        updateFlutterPhaseStep();
     }
 
     void setSampleRate(float sr) noexcept
@@ -27,14 +26,14 @@ public:
         sampleRate_ = sr;
         setTimesMs(lastAtkMs_, lastRelMs_);
         setHoldMs(lastHoldMs_);
-        snapCoef_ = std::exp(-1.0f / (0.05f * sr));
+        updateFlutterPhaseStep();
     }
 
     // SHAPE: envelope curve. -1 = exponential (tight/punchy), 0 = linear, +1 = log (smooth).
     void setShape(float s) noexcept { shape_ = s < -1.0f ? -1.0f : (s > 1.0f ? 1.0f : s); }
 
-    // SNAP: brief gain overshoot above unity on duck release — "air rushing back in".
-    void setSnap(float s) noexcept { snap_ = s < 0.0f ? 0.0f : (s > 1.0f ? 1.0f : s); }
+    // FLUTTER: tremolo depth applied during the release phase. 0 = smooth release.
+    void setFlutter(float f) noexcept { flutter_ = f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f); }
 
     void setTimesMs(float attackMs, float releaseMs) noexcept
     {
@@ -52,26 +51,31 @@ public:
         holdSamplesTotal_ = static_cast<int>(holdMs * 0.001f * sampleRate_);
     }
 
-    void reset() noexcept { env_ = 0.0f; holdRemaining_ = 0; snapEnv_ = 0.0f; snapArmed_ = false; }
+    void reset() noexcept
+    {
+        env_ = 0.0f;
+        holdRemaining_ = 0;
+        inRelease_ = false;
+        flutterPhase_ = 0.0f;
+    }
 
     float process(float trigger, float wet, float depth) noexcept
     {
         const float rect = std::abs(trigger);
         if (rect > env_)
         {
-            // Attack: env tracks up toward rect; restart hold window.
             env_ = rect + (env_ - rect) * atkCoef_;
             holdRemaining_ = holdSamplesTotal_;
-            snapArmed_ = true; // duck is active — prime snap for release
+            inRelease_ = false;
         }
         else if (holdRemaining_ > 0)
         {
-            // Hold: freeze env at its current (post-attack) value.
             --holdRemaining_;
         }
         else
         {
-            // Release: standard one-pole decay.
+            // Entering release phase — reset flutter LFO on first sample.
+            if (!inRelease_) { inRelease_ = true; flutterPhase_ = 0.0f; }
             env_ = rect + (env_ - rect) * relCoef_;
         }
         if (std::fpclassify(env_) == FP_SUBNORMAL) env_ = 0.0f;
@@ -80,45 +84,47 @@ public:
         const float clamped = env_ > 1.0f ? 1.0f : env_;
 
         // SHAPE: curve the envelope value before computing gain reduction.
-        // shape < 0 → convex/exponential (snappy, tight).
-        // shape > 0 → concave/logarithmic (smooth, rounded pump).
         float envShaped = clamped;
         if (clamped > 0.0f && shape_ != 0.0f)
         {
             const float expo = shape_ >= 0.0f
-                ? 1.0f - shape_ * 0.9f   // 1.0 → 0.1 (concave)
-                : 1.0f + (-shape_) * 3.0f; // 1.0 → 4.0 (convex)
+                ? 1.0f - shape_ * 0.9f    // 1.0 → 0.1 (concave / smooth)
+                : 1.0f + (-shape_) * 3.0f; // 1.0 → 4.0 (convex / punchy)
             envShaped = std::pow(clamped, expo);
         }
 
-        // SNAP: brief gain overshoot above unity when the duck releases.
-        // Fires once per duck event on the falling edge (clamped crosses floor).
-        if (snap_ > 0.0f)
+        // FLUTTER: LFO tremolo during release. The oscillation ripples the
+        // shaped envelope so the duck pumps rhythmically as it releases.
+        if (inRelease_ && flutter_ > 0.0f && envShaped > 0.001f)
         {
-            if (snapArmed_ && clamped < 0.01f)
-            {
-                snapEnv_ = snap_ * 0.35f; // max ~+3 dB at snap=1
-                snapArmed_ = false;
-            }
-            snapEnv_ *= snapCoef_;
-            if (std::fpclassify(snapEnv_) == FP_SUBNORMAL) snapEnv_ = 0.0f;
+            flutterPhase_ += flutterPhaseStep_;
+            if (flutterPhase_ >= 6.28318530f) flutterPhase_ -= 6.28318530f;
+            const float ripple = flutter_ * 0.5f * envShaped * std::sin(flutterPhase_);
+            envShaped += ripple;
+            if (envShaped < 0.0f) envShaped = 0.0f;
+            if (envShaped > 1.0f) envShaped = 1.0f;
         }
 
-        return wet * (1.0f - depth * envShaped + snapEnv_);
+        return wet * (1.0f - depth * envShaped);
     }
 
 private:
+    void updateFlutterPhaseStep() noexcept
+    {
+        flutterPhaseStep_ = kFlutterHz / sampleRate_ * 6.28318530f;
+    }
+
     float sampleRate_ = 48000.0f;
     float env_ = 0.0f;
     float atkCoef_ = 0.0f, relCoef_ = 0.0f;
     int   holdSamplesTotal_ = 0;
     int   holdRemaining_    = 0;
     float lastAtkMs_ = 2.0f, lastRelMs_ = 250.0f, lastHoldMs_ = 0.0f;
-    float shape_    = 0.0f;  // -1..+1 envelope curve
-    float snap_     = 0.0f;  // 0..1 post-release overshoot
-    float snapEnv_  = 0.0f;  // overshoot envelope state
-    float snapCoef_ = 0.0f;  // ~50 ms decay coefficient
-    bool  snapArmed_ = false;
+    float shape_          = 0.0f;
+    float flutter_        = 0.0f;
+    float flutterPhase_    = 0.0f;
+    float flutterPhaseStep_ = 0.0f;
+    bool  inRelease_      = false;
 };
 
 } // namespace bombo

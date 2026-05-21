@@ -36,7 +36,7 @@ struct ChainParams
     // DELAY
     float delayMs       = 250.0f;
     float delayFeedback = 0.0f;
-    float delayCrumble  = 0.0f;
+    float delaySmear    = 0.0f;
     // delayTimeMode: 0 = Free, otherwise index into the note-value list
     // declared in createParameterLayout (1=1/2, 2=1/2., 3=1/2T, etc).
     // hostBpm is the effective BPM (host's value if available, else the
@@ -58,7 +58,7 @@ struct ChainParams
     float duckReleaseMs = 250.0f;
     float duckDepth     = 0.0f;
     float duckShape     = 0.0f;
-    float duckSnap      = 0.0f;
+    float duckFlutter   = 0.0f;
     // LIMITER
     bool  limiterOn     = true;
     float limiterAmount = 0.5f;
@@ -178,9 +178,8 @@ public:
         }();
         delay_.setTimeMs(effectiveMs);
         delay_.setFeedback(p.delayFeedback);
-        delay_.setDrift(0.0f);   // drift retired — kept as no-op for now
+        delay_.setDrift(p.delaySmear);
         delay_.setFilterMorph(p.delayMorph);
-        delay_.setCrumble(p.delayCrumble);
 
         reverb_.setParams(p.reverbDecay, p.reverbDamp);
         reverb_.setSize(p.reverbSize);
@@ -190,7 +189,7 @@ public:
         ducker_.setTimesMs(p.duckAttackMs, p.duckReleaseMs);
         ducker_.setHoldMs(p.duckHoldMs);
         ducker_.setShape(p.duckShape);
-        ducker_.setSnap(p.duckSnap);
+        ducker_.setFlutter(p.duckFlutter);
 
         params_ = p;
     }

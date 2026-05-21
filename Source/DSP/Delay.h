@@ -57,17 +57,13 @@ public:
         feedback_ = fb;
     }
 
-    // CRUMBLE: bit-depth reduction in the feedback loop. 0 = clean, 1 = lo-fi.
-    void setCrumble(float c) noexcept
-    {
-        crumble_ = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);
-    }
-
+    // SMEAR: tape-warble LFO on the read tap. 0 = static, 1 = ~90 cents wobble.
     void setDrift(float drift) noexcept
     {
         if (drift < 0.0f) drift = 0.0f;
         if (drift > 1.0f) drift = 1.0f;
-        driftDepthSamples_ = drift * (0.005f * sampleRate_);
+        // 0.02 * sr = 960 samples at 48 kHz → up to ~90 cents at 0.7 Hz.
+        driftDepthSamples_ = drift * (0.02f * sampleRate_);
     }
 
     void setDamp(float damp) noexcept
@@ -160,15 +156,7 @@ public:
         // then plays back at the delay-cycle period AFTER the fade ends.
         // With max feedback (≈1.0), that capture rings out indefinitely
         // — user reported this as a faint, never-dying delay tail.
-        float fb = fbDampZ_ * feedback_;
-        // CRUMBLE: bit-crush the feedback signal so each repeat degrades.
-        // Bit depth sweeps 24 (clean) → 4 (lo-fi rubble) as crumble → 1.
-        if (crumble_ > 0.001f && killFadeRemaining_ == 0)
-        {
-            const float bits = 24.0f - crumble_ * 20.0f;
-            const float step = std::pow(2.0f, bits - 1.0f);
-            fb = std::round(fb * step) / step;
-        }
+        const float fb = fbDampZ_ * feedback_;
         buffer_[writePos_] = (killFadeRemaining_ > 0) ? 0.0f : input + fb;
         writePos_ = (writePos_ + 1) % bufLen;
 
@@ -263,7 +251,6 @@ private:
     float feedback_ = 0.45f;
     float fbDampZ_ = 0.0f;
     float fbDampCoef_ = 0.25f;
-    float crumble_ = 0.0f;
     float lfoPhase_ = 0.0f;
     float driftDepthSamples_ = 0.0f;
     float driftRateHz_ = 0.7f;

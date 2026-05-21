@@ -134,7 +134,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg);
         addChoice(s, pid::delayTimeMode, "SYNC", s.labelOnBg);
         addKnob(s, pid::delayMorph,    "TONE",    s.labelOnBg);
-        addKnob(s, pid::delayCrumble,  "CRUMBLE", s.labelOnBg);
+        addKnob(s, pid::delaySmear,    "SMEAR",   s.labelOnBg);
         addKnob(s, pid::delayMix,      "MIX",     s.labelOnBg);
         sections_.push_back(std::move(s));
     }
@@ -171,7 +171,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         addKnob(s, pid::duckRel,   "REL",   s.labelOnBg);
         addKnob(s, pid::duckDepth, "DEPTH", s.labelOnBg);
         addKnob(s, pid::duckShape, "SHAPE", s.labelOnBg);
-        addKnob(s, pid::duckSnap,  "SNAP",  s.labelOnBg);
+        addKnob(s, pid::duckFlutter, "FLUTTER", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
 
