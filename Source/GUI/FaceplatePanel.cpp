@@ -661,7 +661,9 @@ void FaceplatePanel::resized()
 
     // Rasterise the chassis silhouette once into an alpha image. paint()
     // uses this as the rack clip — pixel-accurate, no curve seams.
-    chassisMask_ = juce::Image(juce::Image::ARGB, juce::jmax(1, w), juce::jmax(1, h), true);
+    // SingleChannel (not ARGB) so reduceClipRegion works on X11 — ARGB
+    // image masks silently no-op on transparent windows under X11/XCB.
+    chassisMask_ = juce::Image(juce::Image::SingleChannel, juce::jmax(1, w), juce::jmax(1, h), true);
     {
         juce::Graphics maskG(chassisMask_);
         maskG.setColour(juce::Colours::white);
