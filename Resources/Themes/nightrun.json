@@ -16,6 +16,11 @@
     "knobCap":     "#FF0A0B0D",
     "knobBevel":   "#FFFFB048",
     "knobRubber":  "#FF050505",
-    "accentAmber": "#FFFFD000"
+    "accentAmber": "#FFFFD000",
+    "bodyHi":      "#FF282016",
+    "bodyLo":      "#FF181008",
+    "cap":         "#FF0C0A08",
+    "noseRed":     "#FFFF5520",
+    "bandYellow":  "#FFFFD000"
   }
 }
