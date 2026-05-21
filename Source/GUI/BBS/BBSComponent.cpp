@@ -184,6 +184,7 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
                 if (newIdx >= 0)
                 {
                     if (progression_ != nullptr) progression_->onKickSaved();
+                    if (onPresetSaved) onPresetSaved();
                     saveStatusMsg_ = ">> PRESET SAVED: " + name + " <<";
                 }
                 else

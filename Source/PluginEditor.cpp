@@ -109,6 +109,13 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         // for now the dismiss callback exists so the wiring is in place.
         (void) this;
     };
+    bbs_.onPresetSaved = [this]
+    {
+        // Refresh the preset bar after BBS S-key saves so the count is
+        // immediately correct and keyboard/button navigation includes the
+        // newly saved preset.
+        faceplate.refreshPresetBar();
+    };
 
     // Wire NoseComponent callbacks through FaceplatePanel.
     faceplate.setNoseProgressionLevel(processorRef.progressionManager().currentLevel());
@@ -668,11 +675,13 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
         if (isPrev || isNext)
         {
             auto& bank = processorRef.presetBank();
-            const int n = bank.size();
-            if (n > 0)
+            if (!bank.empty())
             {
-                const int delta = isNext ? 1 : -1;
-                bank.applyByIndex((bank.currentIndex() + delta + n) % n, processorRef.apvts);
+                // Use bank.prev()/next() which correctly handle currentIndex()==-1.
+                // The manual (idx + delta + n) % n formula gave n-2 instead of
+                // n-1 when no preset was selected and the user pressed prev.
+                if (isNext) bank.next(processorRef.apvts);
+                else        bank.prev(processorRef.apvts);
                 faceplate.refreshPresetBar();
                 return true;
             }

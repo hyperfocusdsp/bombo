@@ -42,6 +42,7 @@ public:
 
     std::function<void()> onShown;
     std::function<void()> onDismissed;
+    std::function<void()> onPresetSaved; // fired after S-key save succeeds
 
     void paint(juce::Graphics&) override;
     bool keyPressed(const juce::KeyPress&) override;
