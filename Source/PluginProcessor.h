@@ -170,6 +170,7 @@ private:
     juce::AudioParameterFloat*  pFilterLp = nullptr;
     juce::AudioParameterFloat*  pFilterLpQ = nullptr;
     juce::AudioParameterFloat*  pFilterColor = nullptr;
+    juce::AudioParameterFloat*  pFilterTeeth = nullptr;
     juce::AudioParameterFloat*  pDelayTime = nullptr;
     juce::AudioParameterFloat*  pDelayFeedback = nullptr;
     juce::AudioParameterChoice* pDelayTimeMode = nullptr;

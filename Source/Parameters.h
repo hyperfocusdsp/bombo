@@ -152,6 +152,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "LP Q", Range(0.5f, 3.0f, 0.01f), 0.707f, curveFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::filterColor, 1},
         "Filter Color", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
+    // TEETH: LP cutoff tracks the pitch envelope. +1 = LP sweeps down with pitch
+    // (filter closes as kick descends). -1 = LP sweeps up (bloom effect).
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::filterTeeth, 1},
+        "Teeth", Range(-1.0f, 1.0f, 0.001f), 0.0f, normFormat));
 
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayTime, 1},
         "Delay Time", skewRange(1.0f, 1000.0f, 0.4f), 380.0f, msFormat));

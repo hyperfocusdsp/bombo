@@ -53,6 +53,7 @@ namespace pid
     inline constexpr const char* filterLp        = "filter_lp";
     inline constexpr const char* filterLpQ       = "filter_lp_q";
     inline constexpr const char* filterColor     = "filter_color";
+    inline constexpr const char* filterTeeth     = "filter_teeth";
     inline constexpr const char* delayTime       = "delay_time";
     inline constexpr const char* delayFeedback   = "delay_feedback";
     // Replaced the old `delay_drift` Float (LFO drift was musically

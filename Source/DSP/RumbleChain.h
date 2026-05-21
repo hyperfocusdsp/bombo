@@ -28,6 +28,11 @@ struct ChainParams
     float hpHz = 30.0f;   float hpQ = 0.707f;
     float lpHz = 4500.0f; float lpQ = 0.707f;
     float filterColor = 0.0f; // 0..1 — drive on LP feedback
+    // TEETH: LP cutoff tracks pitch envelope. -1..+1; 0 = no tracking.
+    float filterTeeth = 0.0f;
+    // Pitch envelope decay (ms) — fed from VoiceTrigger so TEETH can
+    // mirror the pitch sweep duration. Only used when filterTeeth != 0.
+    float pitchDecayMs = 80.0f;
     // DELAY
     float delayMs       = 250.0f;
     float delayFeedback = 0.0f;
@@ -115,6 +120,15 @@ public:
         reverb_.killTail();
     }
 
+    // Called at each kick trigger alongside killTail(). Starts the TEETH
+    // pitch-tracking envelope so the LP cutoff sweeps with the pitch.
+    void onTrigger(float pitchDecayMs) noexcept
+    {
+        teethEnv_ = 1.0f;
+        const float decayS = (pitchDecayMs < 1.0f ? 1.0f : pitchDecayMs) * 0.001f;
+        teethEnvCoef_ = std::exp(-1.0f / (decayS * sampleRate_));
+    }
+
     void update(const ChainParams& p) noexcept
     {
         // Filter coefs — only recompute when params actually moved.
@@ -123,10 +137,22 @@ public:
             hpFilter_.setHpf(sampleRate_, p.hpHz, p.hpQ);
             lastHpHz_ = p.hpHz; lastHpQ_ = p.hpQ;
         }
-        if (std::abs(p.lpHz - lastLpHz_) > 0.5f || std::abs(p.lpQ - lastLpQ_) > 0.001f)
+        // TEETH: modulate LP cutoff with the pitch-tracking envelope.
+        // teethEnv_ is advanced per-sample in process(); update() reads the
+        // current value once per block (block-rate LP update, inaudible lag).
+        float effectiveLpHz = p.lpHz;
+        if (std::abs(p.filterTeeth) > 0.001f && teethEnv_ > 0.001f)
         {
-            lpFilter_.setLpf(sampleRate_, p.lpHz, p.lpQ);
-            lastLpHz_ = p.lpHz; lastLpQ_ = p.lpQ;
+            const float semitones = p.filterTeeth * 24.0f * teethEnv_;
+            effectiveLpHz = p.lpHz * std::pow(2.0f, semitones / 12.0f);
+            const float maxHz = sampleRate_ * 0.49f;
+            effectiveLpHz = effectiveLpHz < 20.0f ? 20.0f
+                          : (effectiveLpHz > maxHz ? maxHz : effectiveLpHz);
+        }
+        if (std::abs(effectiveLpHz - lastLpHz_) > 0.5f || std::abs(p.lpQ - lastLpQ_) > 0.001f)
+        {
+            lpFilter_.setLpf(sampleRate_, effectiveLpHz, p.lpQ);
+            lastLpHz_ = effectiveLpHz; lastLpQ_ = p.lpQ;
         }
         lpFilter_.setDrive(p.filterColor);
 
@@ -172,6 +198,14 @@ public:
     // Process one sample. dry = current voice-pool sum.
     float process(float dry) noexcept
     {
+        // TEETH: advance pitch-tracking envelope every sample so update()
+        // picks up the current value at block rate for LP modulation.
+        if (teethEnv_ > 0.0001f)
+        {
+            teethEnv_ *= teethEnvCoef_;
+            if (std::fpclassify(teethEnv_) == FP_SUBNORMAL) teethEnv_ = 0.0f;
+        }
+
         // DRIVE on the dry path (voice-clip family — same shaper palette).
         float driven = dry;
         if (!params_.driveMute
@@ -219,6 +253,9 @@ private:
     ChainParams params_{};
     float lastHpHz_ = 30.0f, lastHpQ_ = 0.707f;
     float lastLpHz_ = 4500.0f, lastLpQ_ = 0.707f;
+    // TEETH pitch-tracking envelope state
+    float teethEnv_     = 0.0f;
+    float teethEnvCoef_ = 1.0f;
 };
 
 } // namespace bombo

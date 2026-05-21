@@ -47,6 +47,7 @@ void BomboProcessor::cacheParameterPointers()
     pFilterLp        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterLp));
     pFilterLpQ       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterLpQ));
     pFilterColor     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterColor));
+    pFilterTeeth     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(filterTeeth));
     pDelayTime       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayTime));
     pDelayFeedback   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayFeedback));
     pDelayTimeMode   = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(delayTimeMode));
@@ -94,6 +95,7 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.lpHz            = pFilterLp->get();
     p.lpQ             = pFilterLpQ->get();
     p.filterColor     = pFilterColor->get();
+    p.filterTeeth     = pFilterTeeth->get();
     p.delayMs         = pDelayTime->get();
     p.delayFeedback   = pDelayFeedback->get();
     p.delayTimeMode   = pDelayTimeMode->getIndex();
@@ -439,6 +441,7 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             voiceMgr_.stealAndAdvance();
             voiceMgr_.trigger(trig);
             chain_.killTail();
+            chain_.onTrigger(trig.pitchEnvDecayMs);
         }
 
         const float dry = voiceMgr_.renderSample();
@@ -776,6 +779,8 @@ void BomboProcessor::randomizeBombo()
     setPlain (filterLp,    rng(1500.0f,12000.0f));
     setPlain (filterLpQ,   rng(   0.7f,    1.3f));
     setNorm  (filterColor, rng(   0.0f,    0.5f));
+    // TEETH: 0.5 norm = 0 (no tracking). Bias toward positive (closing with pitch).
+    setNorm  (filterTeeth, rng(   0.4f,    0.8f));
 
     // ── DUCK ────────────────────────────────────────────────────────
     setPlain (duckAtk,    rng(  0.5f,  10.0f));

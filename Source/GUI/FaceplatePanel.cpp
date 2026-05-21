@@ -159,6 +159,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         addKnob(s, pid::filterLp,    "LP",    s.labelOnBg);
         addKnob(s, pid::filterLpQ,   "LP Q",  s.labelOnBg);
         addKnob(s, pid::filterColor, "COLOR", s.labelOnBg);
+        addKnob(s, pid::filterTeeth, "TEETH", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
     {
