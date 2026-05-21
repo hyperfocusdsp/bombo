@@ -139,23 +139,6 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 
     if (key == juce::KeyPress::escapeKey) { hide(); return true; }
 
-    // Konami detector (↑↑↓↓←→←→) — only on BoomFeed, before other handlers.
-    // Matched keys are consumed so ←→ don't flip BoomFeed mode mid-sequence.
-    if (screens_.current() == BBSScreen::BoomFeed)
-    {
-        if (key.getKeyCode() == kKonamiSeq[konamiPos_])
-        {
-            if (++konamiPos_ >= kKonamiLen)
-            {
-                konamiPos_ = 0;
-                game_.hyperfocusModeActive = true;
-                launchGame();
-            }
-            return true; // consume matched key
-        }
-        konamiPos_ = 0; // mismatch — reset, fall through
-    }
-
     // T fires the kick from any BBS screen — Intro/BoomFeed/MyDownloads.
     // Mirrors the main editor's T shortcut so muscle memory carries over.
     {
@@ -167,13 +150,33 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
         }
     }
 
+    // Intro skip — transition to BoomFeed first so that Konami + command
+    // buffer below see the correct screen on the very same keypress.
     if (screens_.current() == BBSScreen::Intro)
     {
         introComplete_ = true;
-        screens_.onIntroComplete();
+        screens_.onIntroComplete(); // transitions to BoomFeed
         // Don't return — N/P fall through to the BoomFeed block so one
         // keypress both skips the intro AND applies the navigation action.
         // Any other key is swallowed at the end of the function.
+    }
+
+    // Konami detector (up-up-down-down-left-right-left-right).
+    // Runs after any intro skip so pressing up to skip intro also counts
+    // as the first Konami step. Matched keys consumed to avoid side effects.
+    if (screens_.current() == BBSScreen::BoomFeed)
+    {
+        if (key == juce::KeyPress(kKonamiSeq[konamiPos_]))
+        {
+            if (++konamiPos_ >= kKonamiLen)
+            {
+                konamiPos_ = 0;
+                game_.hyperfocusModeActive = true;
+                launchGame();
+            }
+            return true; // consume matched key
+        }
+        konamiPos_ = 0; // mismatch — reset, fall through
     }
 
     if (key == juce::KeyPress::tabKey)
@@ -187,8 +190,10 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 
     if (screens_.current() == BBSScreen::BoomFeed)
     {
-        // Accumulate typed chars — "GAME" + any key launches the game.
+        // Single-key shortcut: G launches the game immediately.
+        // Also accumulate a buffer — typing "GAME" fully works too.
         const auto chUp = juce::CharacterFunctions::toUpperCase(key.getTextCharacter());
+        if (chUp == 'G') { commandBuffer_.clear(); launchGame(); return true; }
         if (chUp >= 'A' && chUp <= 'Z')
         {
             commandBuffer_ += chUp;
