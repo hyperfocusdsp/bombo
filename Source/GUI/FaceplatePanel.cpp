@@ -120,6 +120,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.accent = col::drive(); s.labelOnBg = col::ink();
         addKnob  (s, pid::driveAmount,   "V.AMT",  s.labelOnBg);
         addChoice(s, pid::driveMode,     "V.MODE", s.labelOnBg);
+        addKnob  (s, pid::driveBias,     "BIAS",   s.labelOnBg);
         addKnob  (s, pid::fxDriveAmount, "B.AMT",  s.labelOnBg);
         addChoice(s, pid::fxDriveMode,   "B.MODE", s.labelOnBg);
         addKnob  (s, pid::fxDriveMix,    "MIX",    s.labelOnBg);
@@ -132,8 +133,9 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         addKnob(s, pid::delayTime,     "TIME",  s.labelOnBg);
         addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg);
         addChoice(s, pid::delayTimeMode, "SYNC", s.labelOnBg);
-        addKnob(s, pid::delayMorph,    "TONE",  s.labelOnBg);
-        addKnob(s, pid::delayMix,      "MIX",   s.labelOnBg);
+        addKnob(s, pid::delayMorph,    "TONE",    s.labelOnBg);
+        addKnob(s, pid::delayCrumble,  "CRUMBLE", s.labelOnBg);
+        addKnob(s, pid::delayMix,      "MIX",     s.labelOnBg);
         sections_.push_back(std::move(s));
     }
     {
@@ -167,6 +169,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         addKnob(s, pid::duckHold,  "HOLD",  s.labelOnBg);
         addKnob(s, pid::duckRel,   "REL",   s.labelOnBg);
         addKnob(s, pid::duckDepth, "DEPTH", s.labelOnBg);
+        addKnob(s, pid::duckShape, "SHAPE", s.labelOnBg);
+        addKnob(s, pid::duckSnap,  "SNAP",  s.labelOnBg);
         sections_.push_back(std::move(s));
     }
 

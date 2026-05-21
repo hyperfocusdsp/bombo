@@ -57,6 +57,12 @@ public:
         feedback_ = fb;
     }
 
+    // CRUMBLE: bit-depth reduction in the feedback loop. 0 = clean, 1 = lo-fi.
+    void setCrumble(float c) noexcept
+    {
+        crumble_ = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);
+    }
+
     void setDrift(float drift) noexcept
     {
         if (drift < 0.0f) drift = 0.0f;
@@ -154,9 +160,16 @@ public:
         // then plays back at the delay-cycle period AFTER the fade ends.
         // With max feedback (≈1.0), that capture rings out indefinitely
         // — user reported this as a faint, never-dying delay tail.
-        buffer_[writePos_] = (killFadeRemaining_ > 0)
-                                ? 0.0f
-                                : input + fbDampZ_ * feedback_;
+        float fb = fbDampZ_ * feedback_;
+        // CRUMBLE: bit-crush the feedback signal so each repeat degrades.
+        // Bit depth sweeps 24 (clean) → 4 (lo-fi rubble) as crumble → 1.
+        if (crumble_ > 0.001f && killFadeRemaining_ == 0)
+        {
+            const float bits = 24.0f - crumble_ * 20.0f;
+            const float step = std::pow(2.0f, bits - 1.0f);
+            fb = std::round(fb * step) / step;
+        }
+        buffer_[writePos_] = (killFadeRemaining_ > 0) ? 0.0f : input + fb;
         writePos_ = (writePos_ + 1) % bufLen;
 
         // Kill-fade V-ramp. The ramp fades the output down to 0 over the
@@ -250,6 +263,7 @@ private:
     float feedback_ = 0.45f;
     float fbDampZ_ = 0.0f;
     float fbDampCoef_ = 0.25f;
+    float crumble_ = 0.0f;
     float lfoPhase_ = 0.0f;
     float driftDepthSamples_ = 0.0f;
     float driftRateHz_ = 0.7f;

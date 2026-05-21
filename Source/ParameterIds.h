@@ -39,6 +39,7 @@ namespace pid
     inline constexpr const char* noiseColor      = "noise_color";
     inline constexpr const char* driveAmount     = "drive_amount";
     inline constexpr const char* driveMode       = "drive_mode";
+    inline constexpr const char* driveBias       = "drive_bias";
     // VOICE A ↔ VOICE B balance. 0 = A only, 0.5 = both at unity (tent),
     // 1 = B only.
     inline constexpr const char* voiceBalance    = "voice_balance";
@@ -60,6 +61,7 @@ namespace pid
     // value; the TIME knob value is ignored.
     inline constexpr const char* delayTimeMode   = "delay_time_mode";
     inline constexpr const char* delayMorph      = "delay_morph";
+    inline constexpr const char* delayCrumble    = "delay_crumble";
     inline constexpr const char* delayMix        = "delay_mix";
     inline constexpr const char* reverbSize      = "reverb_size";
     inline constexpr const char* reverbDecay     = "reverb_decay";
@@ -71,6 +73,8 @@ namespace pid
     inline constexpr const char* duckHold        = "duck_hold";
     inline constexpr const char* duckRel         = "duck_rel";
     inline constexpr const char* duckDepth       = "duck_depth";
+    inline constexpr const char* duckShape       = "duck_shape";
+    inline constexpr const char* duckSnap        = "duck_snap";
     inline constexpr const char* limiterOn       = "limiter_on";
     inline constexpr const char* limiterAmount   = "limiter_amount";
     // TRANSPORT (standalone-only knobs the host doesn't drive). loopOn =

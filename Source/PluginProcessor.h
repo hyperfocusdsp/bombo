@@ -158,6 +158,7 @@ private:
     juce::AudioParameterFloat*  pNoiseColor = nullptr;
     juce::AudioParameterFloat*  pDriveAmount = nullptr;
     juce::AudioParameterChoice* pDriveMode = nullptr;
+    juce::AudioParameterFloat*  pDriveBias = nullptr;
     juce::AudioParameterFloat*  pVoiceBalance = nullptr;
 
     // Rumble FX chain params (Phase 2).
@@ -173,6 +174,7 @@ private:
     juce::AudioParameterFloat*  pDelayFeedback = nullptr;
     juce::AudioParameterChoice* pDelayTimeMode = nullptr;
     juce::AudioParameterFloat*  pDelayMorph = nullptr;
+    juce::AudioParameterFloat*  pDelayCrumble = nullptr;
     juce::AudioParameterFloat*  pDelayMix = nullptr;
     juce::AudioParameterFloat*  pReverbSize = nullptr;
     juce::AudioParameterFloat*  pReverbDecay = nullptr;
@@ -184,6 +186,8 @@ private:
     juce::AudioParameterFloat*  pDuckHold = nullptr;
     juce::AudioParameterFloat*  pDuckRel = nullptr;
     juce::AudioParameterFloat*  pDuckDepth = nullptr;
+    juce::AudioParameterFloat*  pDuckShape = nullptr;
+    juce::AudioParameterFloat*  pDuckSnap = nullptr;
     juce::AudioParameterBool*   pLimiterOn = nullptr;
     juce::AudioParameterFloat*  pLimiterAmount = nullptr;
     juce::AudioParameterBool*   pTailKillOn = nullptr;

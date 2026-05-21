@@ -125,6 +125,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back(std::make_unique<Choice>(juce::ParameterID{pid::driveMode, 1},
         "Drive Mode", juce::StringArray{"Off", "Tanh", "Diode", "Cubic"},
         VC_DIODE));
+    // BIAS: DC offset into waveshaper pre-clip → asymmetric harmonics (tube character).
+    // -1 = heavy negative bias, 0 = symmetric, +1 = heavy positive bias.
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::driveBias, 1},
+        "Drive Bias", Range(-1.0f, 1.0f, 0.001f), 0.0f, normFormat));
 
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::voiceBalance, 1},
         "Voice Balance", Range(0.0f, 1.0f, 0.001f), 0.50f, normFormat));
@@ -166,6 +170,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         0));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMorph, 1},
         "Delay Tone", Range(0.0f, 1.0f, 0.001f), 0.4f, normFormat));
+    // CRUMBLE: bit-depth reduction in the feedback path — repeats degrade
+    // progressively. 0 = clean, 1 = lo-fi rubble.
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayCrumble, 1},
+        "Crumble", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMix, 1},
         "Delay Mix", Range(0.0f, 1.0f, 0.001f), 0.25f, normFormat));
 
@@ -190,6 +198,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Duck Rel", skewRange(10.0f, 500.0f, 0.4f), 220.0f, msFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckDepth, 1},
         "Duck Depth", Range(0.0f, 1.0f, 0.001f), 0.6f, normFormat));
+    // SHAPE: envelope curve. -1 = exponential (tight/punchy), 0 = linear, +1 = log (smooth).
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckShape, 1},
+        "Duck Shape", Range(-1.0f, 1.0f, 0.001f), 0.0f, normFormat));
+    // SNAP: brief gain overshoot above unity on duck release — the "air rushing back".
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckSnap, 1},
+        "Duck Snap", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
 
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::limiterOn, 1}, "Limiter On", true));

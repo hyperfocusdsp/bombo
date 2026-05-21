@@ -43,6 +43,9 @@ struct VoiceTrigger
     // Drive
     float driveAmount     = 0.30f;
     int   driveMode       = VC_DIODE;
+    // BIAS: DC offset fed into the waveshaper pre-clip for asymmetric harmonics.
+    // -1..+1; 0 = symmetric (no change to existing behaviour).
+    float driveBias       = 0.0f;
     // Section mute snapshots — captured at note-on so they apply for the
     // voice's lifetime. driveMute also bypasses the voice clipper so the
     // whole DRIVE column quiets when toggled off, not just the rumble bus.
@@ -117,6 +120,8 @@ public:
         }
         subHpfPrevX_ = 0.0f;
         subHpfPrevY_ = 0.0f;
+        dcBlockX_ = 0.0f;
+        dcBlockY_ = 0.0f;
         // COLOR filter: one-pole LP applied to the full body sum (mid +
         // click + noise + sample). Cutoff sweep matches NoiseGen's range
         // direction (color=0 → dark, color=1 → bright) but starts higher
@@ -238,9 +243,28 @@ public:
 
         // DRIVE column mute bypasses the per-voice clipper as well as the
         // chain's B.AMT stage (RumbleChain already honors driveMute).
-        const float shaped = trig_.driveMute
-            ? raw
-            : voiceClipApply(trig_.driveMode, trig_.driveAmount, raw);
+        float shaped;
+        if (trig_.driveMute)
+        {
+            shaped = raw;
+        }
+        else
+        {
+            // BIAS: DC offset into waveshaper → asymmetric clipping, even harmonics.
+            const float biased = raw + trig_.driveBias * 0.4f;
+            shaped = voiceClipApply(trig_.driveMode, trig_.driveAmount, biased);
+
+            // DC blocker (one-pole HP at ~5 Hz): removes the offset that
+            // asymmetric clipping introduces. y[n] = x[n] - x[n-1] + R*y[n-1].
+            if (std::abs(trig_.driveBias) > 0.001f)
+            {
+                const float y = shaped - dcBlockX_ + 0.9997f * dcBlockY_;
+                dcBlockX_ = shaped;
+                dcBlockY_ = y;
+                if (std::fpclassify(dcBlockY_) == FP_SUBNORMAL) dcBlockY_ = 0.0f;
+                shaped = y;
+            }
+        }
 
         const float out = shaped * fadeoutGain_;
 
@@ -280,6 +304,9 @@ private:
     float          subHpfA_      = 1.0f;
     float          subHpfPrevX_  = 0.0f;
     float          subHpfPrevY_  = 0.0f;
+    // DC blocker for BIAS — one-pole HP state. Reset at trigger.
+    float          dcBlockX_     = 0.0f;
+    float          dcBlockY_     = 0.0f;
 };
 
 } // namespace bombo

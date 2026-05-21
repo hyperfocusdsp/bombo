@@ -36,6 +36,7 @@ void BomboProcessor::cacheParameterPointers()
     pNoiseColor    = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(noiseColor));
     pDriveAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(driveAmount));
     pDriveMode     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(driveMode));
+    pDriveBias     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(driveBias));
     pVoiceBalance  = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(voiceBalance));
 
     pFxDriveAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(fxDriveAmount));
@@ -50,6 +51,7 @@ void BomboProcessor::cacheParameterPointers()
     pDelayFeedback   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayFeedback));
     pDelayTimeMode   = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(delayTimeMode));
     pDelayMorph      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMorph));
+    pDelayCrumble    = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayCrumble));
     pDelayMix        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMix));
     pReverbSize      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbSize));
     pReverbDecay     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbDecay));
@@ -61,6 +63,8 @@ void BomboProcessor::cacheParameterPointers()
     pDuckHold        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckHold));
     pDuckRel         = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckRel));
     pDuckDepth       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckDepth));
+    pDuckShape       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckShape));
+    pDuckSnap        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckSnap));
     pLimiterOn       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(limiterOn));
     pLimiterAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(limiterAmount));
     pTailKillOn      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(tailKillOn));
@@ -98,6 +102,7 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.hostBpm         = hostBpmAtomic_.load(std::memory_order_relaxed);
     if (p.hostBpm < 1.0f && pBpm != nullptr) p.hostBpm = pBpm->get();
     p.delayMorph      = pDelayMorph->get();
+    p.delayCrumble    = pDelayCrumble->get();
     p.delayMix        = pDelayMix->get();
     p.reverbSize      = pReverbSize->get();
     p.reverbDecay     = pReverbDecay->get();
@@ -109,6 +114,8 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.duckHoldMs      = pDuckHold->get();
     p.duckReleaseMs   = pDuckRel->get();
     p.duckDepth       = pDuckDepth->get();
+    p.duckShape       = pDuckShape->get();
+    p.duckSnap        = pDuckSnap->get();
     p.limiterOn       = pLimiterOn->get();
     p.limiterAmount   = pLimiterAmount->get();
     p.driveMute       = pDriveMute->get();
@@ -140,6 +147,7 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     t.noiseColor      = pNoiseColor->get();
     t.driveAmount     = pDriveAmount->get();
     t.driveMode       = pDriveMode->getIndex();
+    t.driveBias       = pDriveBias->get();
     t.voiceAMute      = pVoiceAMute->get();
     t.voiceBMute      = pVoiceBMute->get();
     t.driveMute       = pDriveMute->get();
@@ -738,6 +746,9 @@ void BomboProcessor::randomizeBombo()
     // ── DRIVE ───────────────────────────────────────────────────────
     setNorm  (driveAmount,   rng(  0.0f,   0.6f));
     setChoice(driveMode, 4);
+    // BIAS centre is 0.5 normalized (= 0.0 plain). Keep mostly centred
+    // with mild asymmetry; extremes reserved for deliberate design.
+    setNorm  (driveBias,     rng(  0.35f,  0.65f));
     setNorm  (fxDriveAmount, rng(  0.0f,   0.5f));
     setChoice(fxDriveMode, 4);
     setNorm  (fxDriveMix,    rng(  0.5f,   1.0f));
@@ -748,6 +759,7 @@ void BomboProcessor::randomizeBombo()
     // 60% chance free, 40% chance a musically-tame sync mode (1/4..1/8T).
     setChoice(delayTimeMode, (rng(0.0f, 1.0f) < 0.6f) ? 0 : (4 + (int) (rng(0.0f, 6.0f))));
     setNorm  (delayMorph,    rng(  0.15f,  0.85f));
+    setNorm  (delayCrumble,  rng(  0.0f,   0.5f));
     setNorm  (delayMix,      rng(  0.0f,   0.35f));
 
     // ── REVERB ──────────────────────────────────────────────────────
@@ -770,6 +782,9 @@ void BomboProcessor::randomizeBombo()
     setPlain (duckHold,   rng(  0.0f,  80.0f));
     setPlain (duckRel,    rng( 80.0f, 350.0f));
     setNorm  (duckDepth,  rng(  0.0f,   0.8f));
+    // SHAPE: 0.5 norm = 0.0 plain (linear). Spread into both exp and log territory.
+    setNorm  (duckShape,  rng(  0.2f,   0.8f));
+    setNorm  (duckSnap,   rng(  0.0f,   0.55f));
 
     // Section mutes — clear all so the user hears the full result. (No
     // point getting a randomized kick that's silent because DRIVE muted.)
