@@ -75,7 +75,7 @@ namespace pid
     inline constexpr const char* duckRel         = "duck_rel";
     inline constexpr const char* duckDepth       = "duck_depth";
     inline constexpr const char* duckShape       = "duck_shape";
-    inline constexpr const char* duckFlutter     = "duck_flutter";
+    inline constexpr const char* duckGrowl     = "duck_growl";
     inline constexpr const char* limiterOn       = "limiter_on";
     inline constexpr const char* limiterAmount   = "limiter_amount";
     // TRANSPORT (standalone-only knobs the host doesn't drive). loopOn =

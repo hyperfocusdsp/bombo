@@ -8,17 +8,18 @@ namespace bombo
 // Envelope-follower wet-gate. Pulls the wet bus down in time with each
 // kick onset. duck_gain = 1 - depth * env. depth=0 is bypass.
 //
-// HOLD: after each attack peak the env is pinned at the new peak for
-// `holdMs` before release coefficient takes over.
+// GROWL: low-pass filter applied to wet BEFORE the gain reduction, keyed
+// to the duck envelope. Deep duck → wet goes dark (~300 Hz LP); releasing
+// duck → wet brightens back to full spectrum simultaneously. Dry kick path
+// is completely unaffected. For techno: reverb/delay tails emerge from
+// darkness into brightness as each kick decays — the "bloom" effect.
 class Ducker
 {
 public:
-    static constexpr float kFlutterHz = 10.0f; // fixed tremolo rate during release
-
     explicit Ducker(float sampleRate = 48000.0f) : sampleRate_(sampleRate)
     {
         setTimesMs(2.0f, 250.0f);
-        updateFlutterPhaseStep();
+        updateGrowlAlpha();
     }
 
     void setSampleRate(float sr) noexcept
@@ -26,14 +27,15 @@ public:
         sampleRate_ = sr;
         setTimesMs(lastAtkMs_, lastRelMs_);
         setHoldMs(lastHoldMs_);
-        updateFlutterPhaseStep();
+        updateGrowlAlpha();
     }
 
     // SHAPE: envelope curve. -1 = exponential (tight/punchy), 0 = linear, +1 = log (smooth).
     void setShape(float s) noexcept { shape_ = s < -1.0f ? -1.0f : (s > 1.0f ? 1.0f : s); }
 
-    // FLUTTER: tremolo depth applied during the release phase. 0 = smooth release.
-    void setFlutter(float f) noexcept { flutter_ = f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f); }
+    // GROWL: LP filter depth on the wet signal during duck. 0 = clean gain
+    // reduction only. 1 = wet fully darkened at peak duck, brightens with release.
+    void setGrowl(float g) noexcept { growl_ = g < 0.0f ? 0.0f : (g > 1.0f ? 1.0f : g); }
 
     void setTimesMs(float attackMs, float releaseMs) noexcept
     {
@@ -55,8 +57,7 @@ public:
     {
         env_ = 0.0f;
         holdRemaining_ = 0;
-        inRelease_ = false;
-        flutterPhase_ = 0.0f;
+        lpZ_ = 0.0f;
     }
 
     float process(float trigger, float wet, float depth) noexcept
@@ -66,7 +67,6 @@ public:
         {
             env_ = rect + (env_ - rect) * atkCoef_;
             holdRemaining_ = holdSamplesTotal_;
-            inRelease_ = false;
         }
         else if (holdRemaining_ > 0)
         {
@@ -74,8 +74,6 @@ public:
         }
         else
         {
-            // Entering release phase — reset flutter LFO on first sample.
-            if (!inRelease_) { inRelease_ = true; flutterPhase_ = 0.0f; }
             env_ = rect + (env_ - rect) * relCoef_;
         }
         if (std::fpclassify(env_) == FP_SUBNORMAL) env_ = 0.0f;
@@ -83,35 +81,39 @@ public:
         if (depth > 1.0f) depth = 1.0f;
         const float clamped = env_ > 1.0f ? 1.0f : env_;
 
-        // SHAPE: curve the envelope value before computing gain reduction.
+        // SHAPE: curve the envelope before computing gain reduction.
         float envShaped = clamped;
         if (clamped > 0.0f && shape_ != 0.0f)
         {
             const float expo = shape_ >= 0.0f
-                ? 1.0f - shape_ * 0.9f    // 1.0 → 0.1 (concave / smooth)
-                : 1.0f + (-shape_) * 3.0f; // 1.0 → 4.0 (convex / punchy)
+                ? 1.0f - shape_ * 0.9f     // 1.0 → 0.1 (concave / smooth)
+                : 1.0f + (-shape_) * 3.0f;  // 1.0 → 4.0 (convex / punchy)
             envShaped = std::pow(clamped, expo);
         }
 
-        // FLUTTER: LFO tremolo during release. The oscillation ripples the
-        // shaped envelope so the duck pumps rhythmically as it releases.
-        if (inRelease_ && flutter_ > 0.0f && envShaped > 0.001f)
+        // GROWL: LP-filter wet keyed to duck depth, applied BEFORE gain
+        // reduction. Wet darkens as duck deepens; brightens as it releases.
+        // lpZ_ is a one-pole LP at ~300 Hz — slow enough to pass only warmth.
+        // Transient is preserved: at attack peak, gain is near 0 so the
+        // darkened wet is inaudible. During release the tail blooms from dark.
+        if (growl_ > 0.0f)
         {
-            flutterPhase_ += flutterPhaseStep_;
-            if (flutterPhase_ >= 6.28318530f) flutterPhase_ -= 6.28318530f;
-            const float ripple = flutter_ * 0.5f * envShaped * std::sin(flutterPhase_);
-            envShaped += ripple;
-            if (envShaped < 0.0f) envShaped = 0.0f;
-            if (envShaped > 1.0f) envShaped = 1.0f;
+            const float t = growl_ * envShaped;
+            lpZ_ = growlAlpha_ * wet + (1.0f - growlAlpha_) * lpZ_;
+            if (std::fpclassify(lpZ_) == FP_SUBNORMAL) lpZ_ = 0.0f;
+            wet = wet * (1.0f - t) + lpZ_ * t;
         }
 
         return wet * (1.0f - depth * envShaped);
     }
 
 private:
-    void updateFlutterPhaseStep() noexcept
+    void updateGrowlAlpha() noexcept
     {
-        flutterPhaseStep_ = kFlutterHz / sampleRate_ * 6.28318530f;
+        // One-pole LP coefficient for ~300 Hz.
+        constexpr float kCutHz = 300.0f;
+        const float wc = 6.28318530f * kCutHz;
+        growlAlpha_ = wc / (sampleRate_ + wc);
     }
 
     float sampleRate_ = 48000.0f;
@@ -120,11 +122,10 @@ private:
     int   holdSamplesTotal_ = 0;
     int   holdRemaining_    = 0;
     float lastAtkMs_ = 2.0f, lastRelMs_ = 250.0f, lastHoldMs_ = 0.0f;
-    float shape_          = 0.0f;
-    float flutter_        = 0.0f;
-    float flutterPhase_    = 0.0f;
-    float flutterPhaseStep_ = 0.0f;
-    bool  inRelease_      = false;
+    float shape_       = 0.0f;
+    float growl_       = 0.0f;
+    float growlAlpha_  = 0.0f;
+    float lpZ_         = 0.0f;
 };
 
 } // namespace bombo

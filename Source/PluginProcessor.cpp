@@ -65,7 +65,7 @@ void BomboProcessor::cacheParameterPointers()
     pDuckRel         = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckRel));
     pDuckDepth       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckDepth));
     pDuckShape       = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckShape));
-    pDuckFlutter        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckFlutter));
+    pDuckGrowl        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(duckGrowl));
     pLimiterOn       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(limiterOn));
     pLimiterAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(limiterAmount));
     pTailKillOn      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(tailKillOn));
@@ -117,7 +117,7 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.duckReleaseMs   = pDuckRel->get();
     p.duckDepth       = pDuckDepth->get();
     p.duckShape       = pDuckShape->get();
-    p.duckFlutter        = pDuckFlutter->get();
+    p.duckGrowl        = pDuckGrowl->get();
     p.limiterOn       = pLimiterOn->get();
     p.limiterAmount   = pLimiterAmount->get();
     p.driveMute       = pDriveMute->get();
@@ -789,7 +789,7 @@ void BomboProcessor::randomizeBombo()
     setNorm  (duckDepth,  rng(  0.0f,   0.8f));
     // SHAPE: 0.5 norm = 0.0 plain (linear). Spread into both exp and log territory.
     setNorm  (duckShape,  rng(  0.2f,   0.8f));
-    setNorm  (duckFlutter,   rng(  0.0f,   0.55f));
+    setNorm  (duckGrowl,   rng(  0.0f,   0.55f));
 
     // Section mutes — clear all so the user hears the full result. (No
     // point getting a randomized kick that's silent because DRIVE muted.)

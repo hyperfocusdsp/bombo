@@ -204,9 +204,9 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // SHAPE: envelope curve. -1 = exponential (tight/punchy), 0 = linear, +1 = log (smooth).
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckShape, 1},
         "Duck Shape", Range(-1.0f, 1.0f, 0.001f), 0.0f, normFormat));
-    // FLUTTER: 10 Hz tremolo during duck release — gain oscillates as the duck releases.
-    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckFlutter, 1},
-        "Duck Flutter", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
+    // GROWL: LP filter on wet during duck — tail darkens at peak, blooms bright on release.
+    p.push_back(std::make_unique<Float>(juce::ParameterID{pid::duckGrowl, 1},
+        "Duck Growl", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
 
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::limiterOn, 1}, "Limiter On", true));

@@ -171,7 +171,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         addKnob(s, pid::duckRel,   "REL",   s.labelOnBg);
         addKnob(s, pid::duckDepth, "DEPTH", s.labelOnBg);
         addKnob(s, pid::duckShape, "SHAPE", s.labelOnBg);
-        addKnob(s, pid::duckFlutter, "FLUTTER", s.labelOnBg);
+        addKnob(s, pid::duckGrowl,   "GROWL",   s.labelOnBg);
         sections_.push_back(std::move(s));
     }
 

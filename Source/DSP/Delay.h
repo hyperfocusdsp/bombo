@@ -113,6 +113,7 @@ public:
     // Per-trigger kill-fade — output V-ramp only, buffer keeps writing.
     void killTail() noexcept
     {
+        lfoPhase_ = 0.0f; // reset SMEAR LFO so each kick warbles identically
         stopFadeRemaining_ = 0;
         stopMuted_ = false;
         if (killFadeRemaining_ == 0)

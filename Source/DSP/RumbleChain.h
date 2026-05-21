@@ -58,7 +58,7 @@ struct ChainParams
     float duckReleaseMs = 250.0f;
     float duckDepth     = 0.0f;
     float duckShape     = 0.0f;
-    float duckFlutter   = 0.0f;
+    float duckGrowl     = 0.0f;
     // LIMITER
     bool  limiterOn     = true;
     float limiterAmount = 0.5f;
@@ -189,7 +189,7 @@ public:
         ducker_.setTimesMs(p.duckAttackMs, p.duckReleaseMs);
         ducker_.setHoldMs(p.duckHoldMs);
         ducker_.setShape(p.duckShape);
-        ducker_.setFlutter(p.duckFlutter);
+        ducker_.setGrowl(p.duckGrowl);
 
         params_ = p;
     }
