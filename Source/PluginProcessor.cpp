@@ -463,9 +463,18 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
                             &chainParams_,
                             sizeof(chainParams_)) != 0)
     {
-        // Any chain param moved — cache is stale, re-capture next trig.
+        // Any chain param moved — cache is stale, re-capture on next
+        // trig. ALSO reset chain + stereo finalizer state so the
+        // re-capture starts from clean FX state. Without the reset
+        // the next captured beat inherits whatever delay buffer +
+        // reverb conv residue the live chain was carrying at the
+        // moment of the tweak — heard as a "chopy/clicky" first
+        // post-tweak beat that the user previously could only get
+        // rid of by stopping + restarting the loop.
         loopCache_.valid     = false;
         loopCache_.capturing = false;
+        chain_.reset();
+        stereoFin_.reset();
     }
     // beatSamples for the cache: round one beat to integer samples.
     const int cacheBeatSamples = (effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
