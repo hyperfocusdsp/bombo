@@ -271,10 +271,9 @@ private:
         }
         float process(float input) noexcept
         {
-            const int readPos = (pos + length - 1) % length;
-            const float bufOut = buffer[readPos];
-            const float out = -input + bufOut;
-            buffer[pos] = input + bufOut * feedback;
+            const float bufOut = buffer[pos];            // M=length delay (read before write)
+            const float out = bufOut - feedback * input; // Schroeder allpass: y = v[n-M] - g·x[n]
+            buffer[pos] = input + bufOut * feedback;     // v[n] = x[n] + g·v[n-M]
             pos = (pos + 1) % length;
             return out;
         }
@@ -352,7 +351,7 @@ private:
             for (auto& s : buffer) s = 0.0f;
             writePos = 0;
             fbLpZ = 0.0f;
-            // lfoPhase intentionally NOT reset — keep modulators decorrelated.
+            lfoPhase = 0.0f;
         }
     };
 
