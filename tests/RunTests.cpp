@@ -23,6 +23,7 @@
 #include "DSP/ConvolutionReverb.h"
 #include "DSP/IRBank.h"
 #include "DSP/RumbleChain.h"
+#include <juce_audio_formats/juce_audio_formats.h>
 
 #include <cmath>
 #include <vector>
@@ -925,6 +926,187 @@ public:
                 + " fadePeak="   + juce::String(fadePeak, 6)
                 + " postFadeEnergy=" + juce::String(postFadeEnergy, 6)
                 + " postFadePeak="   + juce::String(postFadePeak, 6));
+        }
+
+        beginTest("USER BUG: tailKillOn toggle controls per-trig chop in loop mode");
+        {
+            // Mirrors the user-reported scenario:
+            //   - DELAY heavy feedback, REVERB on, LOOP mode at 140 BPM.
+            //   - TAIL ON  -> delay buffer should chop between every trig
+            //                 (post-trig the delay echo from beat N-1 must
+            //                 be gone before beat N's echo arrives).
+            //   - TAIL OFF -> delay buffer must NOT chop; the previous
+            //                 beat's echo continues ringing through the
+            //                 next beat.
+            const float sr = 48000.0f;
+            const int   beatSamples = static_cast<int>(60.0f / 140.0f * sr);
+
+            auto runScenario = [&](bool tailKillOn) noexcept {
+                bombo::RumbleChain chain(sr);
+                bombo::ChainParams p;
+                // Heavy-feedback delay, low feedback HP/LP filtering so we
+                // can clearly see the echo tail. Reverb muted so the only
+                // wet content is delay.
+                p.delayMs        = 250.0f;
+                p.delayFeedback  = 0.85f;
+                p.delayMix       = 0.6f;
+                p.reverbMix      = 0.0f;
+                p.reverbMute     = true;
+                p.delayMute      = false;
+                p.duckDepth      = 0.0f;
+                p.hpHz           = 30.0f;  p.hpQ = 0.707f;
+                p.lpHz           = 12000.0f; p.lpQ = 0.707f;
+                p.limiterOn      = true;
+                p.tailKillOn     = tailKillOn;   // <-- the bit under test
+                chain.update(p);
+
+                // 4 trigs at 140 BPM, captures wet-tail energy in the
+                // 200 ms window just BEFORE each trigger (i.e. the
+                // accumulated echo level entering the next beat). If
+                // tailKillOn does its job, this should be near zero
+                // (~previous tail killed). If it doesn't, energy grows.
+                std::vector<double> preBeatEnergy;
+                preBeatEnergy.reserve(4);
+                for (int beat = 0; beat < 4; ++beat)
+                {
+                    // Per-trig flow mirrors PluginProcessor exactly.
+                    chain.killTail();
+                    chain.onTrigger(80.0f);
+                    // Inject a kick-attack approximation: short impulse
+                    // burst plus 100 ms of low-level noise (sustained
+                    // body) so the delay buffer captures real content.
+                    chain.process(1.0f);
+                    for (int i = 1; i < static_cast<int>(0.10f * sr); ++i)
+                        chain.process(0.05f * static_cast<float>(((i * 17) % 23) - 11) / 11.0f);
+                    // Silent fill to end of beat, accumulate energy for
+                    // the 200 ms pre-NEXT-beat window.
+                    const int silentSamples = beatSamples
+                                            - static_cast<int>(0.10f * sr);
+                    double winEnergy = 0.0;
+                    const int winStart = silentSamples
+                                       - static_cast<int>(0.20f * sr);
+                    for (int i = 0; i < silentSamples; ++i)
+                    {
+                        const float y = chain.process(0.0f);
+                        if (i >= winStart)
+                            winEnergy += static_cast<double>(y) * y;
+                    }
+                    preBeatEnergy.push_back(winEnergy);
+                }
+                return preBeatEnergy;
+            };
+
+            // When BOMBO_DUMP_WAV is set, also write WAV captures for
+            // user-audible verification. Captures both scenarios end-to-
+            // end (8 beats each) as mono 48 kHz floats. Path is fixed
+            // in /tmp so the user can play them with any player.
+            const bool dumpWav = std::getenv("BOMBO_DUMP_WAV") != nullptr;
+
+            auto runScenarioAndCapture = [&](bool tailKillOn, const char* wavPath) noexcept {
+                bombo::RumbleChain chain(sr);
+                bombo::ChainParams p;
+                p.delayMs        = 250.0f;
+                p.delayFeedback  = 0.85f;
+                p.delayMix       = 0.6f;
+                p.reverbMix      = 0.0f;
+                p.reverbMute     = true;
+                p.delayMute      = false;
+                p.duckDepth      = 0.0f;
+                p.hpHz           = 30.0f;  p.hpQ = 0.707f;
+                p.lpHz           = 12000.0f; p.lpQ = 0.707f;
+                p.limiterOn      = true;
+                p.tailKillOn     = tailKillOn;
+                chain.update(p);
+
+                const int nBeats = 8;
+                const int totalSamples = beatSamples * nBeats;
+                std::vector<float> wav;
+                if (dumpWav) wav.reserve(totalSamples);
+
+                for (int beat = 0; beat < nBeats; ++beat)
+                {
+                    chain.killTail();
+                    chain.onTrigger(80.0f);
+                    const float attack = chain.process(1.0f);
+                    if (dumpWav) wav.push_back(attack);
+                    for (int i = 1; i < static_cast<int>(0.10f * sr); ++i)
+                    {
+                        const float in = 0.05f * static_cast<float>(((i * 17) % 23) - 11) / 11.0f;
+                        const float y  = chain.process(in);
+                        if (dumpWav) wav.push_back(y);
+                    }
+                    const int silentSamples = beatSamples - static_cast<int>(0.10f * sr);
+                    for (int i = 0; i < silentSamples; ++i)
+                    {
+                        const float y = chain.process(0.0f);
+                        if (dumpWav) wav.push_back(y);
+                    }
+                }
+
+                if (dumpWav && wavPath != nullptr)
+                {
+                    juce::WavAudioFormat fmt;
+                    juce::File outFile(wavPath);
+                    outFile.deleteFile();
+                    auto stream = outFile.createOutputStream();
+                    if (stream != nullptr)
+                    {
+                        std::unique_ptr<juce::AudioFormatWriter> writer(
+                            fmt.createWriterFor(stream.get(), sr, 1, 16, {}, 0));
+                        if (writer != nullptr)
+                        {
+                            stream.release();
+                            juce::AudioBuffer<float> buf(1, (int) wav.size());
+                            std::copy(wav.begin(), wav.end(), buf.getWritePointer(0));
+                            writer->writeFromAudioSampleBuffer(buf, 0, (int) wav.size());
+                        }
+                    }
+                }
+            };
+
+            const auto onEnergies  = runScenario(true);
+            const auto offEnergies = runScenario(false);
+
+            if (dumpWav)
+            {
+                runScenarioAndCapture(true,  "/tmp/bombo_tail_on.wav");
+                runScenarioAndCapture(false, "/tmp/bombo_tail_off.wav");
+                juce::Logger::writeToLog(juce::String("WAV dumps: /tmp/bombo_tail_on.wav /tmp/bombo_tail_off.wav"));
+            }
+
+            juce::Logger::writeToLog(juce::String("TAIL ON  beats: ")
+                + juce::String(onEnergies[0], 6) + ", "
+                + juce::String(onEnergies[1], 6) + ", "
+                + juce::String(onEnergies[2], 6) + ", "
+                + juce::String(onEnergies[3], 6));
+            juce::Logger::writeToLog(juce::String("TAIL OFF beats: ")
+                + juce::String(offEnergies[0], 6) + ", "
+                + juce::String(offEnergies[1], 6) + ", "
+                + juce::String(offEnergies[2], 6) + ", "
+                + juce::String(offEnergies[3], 6));
+
+            // TAIL OFF: each successive beat's tail energy should be
+            // GREATER than or equal to TAIL ON's (no chop -> tail
+            // accumulates). If ON and OFF are equal, the toggle is a
+            // no-op -- the user's bug.
+            double onTotal  = onEnergies[1]  + onEnergies[2]  + onEnergies[3];
+            double offTotal = offEnergies[1] + offEnergies[2] + offEnergies[3];
+            expect(offTotal > onTotal * 1.5,
+                   "TAIL toggle isn't separating chop vs ring "
+                   "(on=" + juce::String(onTotal, 6)
+                   + " off=" + juce::String(offTotal, 6) + ")");
+
+            // TAIL ON: per-beat tail energies should be SIMILAR (each
+            // beat starts from a freshly chopped buffer, so the level
+            // entering the next beat is roughly the same every time).
+            const double onMin = std::min({onEnergies[1], onEnergies[2], onEnergies[3]});
+            const double onMax = std::max({onEnergies[1], onEnergies[2], onEnergies[3]});
+            const double onRange = onMax > 0.0 ? (onMax - onMin) / onMax : 0.0;
+            expect(onRange < 0.20,
+                   "TAIL ON tails varying too much across beats "
+                   "(range=" + juce::String(onRange, 4)
+                   + " min=" + juce::String(onMin, 6)
+                   + " max=" + juce::String(onMax, 6) + ")");
         }
 
         beginTest("algo dispatch is deterministic across runs");
