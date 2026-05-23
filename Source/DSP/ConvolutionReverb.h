@@ -98,6 +98,11 @@ public:
     // drop-in.
     void killTail() noexcept
     {
+        // TAIL OFF = no-op. Tails ring (conv state preserved) in any
+        // trig mode, matching the user-facing "Tail Kill OFF = let
+        // tails ring forever" semantics.
+        if (! tailKillOn_) return;
+
         stopFadeRemaining_ = 0;
         stopMuted_ = false;
         if (killFadeRemaining_ == 0)
@@ -125,6 +130,12 @@ public:
     // pair killTail with onTrigger), reset immediately.
     void onTrigger() noexcept
     {
+        // TAIL OFF = no per-trigger envelope reset. The wet-bus
+        // decayEnv stays pinned at 1.0 (see process()) and trigAge
+        // doesn't restart, so layered hits accumulate naturally
+        // instead of each refreshing the per-trig envelope shape.
+        if (! tailKillOn_) return;
+
         if (killFadeRemaining_ > 0)
         {
             triggerResetPending_ = true;
@@ -196,6 +207,14 @@ public:
         predelaySamples_ = s;
     }
 
+    // Controls per-trigger kill + per-trigger wet-bus envelope. When
+    // OFF the convolution simply rings out per IR + linearity, with no
+    // wet-side attenuation envelope and no fade-and-reset on trigger.
+    // In loop mode this lets every kick's IR response layer with the
+    // previous beats' (LTI sum), matching the user's "ring forever"
+    // expectation.
+    void setTailKillOn (bool on) noexcept { tailKillOn_ = on; }
+
     // ── PROCESS ────────────────────────────────────────────────────────
     float process (float in) noexcept
     {
@@ -238,30 +257,36 @@ public:
         if (std::fpclassify (wetLpfZ_) == FP_SUBNORMAL) wetLpfZ_ = 0.0f;
         wet = wetLpfZ_;
 
-        // 6) Per-trigger decay envelope.
-        if (decayEnv_ > 1e-7f)
+        // 6) Per-trigger decay envelope. When TAIL OFF the wet bus is
+        //    passed through at unity — the only "decay" is whatever the
+        //    IR itself provides, which gives natural per-hit ringing and
+        //    LTI layering across hits.
+        if (tailKillOn_)
         {
-            wet *= decayEnv_;
-            decayEnv_ *= decayCoef_;
-        }
-        else
-        {
-            wet = 0.0f;
-        }
+            if (decayEnv_ > 1e-7f)
+            {
+                wet *= decayEnv_;
+                decayEnv_ *= decayCoef_;
+            }
+            else
+            {
+                wet = 0.0f;
+            }
 
-        // 7) Size window — full level until tail-fade region, then linear
-        // ramp to 0, then silence.
-        if (trigAge_ >= sizeWindowSamples_)
-        {
-            wet = 0.0f;
+            // 7) Size window — full level until tail-fade region, then
+            //    linear ramp to 0, then silence.
+            if (trigAge_ >= sizeWindowSamples_)
+            {
+                wet = 0.0f;
+            }
+            else
+            {
+                const int tail = sizeWindowSamples_ - trigAge_;
+                if (tail < sizeFadeSamples_)
+                    wet *= (float) tail / (float) sizeFadeSamples_;
+            }
+            if (trigAge_ < INT32_MAX - 1) ++trigAge_;
         }
-        else
-        {
-            const int tail = sizeWindowSamples_ - trigAge_;
-            if (tail < sizeFadeSamples_)
-                wet *= (float) tail / (float) sizeFadeSamples_;
-        }
-        if (trigAge_ < INT32_MAX - 1) ++trigAge_;
 
         // 8) Per-trigger killTail linear fade — at bottom, reset state.
         // Mirrors FdnReverb 1:1 so RumbleChain doesn't need to change.
@@ -390,6 +415,11 @@ private:
     // fade ends, so the old wet residue keeps decaying smoothly
     // through the fade instead of getting bumped up by the reset.
     bool          triggerResetPending_ { false };
+
+    // setTailKillOn(false) makes killTail() and onTrigger() no-ops and
+    // bypasses the per-trigger wet-bus envelope/Size window — the
+    // convolution rings naturally and hits layer in LTI fashion.
+    bool          tailKillOn_ { true };
 };
 
 } // namespace bombo

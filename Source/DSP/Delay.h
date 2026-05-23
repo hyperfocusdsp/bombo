@@ -110,9 +110,16 @@ public:
         stopFadeTotal_ = fadeSamples;
     }
 
+    // Controls whether killTail() does anything. TAIL OFF = no-op,
+    // letting the delay buffer + feedback ring naturally across trigs
+    // (the user-facing "let tails ring forever" semantics).
+    void setTailKillOn(bool on) noexcept { tailKillOn_ = on; }
+
     // Per-trigger kill-fade — output V-ramp only, buffer keeps writing.
     void killTail() noexcept
     {
+        if (! tailKillOn_) return;
+
         lfoPhase_ = 0.0f; // reset SMEAR LFO so each kick warbles identically
         stopFadeRemaining_ = 0;
         stopMuted_ = false;
@@ -260,6 +267,9 @@ private:
     uint32_t stopFadeRemaining_ = 0;
     uint32_t stopFadeTotal_ = 1;
     bool stopMuted_ = false;
+    // setTailKillOn(false) suppresses per-trigger killTail so tails
+    // ring naturally across hits.
+    bool tailKillOn_ = true;
 
     // Wet-bus morph SVF (LP/BP/HP at fixed 300 Hz, crossfaded).
     float svfIc1_ = 0.0f, svfIc2_ = 0.0f;

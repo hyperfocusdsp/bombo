@@ -66,6 +66,12 @@ struct ChainParams
     // LIMITER
     bool  limiterOn     = true;
     float limiterAmount = 0.5f;
+    // TAIL KILL: governs per-trigger chop semantics across the FX bus.
+    // ON  = chop tails between trigs in any mode (delay buffer flush,
+    //       reverb conv reset, fresh per-trig wet identity).
+    // OFF = let tails ring naturally in any mode (no flush, layered
+    //       hits, no per-trig wet-bus envelope).
+    bool  tailKillOn    = true;
     // SECTION MUTES — when set, the named stage passes its input through
     // unmodified (filter) or contributes zero (delay/reverb), so the
     // user can A/B with that effect bypassed.
@@ -193,6 +199,8 @@ public:
         reverb_.setDecay(p.reverbDecay);
         reverb_.setDamp(p.reverbDamp);
         reverb_.setPredelayMs(p.reverbPredelayMs);
+        reverb_.setTailKillOn(p.tailKillOn);
+        delay_.setTailKillOn(p.tailKillOn);
         // p.reverbDiffusion intentionally ignored — param kept for
         // preset back-compat but the IR has built-in diffusion.
 

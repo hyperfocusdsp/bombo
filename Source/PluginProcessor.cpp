@@ -122,6 +122,7 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.duckGrowl        = pDuckGrowl->get();
     p.limiterOn       = pLimiterOn->get();
     p.limiterAmount   = pLimiterAmount->get();
+    p.tailKillOn      = (pTailKillOn != nullptr) && pTailKillOn->get();
     p.driveMute       = pDriveMute->get();
     p.delayMute       = pDelayMute->get();
     p.reverbMute      = pReverbMute->get();
