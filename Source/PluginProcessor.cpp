@@ -418,7 +418,7 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             // so the dry body fades over its own 5 ms steal-fadeout
             // alongside the wet, giving a tight clean tail cut.
             voiceMgr_.fadeoutAllActive();
-            chain_.killTail();
+            chain_.killTailSoft();
             pendingTailKillSamples_ = -1;
         }
     }

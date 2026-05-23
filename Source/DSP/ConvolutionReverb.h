@@ -51,6 +51,10 @@ public:
     // (no resonant FDN loop), so we can run the fade tight to avoid
     // the "old tail bleeds into new kick" sensation in loop mode.
     static constexpr float kKillFadeMs       = 6.0f;
+    // Deferred kill (1 beat after last trig, loop-off): no new kick to
+    // mask the cut, so use a smoother fade for a natural decay-out
+    // instead of an audible chop.
+    static constexpr float kKillFadeSoftMs   = 50.0f;
     static constexpr int   kMaxPredelaySamples = 32768; // ~683 ms @ 48 k
 
     explicit ConvolutionReverb (float sampleRate = 48000.0f)
@@ -96,23 +100,8 @@ public:
     // Conv state is reset at the bottom of the fade. Mirrors FdnReverb's
     // kill-tail behaviour 1:1 so the RumbleChain integration is a
     // drop-in.
-    void killTail() noexcept
-    {
-        // TAIL OFF = no-op. Tails ring (conv state preserved) in any
-        // trig mode, matching the user-facing "Tail Kill OFF = let
-        // tails ring forever" semantics.
-        if (! tailKillOn_) return;
-
-        stopFadeRemaining_ = 0;
-        stopMuted_ = false;
-        if (killFadeRemaining_ == 0)
-        {
-            std::uint32_t fadeSamples = (std::uint32_t) (kKillFadeMs * 0.001f * sampleRate_);
-            if (fadeSamples < 1) fadeSamples = 1;
-            killFadeRemaining_ = fadeSamples;
-            killFadeTotal_     = fadeSamples;
-        }
-    }
+    void killTail()     noexcept { startKillFade (kKillFadeMs); }
+    void killTailSoft() noexcept { startKillFade (kKillFadeSoftMs); }
 
     // Called per trigger alongside killTail(). The visible reset of the
     // wet-bus decay envelope + Size-window age counter is DEFERRED to
@@ -341,6 +330,18 @@ public:
     }
 
 private:
+    void startKillFade (float fadeMs) noexcept
+    {
+        if (! tailKillOn_) return;
+        stopFadeRemaining_ = 0;
+        stopMuted_ = false;
+        if (killFadeRemaining_ != 0) return;
+        std::uint32_t fadeSamples = (std::uint32_t) (fadeMs * 0.001f * sampleRate_);
+        if (fadeSamples < 1) fadeSamples = 1;
+        killFadeRemaining_ = fadeSamples;
+        killFadeTotal_     = fadeSamples;
+    }
+
     void prepareInternal (float sampleRate) noexcept
     {
         sampleRate_ = sampleRate;

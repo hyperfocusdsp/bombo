@@ -122,12 +122,20 @@ public:
         masterBus_.reset();
     }
 
-    // Called from the trigger handler so each kick is its own discrete
-    // reverb + delay event (Maddix-Rumbler behaviour).
+    // Per-trigger kill — fast fade, masked by the new kick attack
+    // that's firing on the same sample.
     void killTail() noexcept
     {
         delay_.killTail();
         reverb_.killTail();
+    }
+
+    // Deferred kill (one beat post-last-trig, loop-off) — gentler
+    // fade since there's no new kick to mask the cut.
+    void killTailSoft() noexcept
+    {
+        delay_.killTailSoft();
+        reverb_.killTailSoft();
     }
 
     // Called at each kick trigger alongside killTail(). Starts the TEETH

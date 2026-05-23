@@ -32,6 +32,13 @@ public:
     // the flush, low enough that the flush stays click-free at the
     // 0.95 feedback cap.
     static constexpr float kKillFadeMs = 6.0f;
+    // Soft kill — used by the deferred tail-kill timer in
+    // BomboProcessor (one beat after the last trigger) AND by loop-off
+    // transitions. No kick attack masks the cut here, so we want the
+    // fade long enough to land click-free + sound like a natural
+    // decay-out rather than a chop. 50 ms V-fade = 25 ms slope =
+    // ~-32 dB at midpoint with sub-audible per-sample slope.
+    static constexpr float kKillFadeSoftMs = 50.0f;
     static constexpr float kStopFadeMs = 80.0f;
 
     explicit Delay(float sampleRate = 48000.0f)
@@ -127,22 +134,17 @@ public:
     // (the user-facing "let tails ring forever" semantics).
     void setTailKillOn(bool on) noexcept { tailKillOn_ = on; }
 
-    // Per-trigger kill-fade — output V-ramp only, buffer keeps writing.
-    void killTail() noexcept
-    {
-        if (! tailKillOn_) return;
+    // Per-trigger kill-fade — output V-ramp + buffer flush at midpoint.
+    // Fast (6 ms) so the OLD tail dies before the NEW kick attack
+    // builds; the brief discontinuity at the buffer flush is masked
+    // by the simultaneous kick attack.
+    void killTail() noexcept { startKillFade(kKillFadeMs); }
 
-        lfoPhase_ = 0.0f; // reset SMEAR LFO so each kick warbles identically
-        stopFadeRemaining_ = 0;
-        stopMuted_ = false;
-        if (killFadeRemaining_ == 0)
-        {
-            uint32_t fadeSamples = static_cast<uint32_t>(kKillFadeMs * 0.001f * sampleRate_);
-            if (fadeSamples < 1) fadeSamples = 1;
-            killFadeRemaining_ = fadeSamples;
-            killFadeTotal_ = fadeSamples;
-        }
-    }
+    // Deferred kill (post-last-trig, transport-stop, etc.) — gentler
+    // fade so the natural-feeling tail decay isn't audibly chopped.
+    // No kick attack is firing alongside, so the kill needs to be
+    // smooth enough to be click-free on its own.
+    void killTailSoft() noexcept { startKillFade(kKillFadeSoftMs); }
 
     float process(float input) noexcept
     {
@@ -214,6 +216,19 @@ public:
     }
 
 private:
+    void startKillFade(float fadeMs) noexcept
+    {
+        if (! tailKillOn_) return;
+        lfoPhase_ = 0.0f;
+        stopFadeRemaining_ = 0;
+        stopMuted_ = false;
+        if (killFadeRemaining_ != 0) return;
+        uint32_t fadeSamples = static_cast<uint32_t>(fadeMs * 0.001f * sampleRate_);
+        if (fadeSamples < 1) fadeSamples = 1;
+        killFadeRemaining_ = fadeSamples;
+        killFadeTotal_ = fadeSamples;
+    }
+
     void setSvfCoefs(float cutoffHz, float q) noexcept
     {
         constexpr float pi = 3.14159265358979323846f;
