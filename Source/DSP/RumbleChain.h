@@ -7,6 +7,9 @@
 #include "MultibandLimiter.h"
 #include "MasterBus.h"
 #include "VoiceClip.h"
+#include "FxOrder.h"
+
+#include <atomic>
 
 namespace bombo
 {
@@ -220,6 +223,20 @@ public:
         params_ = p;
     }
 
+    // Set the FX chain order. Safe to call from any thread — the order is
+    // stored in a lock-free atomic and `process()` reloads it each sample.
+    // Input is sanitized; invalid orders fall back to the default.
+    void setFxOrder(FxOrder o) noexcept
+    {
+        if (!isValidFxOrder(o)) o = kDefaultFxOrder;
+        fxOrder_.store(o, std::memory_order_release);
+    }
+
+    FxOrder getFxOrder() const noexcept
+    {
+        return fxOrder_.load(std::memory_order_acquire);
+    }
+
     // Process one sample. dry = current voice-pool sum.
     float process(float dry) noexcept
     {
@@ -231,42 +248,81 @@ public:
             if (std::fpclassify(teethEnv_) == FP_SUBNORMAL) teethEnv_ = 0.0f;
         }
 
-        // DRIVE on the dry path (voice-clip family — same shaper palette).
-        float driven = dry;
-        if (!params_.driveMute
-            && params_.driveAmount > 0.0f
-            && params_.driveMode != VC_OFF)
-        {
-            const float shaped = voiceClipApply(params_.driveMode,
-                                                params_.driveAmount, dry);
-            driven = dry * (1.0f - params_.driveMix) + shaped * params_.driveMix;
-        }
+        // Pre-chain dry is captured as the DUCKER sidechain key. The kick's
+        // attack envelope (read from this signal) governs how aggressively
+        // the FX-chain output is ducked, preserving the punch-and-tail feel
+        // even when DELAY / REVERB sit late in the user-set chain.
+        const float preChainDry = dry;
 
-        // FILTER (HP then LP — kicks want the rumble bus AC-coupled and
-        // top-trimmed before it enters the wet stages). Mute bypasses to
-        // raw input — but we still process the filters silently so their
-        // state stays warm and re-enabling doesn't pop.
-        float filtered = driven;
-        if (!params_.filterMute)
-            filtered = lpFilter_.process(hpFilter_.process(driven));
+        // Serial FX chain. Each stage carries its own dry/wet via the mix
+        // knob (or is a pure mute-or-pass for FILTER which has no mix).
+        // The order is reloaded per sample so reorders from the GUI take
+        // effect without a buffer-boundary delay.
+        const FxOrder order = fxOrder_.load(std::memory_order_acquire);
+        float x = dry;
+        for (FxId fx : order)
+            x = processOne(fx, x);
 
-        // DELAY and REVERB run from the same filtered source, summed wet.
-        // Muted stages contribute zero to the wet sum so the dry kick
-        // passes through cleanly.
-        const float dWet = params_.delayMute  ? 0.0f : delay_.process(filtered);
-        const float rWet = params_.reverbMute ? 0.0f : reverb_.process(filtered);
-        float wet = dWet * params_.delayMix + rWet * params_.reverbMix;
-
-        // Sidechain duck the wet off the dry (filtered) signal.
+        // DUCKER: sidechain key = pre-chain dry, input = chain output.
+        // With depth = 0 this is passthrough.
         if (!params_.duckMute)
-            wet = ducker_.process(filtered, wet, params_.duckDepth);
+            x = ducker_.process(preChainDry, x, params_.duckDepth);
 
-        const float sum = filtered + wet;
-        const float limited = multiband_.process(sum, params_.limiterOn, params_.limiterAmount);
+        const float limited = multiband_.process(x, params_.limiterOn, params_.limiterAmount);
         return masterBus_.process(limited);
     }
 
 private:
+    // Single-stage dispatch. Inlined hot path; no virtuals.
+    inline float processOne(FxId fx, float in) noexcept
+    {
+        switch (fx)
+        {
+            case FxId::Drive:  return processDrive(in);
+            case FxId::Filter: return processFilter(in);
+            case FxId::Delay:  return processDelay(in);
+            case FxId::Reverb: return processReverb(in);
+        }
+        return in;
+    }
+
+    inline float processDrive(float in) noexcept
+    {
+        if (params_.driveMute
+            || params_.driveAmount <= 0.0f
+            || params_.driveMode == VC_OFF)
+            return in;
+        const float shaped = voiceClipApply(params_.driveMode,
+                                            params_.driveAmount, in);
+        return in * (1.0f - params_.driveMix) + shaped * params_.driveMix;
+    }
+
+    inline float processFilter(float in) noexcept
+    {
+        // Run the filters even when muted so their state stays warm and
+        // re-enabling doesn't pop.
+        const float filtered = lpFilter_.process(hpFilter_.process(in));
+        return params_.filterMute ? in : filtered;
+    }
+
+    inline float processDelay(float in) noexcept
+    {
+        // Send-style mix: dry passes through unchanged, wet is added on top
+        // scaled by delayMix. Matches the pre-serial chain's wet:dry feel,
+        // so legacy presets keep their character. Serial order still
+        // matters because each stage's *input* is the previous stage's
+        // output, but `delayMix` no longer steals dry level.
+        if (params_.delayMute) return in;
+        return in + delay_.process(in) * params_.delayMix;
+    }
+
+    inline float processReverb(float in) noexcept
+    {
+        // Same send-style mix as DELAY — preserves dry, adds wet × mix.
+        if (params_.reverbMute) return in;
+        return in + reverb_.process(in) * params_.reverbMix;
+    }
+
     float sampleRate_;
     BiquadFilter hpFilter_;
     BiquadFilter lpFilter_;
@@ -281,6 +337,11 @@ private:
     // TEETH pitch-tracking envelope state
     float teethEnv_     = 0.0f;
     float teethEnvCoef_ = 1.0f;
+    // Current chain order. Lock-free for RT-safe atomic swap from GUI.
+    std::atomic<FxOrder> fxOrder_{ kDefaultFxOrder };
+    static_assert(std::atomic<FxOrder>::is_always_lock_free,
+                  "FxOrder atomic must be lock-free on this platform — "
+                  "if not, switch to a triple-buffer pattern");
 };
 
 } // namespace bombo

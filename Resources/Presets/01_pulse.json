@@ -11,5 +11,6 @@
     "reverb_size": 0.30, "reverb_mix": 0.12,
     "delay_mix": 0.0,
     "duck_depth": 0.50
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

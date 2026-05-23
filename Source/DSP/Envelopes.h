@@ -68,6 +68,10 @@ public:
         dt_ = 1.0f / sr;
         attackSamples_ = static_cast<int>(0.001f * sr);
         if (attackSamples_ < 1) attackSamples_ = 1;
+        // ~3 ms terminal fade — long enough to be a slope at the kHz
+        // band (so no audible click) and short enough that the tail
+        // perceptually ends right when the decay does.
+        fadeSamples_ = std::max(1, static_cast<int>(0.003f * sr));
     }
 
     void triggerFull(float decayMs, float attackMs, float driftAmount) noexcept
@@ -81,6 +85,8 @@ public:
         t_ = 0.0f;
         attackCounter_ = 0;
         active_ = true;
+        fadeRemaining_  = 0;
+        fadeStartGain_  = 0.0f;
     }
 
     void trigger(float decayMs, float driftAmount) noexcept
@@ -91,6 +97,23 @@ public:
     float tick() noexcept
     {
         if (!active_) return 0.0f;
+
+        // Terminal-fade phase: linear ramp from the gain at which the
+        // decay crossed the fade threshold down to true zero. Without
+        // this, the previous hard cut at gain<0.0001 could click on
+        // sample sources whose content isn't already near zero at the
+        // cutoff moment. Runs regardless of DEC length, so a 5 s tail
+        // ends as cleanly as a 200 ms one.
+        if (fadeRemaining_ > 0)
+        {
+            const float g = fadeStartGain_
+                * (static_cast<float>(fadeRemaining_)
+                   / static_cast<float>(fadeSamples_));
+            --fadeRemaining_;
+            if (fadeRemaining_ == 0) active_ = false;
+            return g;
+        }
+
         float attackGain;
         if (attackCounter_ < attackSamples_)
         {
@@ -105,13 +128,22 @@ public:
         const float decayGain = std::exp(-t_ / tau_);
         t_ += dt_;
         const float g = attackGain * decayGain;
-        if (g < 0.0001f) { active_ = false; return 0.0f; }
+        if (g < kFadeThreshold)
+        {
+            fadeStartGain_ = g;
+            fadeRemaining_ = fadeSamples_;
+            return g;
+        }
         return g;
     }
 
     bool isActive() const noexcept { return active_; }
 
 private:
+    // -50 dB — well below audibility but high enough that the linear
+    // fade-down has a real slope rather than being smoke.
+    static constexpr float kFadeThreshold = 0.003f;
+
     float tau_ = 0.06f;
     float t_ = 0.0f;
     float dt_ = 1.0f / 48000.0f;
@@ -119,6 +151,9 @@ private:
     int attackSamples_ = 48;
     int attackCounter_ = 0;
     bool active_ = false;
+    int fadeSamples_   = 144;   // ~3 ms at 48 kHz, re-computed in setSampleRate
+    int fadeRemaining_ = 0;
+    float fadeStartGain_ = 0.0f;
 };
 
 } // namespace bombo

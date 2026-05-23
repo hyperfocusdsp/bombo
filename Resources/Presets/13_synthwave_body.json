@@ -11,5 +11,6 @@
     "filter_color": 0.40,
     "reverb_size": 0.65, "reverb_decay": 0.70, "reverb_mix": 0.30,
     "delay_time": 350.0, "delay_mix": 0.18, "delay_morph": 0.50
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

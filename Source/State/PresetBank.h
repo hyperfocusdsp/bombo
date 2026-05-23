@@ -3,8 +3,12 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_core/juce_core.h>
 
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include "../DSP/FxOrder.h"
 
 namespace bombo
 {
@@ -37,7 +41,21 @@ public:
         std::string                                displayName;  // pretty
         std::vector<std::pair<std::string, float>> params;
         juce::File                                 filePath;     // empty for factory
+        // Per-preset FX chain order. Absent on legacy presets that pre-date
+        // the feature — apply path falls back to the chain's current order
+        // in that case (no-op), preserving the user's last manual choice.
+        std::optional<FxOrder>                     fxOrder;
     };
+
+    // Fires at the end of every successful applyByIndex with the just-
+    // applied preset. The editor wires this to push preset.fxOrder into
+    // both the processor (DSP) and the faceplate (UI).
+    std::function<void(const Preset&)> onPresetApplied;
+
+    // Queried at save-time to capture the current FX chain order into the
+    // resulting JSON. The editor sets this to a closure returning
+    // BomboProcessor::getFxOrder(). Returns std::nullopt to omit the field.
+    std::function<std::optional<FxOrder>()> fxOrderProvider;
 
     PresetBank();
 

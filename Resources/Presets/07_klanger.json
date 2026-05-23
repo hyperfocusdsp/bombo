@@ -11,5 +11,6 @@
     "filter_hp": 80.0, "filter_lp": 8000.0,
     "delay_time": 95.0, "delay_feedback": 0.50, "delay_mix": 0.35, "delay_drift": 0.30,
     "duck_depth": 0.45
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

@@ -9,5 +9,6 @@
     "click_amount": 0.40,
     "drive_amount": 0.55, "drive_mode": 3,
     "duck_depth": 0.55
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

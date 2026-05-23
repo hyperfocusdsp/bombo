@@ -71,6 +71,11 @@ public:
     void setSampleRate (float sampleRate) noexcept
     {
         // Non-RT path — called from PluginProcessor::prepareToPlay only.
+        // The ctor already calls prepareInternal at the default 48 kHz, so
+        // when the host hands us the same rate (very common — including the
+        // offline bouncer's clone) we skip the IR re-synthesis + FFT setup.
+        // That's hundreds of ms of avoidable work per clone.
+        if (sampleRate == sampleRate_) return;
         prepareInternal (sampleRate);
     }
 

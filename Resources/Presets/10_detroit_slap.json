@@ -8,5 +8,6 @@
     "noise_amount": 0.35, "noise_color": 0.40,
     "drive_amount": 0.40, "drive_mode": 2,
     "duck_depth": 0.70
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

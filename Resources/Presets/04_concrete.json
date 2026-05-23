@@ -9,5 +9,6 @@
     "drive_amount": 0.45, "drive_mode": 2,
     "mid_pitch_start": 400.0, "mid_pitch_end": 100.0, "mid_decay": 60.0, "mid_level": 0.85,
     "duck_depth": 0.75
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

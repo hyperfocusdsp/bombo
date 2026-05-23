@@ -459,18 +459,19 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         loopCache_.valid     = false;
     }
     else if (loopCache_.valid
-             && std::memcmp(&loopCache_.capturedParams,
-                            &chainParams_,
-                            sizeof(chainParams_)) != 0)
+             && (std::memcmp(&loopCache_.capturedParams,
+                             &chainParams_,
+                             sizeof(chainParams_)) != 0
+                 || loopCache_.capturedTrigger != trig))
     {
-        // Any chain param moved — cache is stale, re-capture on next
-        // trig. ALSO reset chain + stereo finalizer state so the
-        // re-capture starts from clean FX state. Without the reset
-        // the next captured beat inherits whatever delay buffer +
-        // reverb conv residue the live chain was carrying at the
-        // moment of the tweak — heard as a "chopy/clicky" first
-        // post-tweak beat that the user previously could only get
-        // rid of by stopping + restarting the loop.
+        // Any chain OR voice param moved — cache is stale, re-capture
+        // on next trig. The currently-playing cached beat keeps reading
+        // out of the buffer so the user hears the loop finish cleanly;
+        // the next downbeat captures fresh with the new settings.
+        // ALSO reset chain + stereo finalizer state so the re-capture
+        // starts from clean FX state — without it the next captured
+        // beat inherits whatever delay buffer + reverb conv residue
+        // the live chain was carrying at the moment of the tweak.
         loopCache_.valid     = false;
         loopCache_.capturing = false;
         chain_.reset();
@@ -504,6 +505,7 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
                     loopCache_.readPos         = 0;
                     loopCache_.beatSamples     = cacheBeatSamples;
                     loopCache_.capturedParams  = chainParams_;
+                    loopCache_.capturedTrigger = trig;
                 }
                 else
                 {
@@ -945,6 +947,15 @@ void BomboProcessor::getStateInformation(juce::MemoryBlock& destData)
             child.setProperty("folder", voiceBFolderPath_, nullptr);
         }
     }
+    // FX chain order — comma-separated lowercase stage names. Sanitized on
+    // read; absent property means default order (drive,filter,delay,reverb).
+    {
+        const auto order = chain_.getFxOrder();
+        auto child = apvts.state.getOrCreateChildWithName("FxOrder", nullptr);
+        juce::StringArray parts;
+        for (auto f : order) parts.add(bombo::fxIdToString(f));
+        child.setProperty("order", parts.joinIntoString(","), nullptr);
+    }
     if (auto xml = apvts.state.createXml())
         copyXmlToBinary(*xml, destData);
 }
@@ -956,6 +967,24 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
         auto tree = juce::ValueTree::fromXml(*xml);
         if (! tree.isValid()) return;
         apvts.replaceState(tree);
+
+        // Restore FX chain order if present. Legacy state (pre-feature) has
+        // no FxOrder child — chain_ keeps its default order in that case.
+        if (auto fxNode = apvts.state.getChildWithName("FxOrder"); fxNode.isValid())
+        {
+            const juce::String s = fxNode.getProperty("order", juce::String()).toString();
+            juce::StringArray parts;
+            parts.addTokens(s, ",", "");
+            parts.trim();
+            if (parts.size() == 4)
+            {
+                bombo::FxOrder o{};
+                bool ok = true;
+                for (int i = 0; i < 4; ++i)
+                    ok = ok && bombo::fxIdFromString(parts[i], o[(std::size_t) i]);
+                if (ok) chain_.setFxOrder(o);  // setFxOrder re-validates
+            }
+        }
 
         // Re-load the VOICE B sample asynchronously — file I/O off the
         // audio thread, and SR must be settled (prepareToPlay may not

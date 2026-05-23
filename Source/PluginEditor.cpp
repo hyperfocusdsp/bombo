@@ -149,6 +149,31 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         faceplate.setNoseProgressionLevel(newLevel);
     };
 
+    // FX chain order — bridge UI drag-commits into the processor, and push
+    // the processor's current order (possibly restored from DAW state) into
+    // the panel once at startup so the UI reflects DSP.
+    faceplate.onFxOrderChanged = [this](bombo::FxOrder o)
+    {
+        processorRef.setFxOrder(o);
+    };
+    faceplate.applyFxOrder(processorRef.getFxOrder());
+
+    // Preset bank ↔ FX order. When a preset applies, route its fxOrder (if
+    // any) through both the DSP chain and the faceplate visual; presets
+    // that pre-date the field leave the current order untouched. At save
+    // time, the bank pulls the current order from the processor.
+    processorRef.presetBank().onPresetApplied =
+        [this](const bombo::PresetBank::Preset& p)
+    {
+        if (! p.fxOrder.has_value()) return;
+        processorRef.setFxOrder(*p.fxOrder);
+        faceplate.applyFxOrder(*p.fxOrder);
+    };
+    processorRef.presetBank().fxOrderProvider = [this]() -> std::optional<bombo::FxOrder>
+    {
+        return processorRef.getFxOrder();
+    };
+
     // Force-reset: DRIVE=0 + REVERB=max + 3 rapid taps resets all BBS progression.
     faceplate.setNoseForceResetReady([this]() -> bool
     {

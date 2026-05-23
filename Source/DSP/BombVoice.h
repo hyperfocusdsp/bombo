@@ -60,6 +60,41 @@ struct VoiceTrigger
     // VOICE A ↔ VOICE B balance (tent). 0 = A only, 0.5 = both at unity,
     // 1 = B only.
     float voiceBalance    = 0.5f;
+
+    // Equality across every field that affects the rendered voice. Used by
+    // the loop cache to detect voice-param edits and invalidate so the next
+    // captured beat picks up the new trigger. sampleBuf is compared by raw
+    // pointer (same loaded buffer = same audio); the shared_ptr's control
+    // block is irrelevant for this purpose. Float comparison is exact —
+    // even a 1-bit knob nudge should invalidate the cache.
+    bool operator==(const VoiceTrigger& o) const noexcept
+    {
+        return waveform        == o.waveform
+            && pitchStartHz    == o.pitchStartHz
+            && pitchEndHz      == o.pitchEndHz
+            && pitchEnvDecayMs == o.pitchEnvDecayMs
+            && pitchCurve      == o.pitchCurve
+            && subHpfHz        == o.subHpfHz
+            && midPitchStartHz == o.midPitchStartHz
+            && midPitchEndHz   == o.midPitchEndHz
+            && midDecayMs      == o.midDecayMs
+            && midLevel        == o.midLevel
+            && ampAttackMs     == o.ampAttackMs
+            && ampDecayMs      == o.ampDecayMs
+            && clickAmount     == o.clickAmount
+            && clickCenterHz   == o.clickCenterHz
+            && noiseAmount     == o.noiseAmount
+            && noiseColor      == o.noiseColor
+            && driveAmount     == o.driveAmount
+            && driveMode       == o.driveMode
+            && driveBias       == o.driveBias
+            && voiceAMute      == o.voiceAMute
+            && voiceBMute      == o.voiceBMute
+            && driveMute       == o.driveMute
+            && voiceBalance    == o.voiceBalance
+            && sampleBuf.get() == o.sampleBuf.get();
+    }
+    bool operator!=(const VoiceTrigger& o) const noexcept { return !(*this == o); }
 };
 
 // 5 ms voice-steal fadeout. Long enough to avoid step discontinuity on a
@@ -170,12 +205,22 @@ public:
 
     float tick() noexcept
     {
-        // Once the amp envelope hits its noise floor, the sub/mid layers go
-        // silent on their own, but the SAMPLE layer bypasses ampEnv — short
-        // decay settings would slice it mid-cycle. Kick off the existing
-        // 5 ms fadeout so the sample bleeds out cleanly. Click-free at any
-        // decay value (including 0).
-        if (!ampEnv_.isActive() && fadeoutStep_ <= 0.0f && fadeoutGain_ > 0.0f)
+        // The SAMPLE layer bypasses ampEnv (it's a raw playback), so the
+        // voice has to stay alive as long as EITHER the envelope is
+        // running OR the sample still has frames to play. Without this
+        // check, a 3 s sample with DEC=300 ms would get cut off after
+        // 300 ms because the voice was declared inactive.
+        const bool sampleStillPlaying = trig_.sampleBuf
+            && samplePos_ < trig_.sampleBuf->getNumSamples();
+        const bool voiceFinishedNaturally =
+            ! ampEnv_.isActive() && ! sampleStillPlaying;
+
+        // Once BOTH the envelope and the sample have run out, kick off
+        // the existing 5 ms fadeout so the tail bleeds to true silence
+        // even if the last sample frame wasn't already at zero.
+        if (voiceFinishedNaturally
+            && fadeoutStep_ <= 0.0f
+            && fadeoutGain_ > 0.0f)
             startFadeout(sampleRate_);
 
         if (fadeoutGain_ <= 0.0f) return 0.0f;
@@ -278,7 +323,10 @@ public:
 
     bool isActive() const noexcept
     {
-        return ampEnv_.isActive() && fadeoutGain_ > 0.0f;
+        const bool sampleStillPlaying = trig_.sampleBuf
+            && samplePos_ < trig_.sampleBuf->getNumSamples();
+        return (ampEnv_.isActive() || sampleStillPlaying)
+            && fadeoutGain_ > 0.0f;
     }
 
 private:

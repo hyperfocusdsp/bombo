@@ -9,5 +9,6 @@
     "drive_amount": 0.20, "drive_mode": 1,
     "reverb_size": 0.40, "reverb_mix": 0.20,
     "duck_depth": 0.50
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

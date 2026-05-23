@@ -1307,6 +1307,124 @@ public:
     }
 };
 
+class FxOrderTests : public juce::UnitTest
+{
+public:
+    FxOrderTests() : juce::UnitTest("FxOrder — chain reorder") {}
+
+    void runTest() override
+    {
+        beginTest("default order is the canonical drive/filter/delay/reverb");
+        {
+            bombo::RumbleChain chain(48000.0f);
+            const auto o = chain.getFxOrder();
+            expect(o == bombo::kDefaultFxOrder,
+                   "fresh RumbleChain must start with kDefaultFxOrder");
+        }
+
+        beginTest("isValidFxOrder accepts permutations, rejects duplicates");
+        {
+            expect( bombo::isValidFxOrder(bombo::kDefaultFxOrder));
+            expect( bombo::isValidFxOrder({ bombo::FxId::Reverb, bombo::FxId::Delay,
+                                            bombo::FxId::Filter, bombo::FxId::Drive }));
+            expect(! bombo::isValidFxOrder({ bombo::FxId::Drive, bombo::FxId::Drive,
+                                              bombo::FxId::Filter, bombo::FxId::Reverb }));
+        }
+
+        beginTest("setFxOrder sanitizes invalid input back to default");
+        {
+            bombo::RumbleChain chain(48000.0f);
+            // Move off the default first so we can observe the fallback.
+            chain.setFxOrder({ bombo::FxId::Reverb, bombo::FxId::Filter,
+                               bombo::FxId::Delay,  bombo::FxId::Drive });
+            expect(chain.getFxOrder() != bombo::kDefaultFxOrder);
+            // Push a malformed order — same FxId four times.
+            chain.setFxOrder({ bombo::FxId::Delay, bombo::FxId::Delay,
+                               bombo::FxId::Delay, bombo::FxId::Delay });
+            expect(chain.getFxOrder() == bombo::kDefaultFxOrder,
+                   "invalid order must be replaced by the default, not stored");
+        }
+
+        beginTest("string round-trip covers every FxId");
+        {
+            const bombo::FxId all[] = { bombo::FxId::Drive, bombo::FxId::Filter,
+                                        bombo::FxId::Delay, bombo::FxId::Reverb };
+            for (auto f : all)
+            {
+                bombo::FxId back{};
+                expect(bombo::fxIdFromString(bombo::fxIdToString(f), back));
+                expect(back == f);
+            }
+            bombo::FxId dummy{};
+            expect(! bombo::fxIdFromString("bogus",   dummy));
+            expect(! bombo::fxIdFromString("",        dummy));
+            expect(! bombo::fxIdFromString("DRIVE",   dummy), "case-sensitive");
+        }
+
+        beginTest("reordering produces different DSP outputs");
+        {
+            // Same params, same input — only fxOrder differs. With both
+            // DELAY and REVERB at non-zero mix and DRIVE engaged, the two
+            // orderings (Drive→Delay vs Delay→Drive) must differ at the
+            // chain output. Catches regressions where the loop walks order
+            // but the stage funcs aren't actually wired to it.
+            const float sr = 48000.0f;
+            bombo::ChainParams p;
+            p.driveAmount = 0.7f;
+            p.driveMode   = bombo::VC_TANH;
+            p.driveMix    = 1.0f;
+            p.delayMix    = 0.6f;
+            p.delayFeedback = 0.4f;
+            p.delayMs     = 25.0f;
+            p.reverbMix   = 0.5f;
+            p.reverbSize  = 0.5f;
+            p.reverbDecay = 0.5f;
+            p.duckDepth   = 0.0f;
+            p.limiterOn   = false;
+
+            auto run = [&](bombo::FxOrder order) -> std::vector<float>
+            {
+                bombo::RumbleChain c(sr);
+                c.setFxOrder(order);
+                c.update(p);
+                c.onTrigger(80.0f);
+                std::vector<float> out;
+                out.reserve(4096);
+                // Drive an impulse + silence, capture the wet response.
+                out.push_back(c.process(1.0f));
+                for (int i = 1; i < 4096; ++i)
+                    out.push_back(c.process(0.0f));
+                return out;
+            };
+
+            const auto a = run({ bombo::FxId::Drive,  bombo::FxId::Filter,
+                                 bombo::FxId::Delay,  bombo::FxId::Reverb });
+            const auto b = run({ bombo::FxId::Delay,  bombo::FxId::Filter,
+                                 bombo::FxId::Reverb, bombo::FxId::Drive });
+
+            double diff = 0.0;
+            for (size_t i = 0; i < a.size(); ++i)
+                diff += std::abs((double) a[i] - (double) b[i]);
+            expect(diff > 1e-3,
+                   "two non-trivial orderings produced identical output — "
+                   "fxOrder is probably not being honoured. diff=" + juce::String(diff, 6));
+        }
+
+        beginTest("default order matches today's chain shape (regression)");
+        {
+            // Pinning test — kDefaultFxOrder must remain
+            // {Drive, Filter, Delay, Reverb} forever. If this changes,
+            // legacy presets that omit fxOrder will silently shift to a
+            // different topology on load. Bump the migration story
+            // deliberately, don't drift the default.
+            expect(bombo::kDefaultFxOrder[0] == bombo::FxId::Drive);
+            expect(bombo::kDefaultFxOrder[1] == bombo::FxId::Filter);
+            expect(bombo::kDefaultFxOrder[2] == bombo::FxId::Delay);
+            expect(bombo::kDefaultFxOrder[3] == bombo::FxId::Reverb);
+        }
+    }
+};
+
 // Static test instances -- JUCE finds them via the UnitTest registry.
 // Palette/ThemeProvider tests live in tests/PaletteTests.cpp, which is
 // compiled as its own translation unit (see CMakeLists.txt) and registers
@@ -1320,6 +1438,7 @@ static BombVoiceTests   bombVoiceTests;
 static DelayTests       delayTests;
 static FdnReverbTests   fdnReverbTests;
 static ConvolutionReverbTests convolutionReverbTests;
+static FxOrderTests     fxOrderTests;
 
 int main()
 {

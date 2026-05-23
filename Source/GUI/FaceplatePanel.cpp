@@ -139,6 +139,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         Section s;
         s.name = "DRIVE"; s.moduleId = "SAT-A"; s.mutePid = pid::driveMute;
         s.accent = col::drive(); s.labelOnBg = col::ink();
+        s.reorderable = true; s.fxId = FxId::Drive;
         addKnob  (s, pid::driveAmount,   "V.AMT",  s.labelOnBg);
         addChoice(s, pid::driveMode,     "V.MODE", s.labelOnBg);
         addKnob  (s, pid::driveBias,     "BIAS",   s.labelOnBg);
@@ -151,6 +152,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         Section s;
         s.name = "DELAY"; s.moduleId = "DLY-1"; s.mutePid = pid::delayMute;
         s.accent = col::delayC(); s.labelOnBg = col::ink();
+        s.reorderable = true; s.fxId = FxId::Delay;
         addKnob(s, pid::delayTime,     "TIME",  s.labelOnBg);
         addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg);
         addChoice(s, pid::delayTimeMode, "SYNC", s.labelOnBg);
@@ -163,6 +165,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         Section s;
         s.name = "REVERB"; s.moduleId = "RVB-CONV"; s.mutePid = pid::reverbMute;
         s.accent = col::reverb(); s.labelOnBg = col::ink();
+        s.reorderable = true; s.fxId = FxId::Reverb;
         // TYPE (Choice) replaces the deprecated DIFFUSION knob — the
         // convolution engine carries diffusion in the IR itself.
         addChoice(s, pid::reverbType,    "TYPE",  s.labelOnBg);
@@ -177,6 +180,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         Section s;
         s.name = "FILTER"; s.moduleId = "SVF-2P"; s.mutePid = pid::filterMute;
         s.accent = col::filterC(); s.labelOnBg = col::ink();
+        s.reorderable = true; s.fxId = FxId::Filter;
         addKnob(s, pid::filterHp,    "HP",    s.labelOnBg);
         addKnob(s, pid::filterHpQ,   "HP Q",  s.labelOnBg);
         addKnob(s, pid::filterLp,    "LP",    s.labelOnBg);
@@ -197,6 +201,14 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         addKnob(s, pid::duckGrowl,   "GROWL",   s.labelOnBg);
         sections_.push_back(std::move(s));
     }
+
+    // ── Visual-order permutation ────────────────────────────────────
+    // Default: identity — column N renders sections_[N]. The four FX in
+    // the middle (indices 2..5) get reshuffled by drag; slots 0, 1, and
+    // 6 stay pinned to VOICE A, VOICE B, DUCK forever.
+    visualOrder_.resize(sections_.size());
+    for (std::size_t i = 0; i < sections_.size(); ++i)
+        visualOrder_[i] = static_cast<int>(i);
 
     // ── Macro row ───────────────────────────────────────────────────
     // Macros live in the red nose region — labels must sit on a saturated
@@ -505,12 +517,14 @@ void FaceplatePanel::paint(juce::Graphics& g)
         g.reduceClipRegion(chassisMask_, juce::AffineTransform());
     else
         g.reduceClipRegion(chassisPath_);
-    const int lastIdx = static_cast<int>(sections_.size()) - 1;
-    for (int i = 0; i < static_cast<int>(sections_.size()); ++i)
+    const int lastCol = static_cast<int>(visualOrder_.size()) - 1;
+    for (int col = 0; col < static_cast<int>(visualOrder_.size()); ++col)
     {
-        const bool roundLeft  = (i == 0);
-        const bool roundRight = (i == lastIdx);
-        paintSection(g, sections_[i], roundLeft, roundRight);
+        const bool roundLeft  = (col == 0);
+        const bool roundRight = (col == lastCol);
+        const int  sIdx       = visualOrder_[(std::size_t) col];
+        if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
+        paintSection(g, sections_[(std::size_t) sIdx], roundLeft, roundRight);
     }
 }
 
@@ -594,6 +608,15 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
         g.fillRect(rb.withHeight(rb.getHeight() * 0.18f));
     }
 
+    // Detect whether THIS section is the one currently being dragged so
+    // we can give it a "lifted" treatment — brighter accent + tinted
+    // title bar — without moving its bounds (live-reflow handles the
+    // positional feedback; this provides the visual identity cue).
+    const bool isDragLifted = (dragState_ == DragState::Dragging)
+        && (dragOriginSection_ >= 0)
+        && (dragOriginSection_ < static_cast<int>(sections_.size()))
+        && (&s == &sections_[(std::size_t) dragOriginSection_]);
+
     // Title strip: 3 px accent tab + thin dark title bar with name text.
     {
         const auto accentStrip = juce::Rectangle<int>(s.rectBounds.getX(),
@@ -606,14 +629,20 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
                                                    kColTitleH - kColAccentH);
         // Accent strip — darker shade of the column accent (was full
         // brightness; now slightly darker so the tab + body don't merge).
-        g.setColour(bodyColour.darker(0.45f));
+        // Lifted state brightens to full saturation so the moving section
+        // reads as the active one even mid-reflow.
+        g.setColour(isDragLifted
+                    ? s.accent.brighter(0.25f)
+                    : bodyColour.darker(0.45f));
         g.fillRect(accentStrip);
-        g.setColour(muted ? col::graphite() : col::ink());
+        g.setColour(isDragLifted ? s.accent.darker(0.30f)
+                                 : (muted ? col::graphite() : col::ink()));
         g.fillRect(titleBar);
-        g.setColour(muted ? col::boneDim() : col::bone());
+        g.setColour(isDragLifted ? col::bone()
+                                 : (muted ? col::boneDim() : col::bone()));
         g.setFont(fonts::title(11.5f));
         g.drawText(s.name, titleBar, juce::Justification::centred);
-        if (muted)
+        if (muted && ! isDragLifted)
         {
             const float midY = titleBar.getCentreY();
             g.setColour(col::boneDim().withAlpha(0.55f));
@@ -820,15 +849,29 @@ void FaceplatePanel::resized()
         maxControls = juce::jmax(maxControls, static_cast<int>(s.controls.size()));
     const int rectH = kColTitleH + maxControls * kRowH + kRectBotPad;
 
-    for (int i = 0; i < kNCols && i < static_cast<int>(sections_.size()); ++i)
+    for (int col = 0;
+         col < kNCols && col < static_cast<int>(visualOrder_.size());
+         ++col)
     {
-        auto& s = sections_[i];
-        const int x = leftMargin + i * (colW + kColGap);
-        // Default section bounds — overridable via LayoutManager.
+        const int sIdx = visualOrder_[(std::size_t) col];
+        if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
+        auto& s = sections_[(std::size_t) sIdx];
+        const int x = leftMargin + col * (colW + kColGap);
+        // Default section bounds — overridable via LayoutManager. The
+        // layout-editor key stays tied to the section *identity*
+        // (s.name), not the column position, so a section dragged
+        // visually keeps any bespoke layout overrides that were saved
+        // for it under its name.
         juce::Rectangle<int> defaultBounds(x, rectTop, colW, rectH);
         const juce::String secId = "section."
             + s.name.replaceCharacter(' ', '_').toLowerCase();
-        s.rectBounds = layout_.boundsOr(secId, defaultBounds);
+        const auto layoutOverride = layout_.boundsOr(secId, defaultBounds);
+        // If the user dragged this section to a new column, its saved
+        // override (if any) holds the OLD x — we want the column position
+        // to track visualOrder_, so always force x + width from the
+        // default while preserving any user-edited y/h.
+        s.rectBounds = juce::Rectangle<int>(x, layoutOverride.getY(),
+                                            colW, layoutOverride.getHeight());
         s.titleBounds = { s.rectBounds.getX(),
                           s.rectBounds.getY(),
                           s.rectBounds.getWidth(),
@@ -1000,14 +1043,184 @@ void FaceplatePanel::toggleMute(const Section& s)
 }
 
 // ────────────────────────────────────────────────────────────────────
-//  Mouse events — section title click toggles mute
+//  FX chain order — UI ↔ DSP bridge
 // ────────────────────────────────────────────────────────────────────
+
+FxOrder FaceplatePanel::currentFxOrder() const noexcept
+{
+    FxOrder out = kDefaultFxOrder;
+    std::size_t emit = 0;
+    for (int sIdx : visualOrder_)
+    {
+        if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
+        const auto& s = sections_[(std::size_t) sIdx];
+        if (! s.reorderable) continue;
+        if (emit < out.size()) out[emit++] = s.fxId;
+    }
+    return out;
+}
+
+void FaceplatePanel::applyFxOrder(FxOrder o)
+{
+    if (! isValidFxOrder(o)) return;
+    if (o == currentFxOrder()) return;
+
+    // Build new visualOrder_: keep fixed-section slots untouched, fill the
+    // reorderable slots in the sequence that produces `o`.
+    std::vector<int> next = visualOrder_;
+
+    // Index lookup: fxId → section index.
+    std::array<int, 4> sectionForFx{ -1, -1, -1, -1 };
+    for (int sIdx = 0; sIdx < static_cast<int>(sections_.size()); ++sIdx)
+    {
+        const auto& s = sections_[(std::size_t) sIdx];
+        if (s.reorderable)
+            sectionForFx[(std::size_t) s.fxId] = sIdx;
+    }
+    // Bail if the model is malformed (every FxId must be backed by exactly
+    // one Section). Should never happen given the constructor wiring.
+    for (int idx : sectionForFx) if (idx < 0) return;
+
+    // Walk the reorderable column slots in order and assign per `o`.
+    std::size_t emit = 0;
+    for (std::size_t col = 0; col < next.size(); ++col)
+    {
+        const int sIdx = next[col];
+        if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
+        if (! sections_[(std::size_t) sIdx].reorderable) continue;
+        next[col] = sectionForFx[(std::size_t) o[emit++]];
+        if (emit >= o.size()) break;
+    }
+
+    visualOrder_ = std::move(next);
+    resized();
+    repaint();
+}
+
+// ────────────────────────────────────────────────────────────────────
+//  Mouse events — section title click toggles mute OR begins reorder drag
+// ────────────────────────────────────────────────────────────────────
+
+namespace
+{
+constexpr int kDragThresholdPx = 4;
+constexpr std::size_t kOrderUndoStackCap = 32;
+}
+
+int FaceplatePanel::hitTestReorderableTitle(juce::Point<int> pt) const noexcept
+{
+    for (int i = 0; i < static_cast<int>(sections_.size()); ++i)
+    {
+        const auto& s = sections_[(std::size_t) i];
+        if (! s.reorderable) continue;
+        if (s.titleBounds.contains(pt)) return i;
+    }
+    return -1;
+}
+
+int FaceplatePanel::insertionColumnForX(int mouseX) const noexcept
+{
+    // Determine the range of reorderable column slots — first and last
+    // slots whose currently-occupying section is reorderable.
+    int firstReorderableCol = -1, lastReorderableCol = -1;
+    for (int col = 0; col < static_cast<int>(visualOrder_.size()); ++col)
+    {
+        const int sIdx = visualOrder_[(std::size_t) col];
+        if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
+        if (! sections_[(std::size_t) sIdx].reorderable) continue;
+        if (firstReorderableCol < 0) firstReorderableCol = col;
+        lastReorderableCol = col;
+    }
+    if (firstReorderableCol < 0) return -1;
+
+    // Find the column whose center is closest to mouseX. Midpoint rule
+    // for crisp snap behavior — once the cursor crosses a neighbor's
+    // midpoint the swap commits.
+    int bestCol = firstReorderableCol;
+    int bestDist = std::numeric_limits<int>::max();
+    for (int col = firstReorderableCol; col <= lastReorderableCol; ++col)
+    {
+        const int sIdx = visualOrder_[(std::size_t) col];
+        const auto& s = sections_[(std::size_t) sIdx];
+        const int center = s.rectBounds.getCentreX();
+        const int dist = std::abs(mouseX - center);
+        if (dist < bestDist) { bestDist = dist; bestCol = col; }
+    }
+    return bestCol;
+}
+
+void FaceplatePanel::swapReorderableColumns(int fromCol, int toCol)
+{
+    if (fromCol == toCol) return;
+    if (fromCol < 0 || toCol < 0) return;
+    if (fromCol >= static_cast<int>(visualOrder_.size())) return;
+    if (toCol   >= static_cast<int>(visualOrder_.size())) return;
+
+    // Validate both endpoints are reorderable slots — the constraint comes
+    // from insertionColumnForX, but belt-and-suspenders is cheap.
+    auto isReorderableCol = [&](int col) noexcept {
+        const int sIdx = visualOrder_[(std::size_t) col];
+        return sIdx >= 0
+            && sIdx < static_cast<int>(sections_.size())
+            && sections_[(std::size_t) sIdx].reorderable;
+    };
+    if (! isReorderableCol(fromCol) || ! isReorderableCol(toCol)) return;
+
+    // Shift slice — pull the dragged section into toCol, sliding the
+    // intervening reorderable sections by one position the other way.
+    // This produces the iOS "rest of the list slides under your finger"
+    // behavior rather than a hard 2-element swap.
+    const int moved = visualOrder_[(std::size_t) fromCol];
+    if (toCol > fromCol)
+    {
+        for (int c = fromCol; c < toCol; ++c)
+            visualOrder_[(std::size_t) c] =
+                visualOrder_[(std::size_t)(c + 1)];
+    }
+    else
+    {
+        for (int c = fromCol; c > toCol; --c)
+            visualOrder_[(std::size_t) c] =
+                visualOrder_[(std::size_t)(c - 1)];
+    }
+    visualOrder_[(std::size_t) toCol] = moved;
+
+    resized();
+    repaint();
+}
+
+void FaceplatePanel::pushOrderUndoSnapshot()
+{
+    orderUndoStack_.push_back(currentFxOrder());
+    if (orderUndoStack_.size() > kOrderUndoStackCap)
+        orderUndoStack_.erase(orderUndoStack_.begin());
+}
 
 void FaceplatePanel::mouseDown(const juce::MouseEvent& e)
 {
     const auto pt = e.getPosition();
+
+    // Reorderable header — arm both intents (mute on tap, drag on move).
+    const int hitReorderable = hitTestReorderableTitle(pt);
+    if (hitReorderable >= 0)
+    {
+        dragState_         = DragState::Armed;
+        dragOriginSection_ = hitReorderable;
+        dragStartPos_      = pt;
+        dragCurrentPos_    = pt;
+        // Find the current column for this section so a drag without an
+        // initial swap is still a valid no-op.
+        dragOriginColumn_  = -1;
+        for (int col = 0; col < static_cast<int>(visualOrder_.size()); ++col)
+            if (visualOrder_[(std::size_t) col] == hitReorderable)
+                { dragOriginColumn_ = col; break; }
+        return;
+    }
+
+    // Fixed (non-reorderable) header — single-purpose mute toggle.
     for (const auto& s : sections_)
     {
+        if (s.reorderable) continue;
         if (s.mutePid.isEmpty()) continue;
         if (s.titleBounds.contains(pt))
         {
@@ -1017,11 +1230,98 @@ void FaceplatePanel::mouseDown(const juce::MouseEvent& e)
     }
 }
 
+void FaceplatePanel::mouseDrag(const juce::MouseEvent& e)
+{
+    if (dragState_ == DragState::Idle) return;
+
+    const auto pt = e.getPosition();
+    dragCurrentPos_ = pt;
+
+    // Promote Armed → Dragging when the cursor escapes the dead-zone.
+    if (dragState_ == DragState::Armed)
+    {
+        const int dx = std::abs(pt.getX() - dragStartPos_.getX());
+        const int dy = std::abs(pt.getY() - dragStartPos_.getY());
+        if (std::max(dx, dy) < kDragThresholdPx) return;
+
+        // Crossing the threshold commits to drag — cancel the mute intent.
+        dragState_ = DragState::Dragging;
+        pushOrderUndoSnapshot();
+        setMouseCursor(juce::MouseCursor::DraggingHandCursor);
+    }
+
+    // Live reflow: find the column under the cursor and swap if it changed.
+    int currentCol = -1;
+    for (int col = 0; col < static_cast<int>(visualOrder_.size()); ++col)
+        if (visualOrder_[(std::size_t) col] == dragOriginSection_)
+            { currentCol = col; break; }
+    if (currentCol < 0) return;
+
+    const int targetCol = insertionColumnForX(pt.getX());
+    if (targetCol >= 0 && targetCol != currentCol)
+        swapReorderableColumns(currentCol, targetCol);
+}
+
+void FaceplatePanel::mouseUp(const juce::MouseEvent& e)
+{
+    const auto state = dragState_;
+    dragState_ = DragState::Idle;
+    setMouseCursor(juce::MouseCursor::NormalCursor);
+
+    if (state == DragState::Armed)
+    {
+        // Tap without drag — fire mute on the originally-pressed section.
+        if (dragOriginSection_ >= 0
+            && dragOriginSection_ < static_cast<int>(sections_.size()))
+            toggleMute(sections_[(std::size_t) dragOriginSection_]);
+    }
+    else if (state == DragState::Dragging)
+    {
+        const FxOrder o = currentFxOrder();
+        if (onFxOrderChanged) onFxOrderChanged(o);
+    }
+
+    dragOriginSection_ = -1;
+    dragOriginColumn_  = -1;
+    juce::ignoreUnused(e);
+}
+
+bool FaceplatePanel::keyPressed(const juce::KeyPress& key)
+{
+    // Cmd/Ctrl+Z — pop the last fx-order snapshot.
+    const bool isUndo =
+        (key.getKeyCode() == 'Z' || key.getKeyCode() == 'z')
+        && (key.getModifiers().isCommandDown() || key.getModifiers().isCtrlDown())
+        && ! key.getModifiers().isShiftDown();
+    if (isUndo && ! orderUndoStack_.empty())
+    {
+        const FxOrder prev = orderUndoStack_.back();
+        orderUndoStack_.pop_back();
+        applyFxOrder(prev);
+        if (onFxOrderChanged) onFxOrderChanged(prev);
+        return true;
+    }
+    return false;
+}
+
 void FaceplatePanel::mouseMove(const juce::MouseEvent& e)
 {
     const auto pt = e.getPosition();
+    // Reorderable headers get the grab cursor as a discoverability hint —
+    // the affordance is the cursor, not chrome on the header.
     for (const auto& s : sections_)
     {
+        if (! s.reorderable) continue;
+        if (s.titleBounds.contains(pt))
+        {
+            setMouseCursor(juce::MouseCursor::DraggingHandCursor);
+            return;
+        }
+    }
+    // Fixed mute-only headers get the standard hand pointer.
+    for (const auto& s : sections_)
+    {
+        if (s.reorderable) continue;
         if (s.mutePid.isEmpty()) continue;
         if (s.titleBounds.contains(pt))
         {

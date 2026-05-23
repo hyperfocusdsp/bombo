@@ -9,5 +9,6 @@
     "noise_amount": 0.10,
     "mid_level": 0.30,
     "drive_amount": 0.15
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

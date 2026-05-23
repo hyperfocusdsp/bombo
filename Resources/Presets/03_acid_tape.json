@@ -12,5 +12,6 @@
     "filter_lp": 3500.0,
     "delay_time": 220.0, "delay_mix": 0.20, "delay_drift": 0.55,
     "duck_depth": 0.30
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

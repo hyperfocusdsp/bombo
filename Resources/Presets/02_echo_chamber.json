@@ -11,5 +11,6 @@
     "delay_drift": 0.40, "delay_morph": 0.55,
     "reverb_size": 0.85, "reverb_decay": 0.85, "reverb_mix": 0.55, "reverb_predelay": 80.0,
     "duck_depth": 0.40
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

@@ -130,6 +130,11 @@ public:
     // in persistentState_ so state survives editor destruction.
     bombo::ProgressionManager& progressionManager() noexcept { return progressionManager_; }
 
+    // FX chain order — DRIVE / FILTER / DELAY / REVERB in user-set sequence.
+    // Lock-free atomic underneath; safe to call from any thread.
+    bombo::FxOrder getFxOrder() const noexcept { return chain_.getFxOrder(); }
+    void setFxOrder(bombo::FxOrder o) noexcept { chain_.setFxOrder(o); }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -272,7 +277,9 @@ private:
         int     beatSamples   = 0;
         bool    capturing     = false;
         bool    valid         = false;
-        bombo::ChainParams capturedParams{};
+        bombo::ChainParams  capturedParams{};
+        bombo::VoiceTrigger capturedTrigger{};   // snapshot at capture-start;
+                                                 // edit on any voice knob → invalidate
     };
     LoopCache loopCache_{};
 

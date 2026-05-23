@@ -13,6 +13,7 @@
 #include "PresetBarComponent.h"
 #include "ScopeComponent.h"
 #include "Theme/ThemedComponent.h"
+#include "../DSP/FxOrder.h"
 
 namespace bombo
 {
@@ -76,7 +77,10 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     void mouseDown(const juce::MouseEvent&) override;
+    void mouseDrag(const juce::MouseEvent&) override;
+    void mouseUp  (const juce::MouseEvent&) override;
     void mouseMove(const juce::MouseEvent&) override;
+    bool keyPressed(const juce::KeyPress&)  override;
 
     // Override theme-change handler to also refresh section label colors.
     void changeListenerCallback(juce::ChangeBroadcaster* bc) override;
@@ -165,6 +169,12 @@ private:
         juce::Rectangle<int> titleBounds;     // clickable title strip at the top of rectBounds
         juce::Rectangle<int> moduleIdBounds;  // narrow strip at the bottom of rectBounds
         std::vector<std::unique_ptr<Control>> controls;
+        // Reorderable sections are the four FX (DRIVE/FILTER/DELAY/REVERB).
+        // VOICE A / VOICE B / DUCK stay pinned to their column slots.
+        bool                 reorderable = false;
+        // Only meaningful when reorderable == true; identifies the DSP stage
+        // this section drives so visualOrder_ can be mapped to FxOrder.
+        FxId                 fxId = FxId::Drive;
     };
 
     Control* addKnob       (Section& s, const juce::String& paramId, const juce::String& displayName,
@@ -219,8 +229,34 @@ private:
     // sample without depending on the BomboProcessor header.
     SampleSlotCallbacks sampleSlotCb_;
 
-    // FX rack — 7 columns left to right.
+    // FX rack — 7 columns left to right. sections_ is the *stable* identity
+    // list (insertion order: VOICE A, VOICE B, DRIVE, DELAY, REVERB, FILTER,
+    // DUCK). Visual layout uses visualOrder_ as an index permutation, so
+    // sections_ never needs to be re-shuffled by the drag code.
     std::vector<Section> sections_;
+
+    // Permutation of section indices → column position. visualOrder_[c] is
+    // the sections_ index drawn at column c. Slots 0, 1, and the last slot
+    // are pinned to the fixed sections (VOICE A, VOICE B, DUCK); the middle
+    // four slots hold the reorderable FX in user-set order. Default is the
+    // identity {0,1,2,3,4,5,6}.
+    std::vector<int> visualOrder_;
+
+public:
+    // Push a new FX order into the rack. Updates visualOrder_, triggers a
+    // re-layout, and is idempotent if `o` already matches the current order.
+    // Used both by drag-commit (UI → DSP) and by preset / DAW-state restore
+    // (DSP → UI). Validation is performed in DSP::setFxOrder.
+    void applyFxOrder(FxOrder o);
+
+    // Current FX order derived from visualOrder_.
+    FxOrder currentFxOrder() const noexcept;
+
+    // Fired when the user commits a drag-reorder. PluginEditor wires this
+    // to BomboProcessor::setFxOrder so DSP and persistence follow the UI.
+    std::function<void(FxOrder)> onFxOrderChanged;
+
+private:
 
     // Mini-Nuke chassis silhouette (R4B-CLASSIC, locked 2026-05-17).
     // chassisPath_ is the unified body egg-shape from rear-cap area to
@@ -291,6 +327,35 @@ private:
     // (see TODO.md F3/F8). Each lives in `macro_[i]` so column i's macro
     // can be re-aligned without a list shuffle.
     std::array<std::unique_ptr<Control>, 7> macro_{};
+
+    // ── Header drag-to-reorder state ────────────────────────────────
+    // Tap-vs-drag disambiguation: mouseDown on a draggable title arms
+    // the gesture but does not toggle mute; if the cursor moves past
+    // kDragThresholdPx the gesture commits to drag (mute intent
+    // cancelled), otherwise mouseUp fires the mute toggle as before.
+    enum class DragState : std::uint8_t { Idle, Armed, Dragging };
+    DragState           dragState_         = DragState::Idle;
+    int                 dragOriginSection_ = -1;   // sections_ index being dragged
+    int                 dragOriginColumn_  = -1;   // column at drag start
+    juce::Point<int>    dragStartPos_;             // mouse pos at mouseDown
+    juce::Point<int>    dragCurrentPos_;           // live mouse pos during drag
+    // Undo stack of fx-order snapshots; capped at kUndoStackCap. Pushed
+    // immediately before each commit; Ctrl+Z pops and re-applies.
+    std::vector<FxOrder> orderUndoStack_;
+
+    // Returns sections_ index of the reorderable section whose title
+    // strip currently contains `pt`, or -1.
+    int hitTestReorderableTitle(juce::Point<int> pt) const noexcept;
+    // Returns the column position (visualOrder_ index) that the dragged
+    // section should occupy given a cursor X. Clamped to the reorderable
+    // slot range (slots between the first and last fixed sections).
+    int insertionColumnForX(int mouseX) const noexcept;
+    // Commit a swap that moves the section currently at fromCol into
+    // toCol; the section displaced rolls into fromCol. Both must be
+    // reorderable slots.
+    void swapReorderableColumns(int fromCol, int toCol);
+    // Push the current FxOrder onto the undo stack (capped).
+    void pushOrderUndoSnapshot();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FaceplatePanel)
 };

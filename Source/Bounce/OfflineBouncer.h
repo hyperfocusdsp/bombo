@@ -58,7 +58,12 @@ private:
     static constexpr double kRenderSampleRate    = 48000.0;
     static constexpr int    kRenderBlockSize     = 512;
     static constexpr int    kNumChannels         = 2;
-    static constexpr float  kSilenceThresholdDb  = -60.0f;
+    // -50 dB is below the audible-content threshold in any mixing context
+    // but high enough that long reverb tails (which can crawl from -40 dB
+    // to -60 dB over several seconds) trip the silence detector cleanly,
+    // instead of holding the bounce open until the 10 s cap. The dynamic
+    // range of the rendered file is still 50 dB — plenty for a kick.
+    static constexpr float  kSilenceThresholdDb  = -50.0f;
     static constexpr int    kSilenceWindowMs     = 50;
     static constexpr double kMaxSeconds          = 10.0;
     static constexpr int    kBitDepth            = 24;

@@ -107,8 +107,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::ampAttack, 1},
         "Amp Attack", skewRange(0.1f, 20.0f, 0.4f), 0.5f, msFormat));
+    // Max extended to 5000 ms so VOICE B can comfortably hold a full
+    // 808-style kick (sub tails routinely 3–5 s). Skew kept at 0.4 so
+    // the bottom of the range — where typical kicks live (200–800 ms) —
+    // still gets most of the knob travel. Click-safe terminal fade
+    // lives in AmpEnvelope so any DEC value ends in true silence.
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::ampDecay, 1},
-        "Amp Decay", skewRange(50.0f, 2000.0f, 0.4f), 700.0f, msFormat));
+        "Amp Decay", skewRange(50.0f, 5000.0f, 0.4f), 700.0f, msFormat));
 
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::clickAmount, 1},
         "Click", Range(0.0f, 1.0f, 0.001f), 0.30f, normFormat));

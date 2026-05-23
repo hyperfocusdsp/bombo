@@ -9,5 +9,6 @@
     "drive_amount": 0.30, "drive_mode": 1,
     "filter_lp": 2500.0, "filter_color": 0.30,
     "reverb_size": 0.70, "reverb_decay": 0.80, "reverb_damp": 0.70, "reverb_mix": 0.40
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

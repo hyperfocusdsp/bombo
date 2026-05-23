@@ -7,14 +7,16 @@
 namespace bombo
 {
 
-// One-shot punch-layer sample. Loaded on the message thread, fed to voices
-// at trigger time via a shared_ptr. The audio thread only reads — never
-// allocates, never holds the load mutex.
+// One-shot sample layer (originally a "punch" snippet; now a full-length
+// sample player). Loaded on the message thread, fed to voices at trigger
+// time via a shared_ptr. The audio thread only reads — never allocates,
+// never holds the load mutex.
 //
-// On load: mono-mix to 1ch, resample to the host sample rate, clip total
-// playback length to ≤ 200 ms (per the user spec "autofade regardless of
-// sample length to 20–200 ms"), then bake a linear fade-to-silence ramp
-// in-place so the per-sample mix loop is just a buffer read.
+// On load: mono-mix to 1ch, resample to the host sample rate, defensive
+// hard-cap at kMaxMs (long enough for full-length 808 kicks + headroom),
+// then bake a short linear fade only on the *last* few ms so the sample's
+// natural amplitude is preserved while playback ending stays click-free.
+// DEC + the runtime amp envelope handle musical shortening.
 struct SampleSlot
 {
     // Returns a fully prepared mono buffer ready for voice playback,
@@ -61,9 +63,10 @@ private:
         if (reader == nullptr || reader->lengthInSamples <= 0)
             return nullptr;
 
-        // Read the leading slice — up to twice the cap so resampling has
-        // headroom for sample-rate conversion. Cast to size_t carefully.
-        constexpr double kMaxMs = 200.0;
+        // Defensive cap so a 60 s field recording can't bloat the per-voice
+        // buffer. 10 s easily covers the longest 808 sub or tom hit.
+        constexpr double kMaxMs    = 10000.0;
+        constexpr double kEndFadeMs = 5.0;
         const double srcSR = reader->sampleRate > 0.0
                            ? reader->sampleRate : targetSampleRate;
         const juce::int64 cap = static_cast<juce::int64>(
@@ -115,20 +118,26 @@ private:
                            outLen);
         }
 
-        // Hard cap at 200 ms expressed at the target SR (the resample math
-        // above can leave us a sample or two over the limit on odd ratios).
+        // Hard cap expressed at the target SR (the resample math above can
+        // leave us a sample or two over the limit on odd ratios).
         const int maxOut = static_cast<int>(
             std::round((kMaxMs * 0.001) * targetSampleRate));
         const int finalLen = std::min(outLen, maxOut);
         if (finalLen <= 0) return nullptr;
 
-        // Bake the fade. Linear 1.0 → 0.0 across the whole clipped length.
-        // Anything past the audible boundary (~20 ms minimum implied) is
-        // baked in too — voices just play through to silence and stop.
-        for (int i = 0; i < finalLen; ++i)
+        // Preserve the sample's natural amplitude — only fade the final
+        // few ms so playback ending doesn't click on samples whose last
+        // frame isn't already at zero. DEC + the live amp envelope are
+        // the user-facing length controls; the loader stays neutral.
+        const int endFadeLen = std::min(
+            finalLen,
+            std::max(1, static_cast<int>(
+                std::round((kEndFadeMs * 0.001) * targetSampleRate))));
+        const int fadeStart  = finalLen - endFadeLen;
+        for (int i = 0; i < endFadeLen; ++i)
         {
-            const float t = static_cast<float>(i) / static_cast<float>(finalLen);
-            resampled[static_cast<size_t>(i)] *= (1.0f - t);
+            const float t = static_cast<float>(i) / static_cast<float>(endFadeLen);
+            resampled[static_cast<size_t>(fadeStart + i)] *= (1.0f - t);
         }
 
         auto out = std::make_shared<juce::AudioBuffer<float>>(1, finalLen);

@@ -11,5 +11,6 @@
     "fx_drive_amount": 0.30, "fx_drive_mode": 2,
     "filter_lp": 4500.0,
     "mid_level": 0.60
-  }
+  },
+  "fxOrder": ["drive", "filter", "delay", "reverb"]
 }

@@ -53,6 +53,23 @@ bool parseBlob(const char* data, int size, PresetBank::Preset& out)
             }
         }
     }
+
+    // FX chain order — optional, absent on legacy presets. Format:
+    //   "fxOrder": ["drive", "filter", "delay", "reverb"]
+    out.fxOrder.reset();
+    if (parsed.hasProperty("fxOrder"))
+    {
+        const auto& fv = parsed["fxOrder"];
+        if (auto* arr = fv.getArray(); arr != nullptr && arr->size() == 4)
+        {
+            FxOrder o{};
+            bool ok = true;
+            for (int i = 0; i < 4; ++i)
+                ok = ok && fxIdFromString((*arr)[i].toString(),
+                                          o[(std::size_t) i]);
+            if (ok && isValidFxOrder(o)) out.fxOrder = o;
+        }
+    }
     return true;
 }
 
@@ -78,7 +95,8 @@ snapshotApvts(juce::AudioProcessorValueTreeState& apvts)
 bool writePresetJson(const juce::File& file,
                      const juce::String& name,
                      const juce::String& displayName,
-                     const std::vector<std::pair<std::string, float>>& params)
+                     const std::vector<std::pair<std::string, float>>& params,
+                     const std::optional<FxOrder>& fxOrder)
 {
     juce::DynamicObject::Ptr root = new juce::DynamicObject();
     root->setProperty("name", name);
@@ -88,6 +106,14 @@ bool writePresetJson(const juce::File& file,
     for (const auto& kv : params)
         paramsObj->setProperty(juce::String(kv.first), kv.second);
     root->setProperty("params", juce::var(paramsObj.get()));
+
+    if (fxOrder.has_value())
+    {
+        juce::Array<juce::var> arr;
+        for (auto f : *fxOrder)
+            arr.add(juce::var(juce::String(fxIdToString(f))));
+        root->setProperty("fxOrder", juce::var(arr));
+    }
 
     file.getParentDirectory().createDirectory();
     return file.replaceWithText(juce::JSON::toString(juce::var(root.get()), true));
@@ -208,6 +234,7 @@ void PresetBank::applyByIndex(int idx, juce::AudioProcessorValueTreeState& apvts
         p->endChangeGesture();
     }
     current_ = idx;
+    if (onPresetApplied) onPresetApplied(preset);
 }
 
 void PresetBank::next(juce::AudioProcessorValueTreeState& apvts)
@@ -257,8 +284,9 @@ int PresetBank::saveAs(const juce::String& displayName,
     const auto file = dir.getChildFile(safeStem + ".json");
     if (file.existsAsFile()) return -1;   // refuse to clobber
 
+    const auto fxOrderToSave = fxOrderProvider ? fxOrderProvider() : std::nullopt;
     if (! writePresetJson(file, displayName.toUpperCase(), displayName,
-                          snapshotApvts(apvts)))
+                          snapshotApvts(apvts), fxOrderToSave))
         return -1;
 
     refreshUserPresets();
@@ -272,8 +300,10 @@ bool PresetBank::overwriteCurrent(juce::AudioProcessorValueTreeState& apvts)
     if (! isCurrentUserPreset()) return false;
     const auto& cur = presets_[(size_t) current_];
     if (cur.filePath == juce::File()) return false;
+    const auto fxOrderToSave = fxOrderProvider ? fxOrderProvider() : std::nullopt;
     if (! writePresetJson(cur.filePath, juce::String(cur.name),
-                          juce::String(cur.displayName), snapshotApvts(apvts)))
+                          juce::String(cur.displayName), snapshotApvts(apvts),
+                          fxOrderToSave))
         return false;
     refreshUserPresets();
     return true;
@@ -293,7 +323,10 @@ bool PresetBank::renameAt(int idx, const juce::String& newDisplayName)
 
     // Write into the new location first, then delete the old one — safer
     // than rename + write if the destination is on a different filesystem.
-    if (! writePresetJson(newFile, newDisplayName.toUpperCase(), newDisplayName, p.params))
+    // Rename preserves the preset's existing fxOrder verbatim — this is a
+    // pure file move + display-name update, not a re-snapshot.
+    if (! writePresetJson(newFile, newDisplayName.toUpperCase(), newDisplayName,
+                          p.params, p.fxOrder))
         return false;
     if (newFile != p.filePath) p.filePath.deleteFile();
     refreshUserPresets();
