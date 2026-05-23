@@ -928,6 +928,100 @@ public:
                 + " postFadePeak="   + juce::String(postFadePeak, 6));
         }
 
+        beginTest("USER BUG: TAIL ON loop-mode bleed in FIRST 15 ms after each trigger");
+        {
+            // What the user is actually hearing: with TAIL ON in loop
+            // mode and a heavy-feedback delay, the OLD echo content is
+            // being faded out across the V-shape kill window AT THE
+            // SAME TIME as the new kick attack plays. Whatever's
+            // audible in the first ~10-15 ms is perceived as "tail
+            // bleeds onto next trig." This test measures peak energy
+            // in the 0-15 ms window after each beat 2+ trigger
+            // (skipping beat 1: no previous tail to bleed) and asserts
+            // it's bounded.
+            const float sr = 48000.0f;
+            const int   beatSamples = static_cast<int>(60.0f / 140.0f * sr);
+            bombo::RumbleChain chain(sr);
+            bombo::ChainParams p;
+            p.delayMs        = 250.0f;
+            p.delayFeedback  = 0.85f;
+            p.delayMix       = 0.6f;
+            p.reverbMute     = true;
+            p.delayMute      = false;
+            p.duckDepth      = 0.0f;
+            p.hpHz           = 30.0f; p.hpQ = 0.707f;
+            p.lpHz           = 12000.0f; p.lpQ = 0.707f;
+            p.limiterOn      = true;
+            p.tailKillOn     = true;
+            chain.update(p);
+
+            // Realistic-ish kick body: 700 ms exponential decay (matches
+            // default ampDecay = 700 ms in Parameters.h). Continuous
+            // input so the delay buffer is full at read positions
+            // 15-30 ms post-trigger -- the window we're testing.
+            auto kickBodySample = [sr](int sampleSinceTrig) noexcept {
+                const float t = static_cast<float>(sampleSinceTrig) / sr;
+                const float env = std::exp(-t / 0.20f);    // tau = 200 ms
+                // Quasi-noise so the delay sees broadband content.
+                const float n = 0.5f * static_cast<float>(((sampleSinceTrig * 17) % 23) - 11) / 11.0f;
+                return env * n;
+            };
+
+            // To isolate the BLEED (old wet residue only, not the new
+            // kick's dry-path attack), build delay buffer state over
+            // several beats with full kick body input, then at the
+            // measurement trigger feed ZERO input — the wet bus output
+            // is then only the previous beats' echo running through
+            // the kill fade. Any non-zero output in the 15 ms window
+            // is the bleed.
+            std::vector<float> bleedPeaks;
+            const int bleedSamples = static_cast<int>(0.015f * sr);
+
+            // Warm-up: 3 beats of continuous kick-body input so the
+            // delay buffer is fully loaded with content.
+            for (int beat = 0; beat < 3; ++beat)
+            {
+                chain.killTail();
+                chain.onTrigger(80.0f);
+                for (int i = 0; i < beatSamples; ++i)
+                {
+                    const float in = (i == 0) ? 1.0f : kickBodySample(i);
+                    chain.process(in);
+                }
+            }
+
+            // Measurement beats: trigger as usual (killTail + onTrigger)
+            // but feed ZERO input throughout — wet output should drop
+            // to ~silence after the kill fade closes the V (~6 ms).
+            for (int beat = 0; beat < 5; ++beat)
+            {
+                chain.killTail();
+                chain.onTrigger(80.0f);
+                float peak = 0.0f;
+                for (int i = 0; i < beatSamples; ++i)
+                {
+                    const float y = std::abs(chain.process(0.0f));
+                    if (i < bleedSamples)
+                        peak = std::max(peak, y);
+                }
+                bleedPeaks.push_back(peak);
+            }
+
+            juce::Logger::writeToLog("TAIL ON  bleed-window peaks (15 ms post-trig, beats 2..6):");
+            for (auto p : bleedPeaks)
+                juce::Logger::writeToLog("  peak=" + juce::String(p, 6));
+
+            const float worstBleed = bleedPeaks.empty() ? 0.0f
+                                   : *std::max_element(bleedPeaks.begin(), bleedPeaks.end());
+            // Threshold = 5% — below this the kick attack masks any
+            // residual chop fade. Was ~0.15-0.30 with the 30 ms V-fade
+            // (15 ms of audible OLD echo), should now sit < 0.05 with
+            // the 6 ms fade.
+            expect(worstBleed < 0.05f,
+                   "post-trig bleed window peak too high: " + juce::String(worstBleed, 6)
+                   + " (must be < 0.05)");
+        }
+
         beginTest("USER BUG: tailKillOn toggle controls per-trig chop in loop mode");
         {
             // Mirrors the user-reported scenario:
@@ -962,9 +1056,7 @@ public:
 
                 // 4 trigs at 140 BPM, captures wet-tail energy in the
                 // 200 ms window just BEFORE each trigger (i.e. the
-                // accumulated echo level entering the next beat). If
-                // tailKillOn does its job, this should be near zero
-                // (~previous tail killed). If it doesn't, energy grows.
+                // accumulated echo level entering the next beat).
                 std::vector<double> preBeatEnergy;
                 preBeatEnergy.reserve(4);
                 for (int beat = 0; beat < 4; ++beat)

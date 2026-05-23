@@ -14,12 +14,24 @@ class Delay
 {
 public:
     static constexpr int kMaxSamples = 200000;
-    // kKillFadeMs bumped 5 → 30 ms 2026-05-17: the 5 ms ramp was
-    // short enough that high-feedback tails clicked at the cut point.
-    // 30 ms lets the V-ramp land near zero regardless of where in the
-    // delay cycle the kill arrives, eliminating the audible click on
-    // loop-tail-chop AND on space-to-stop scenarios.
-    static constexpr float kKillFadeMs = 30.0f;
+    // kKillFadeMs: width of the V-shaped tail-kill window. Trade-off
+    // between click suppression and audible chop tightness:
+    //   - first half = output ramps OLD echo down to 0 (audible bleed
+    //     window — the longer this is, the more old content you hear
+    //     overlapping the new kick attack)
+    //   - midpoint  = hard buffer flush (silent at output)
+    //   - second half = output ramps back up (silent because buffer is
+    //     empty)
+    // History: 5 ms originally; bumped to 30 ms 2026-05-17 to mask
+    // buffer-flush clicks at high feedback. But 30 ms = 15 ms of
+    // audible OLD-tail bleed at the start of every chopped beat —
+    // user reports this as "tail bleeds onto next trig" in loop mode
+    // 2026-05-23. Tightened to 6 ms (matches ConvolutionReverb fade +
+    // dry-voice 5 ms steal): bleed window is now ~3 ms (below kick-
+    // attack-mask threshold) while V-ramp still reaches ~0.7% before
+    // the flush, low enough that the flush stays click-free at the
+    // 0.95 feedback cap.
+    static constexpr float kKillFadeMs = 6.0f;
     static constexpr float kStopFadeMs = 80.0f;
 
     explicit Delay(float sampleRate = 48000.0f)
