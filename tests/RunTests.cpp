@@ -1201,6 +1201,81 @@ public:
                    + " max=" + juce::String(onMax, 6) + ")");
         }
 
+        beginTest("USER BUG REGRESSION CHECK: per-beat DELAY identity in loop");
+        {
+            // Drive RumbleChain with a deterministic kick-body shape
+            // for 8 beats at 140 BPM with heavy feedback. Capture each
+            // beat's chain output. Compare beats 2-7 sample-by-sample.
+            // If any sample differs > 1e-5 between any pair of beats,
+            // the chain has state-dependent leakage = "alters on every
+            // kick" bug.
+            const float sr = 48000.0f;
+            const int   beatSamples = static_cast<int>(60.0f / 140.0f * sr);
+            bombo::RumbleChain chain(sr);
+            bombo::ChainParams p;
+            p.delayMs        = 250.0f;
+            p.delayFeedback  = 0.85f;
+            p.delayMix       = 0.6f;
+            p.reverbMix      = 0.0f;
+            p.reverbMute     = true;
+            p.delayMute      = false;
+            p.duckDepth      = 0.0f;
+            p.hpHz           = 30.0f; p.hpQ = 0.707f;
+            p.lpHz           = 12000.0f; p.lpQ = 0.707f;
+            p.limiterOn      = true;
+            p.tailKillOn     = true;
+            chain.update(p);
+
+            auto kickBody = [sr](int sampleSinceTrig) noexcept {
+                const float t = static_cast<float>(sampleSinceTrig) / sr;
+                const float env = std::exp(-t / 0.20f);
+                const float n = 0.5f * static_cast<float>(((sampleSinceTrig * 17) % 23) - 11) / 11.0f;
+                return env * n;
+            };
+
+            const int nBeats = 8;
+            std::vector<std::vector<float>> beatRecordings(nBeats,
+                                                          std::vector<float>(beatSamples));
+            for (int beat = 0; beat < nBeats; ++beat)
+            {
+                chain.killTail();
+                chain.onTrigger(80.0f);
+                for (int i = 0; i < beatSamples; ++i)
+                {
+                    const float in = (i == 0) ? 1.0f : kickBody(i);
+                    beatRecordings[beat][i] = chain.process(in);
+                }
+            }
+
+            // Compare beat 2 to beats 3..7. If chain is LTI per-trig,
+            // these should be SAMPLE-IDENTICAL (modulo voice-side state,
+            // but we're driving chain directly so no voices involved).
+            float maxDiff = 0.0f;
+            int   worstSample = -1;
+            int   worstBeat = -1;
+            for (int beat = 3; beat < nBeats; ++beat)
+            {
+                for (int i = 0; i < beatSamples; ++i)
+                {
+                    const float d = std::abs(beatRecordings[2][i] - beatRecordings[beat][i]);
+                    if (d > maxDiff)
+                    {
+                        maxDiff = d;
+                        worstSample = i;
+                        worstBeat = beat;
+                    }
+                }
+            }
+            juce::Logger::writeToLog(juce::String("Per-beat max diff vs beat 2: ")
+                + juce::String(maxDiff, 8)
+                + " (worst at sample " + juce::String(worstSample)
+                + " of beat " + juce::String(worstBeat) + ")");
+            // Sample-accurate identity expected.
+            expect(maxDiff < 1e-4f,
+                   "chain output VARIES between identical-input beats — "
+                   "state leak somewhere (max diff " + juce::String(maxDiff, 8) + ")");
+        }
+
         beginTest("algo dispatch is deterministic across runs");
         {
             const float sr = 48000.0f;

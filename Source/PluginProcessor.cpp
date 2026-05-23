@@ -220,6 +220,18 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     chainParams_ = buildChainParamsFromApvts();
     chain_.update(chainParams_);
 
+    // Loop-cache sized for one beat at the slowest supported BPM (60).
+    // Always stereo; gets resized once at prepare and not on the audio
+    // thread.
+    const int maxBeatSamples = static_cast<int>(currentSampleRate_ * (60.0f / 60.0f));
+    loopCache_.buf.setSize(2, maxBeatSamples, false, true, true);
+    loopCache_.buf.clear();
+    loopCache_.capturing   = false;
+    loopCache_.valid       = false;
+    loopCache_.writePos    = 0;
+    loopCache_.readPos     = 0;
+    loopCache_.beatSamples = 0;
+
     waveBuffer_.clear();
 
     masterGainSmoothed.reset(sampleRate, 0.010);
@@ -435,6 +447,32 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     chainParams_ = buildChainParamsFromApvts();
     chain_.update(chainParams_);
 
+    // Loop-cache: live capture on the first trigger after entering
+    // LOOP + TAIL ON, then replay for subsequent beats so every loop
+    // pass is sample-identical. Param change invalidates the cache so
+    // the next trigger re-captures with the new settings. See
+    // PluginProcessor.h LoopCache for the rationale.
+    const bool loopCacheActive = loopNow && tailKillEnabled;
+    if (! loopCacheActive)
+    {
+        loopCache_.capturing = false;
+        loopCache_.valid     = false;
+    }
+    else if (loopCache_.valid
+             && std::memcmp(&loopCache_.capturedParams,
+                            &chainParams_,
+                            sizeof(chainParams_)) != 0)
+    {
+        // Any chain param moved — cache is stale, re-capture next trig.
+        loopCache_.valid     = false;
+        loopCache_.capturing = false;
+    }
+    // beatSamples for the cache: round one beat to integer samples.
+    const int cacheBeatSamples = (effectiveBpm > 0.0f && currentSampleRate_ > 0.0f)
+        ? juce::jmin(loopCache_.buf.getNumSamples(),
+                     static_cast<int>(std::round((60.0 / effectiveBpm) * currentSampleRate_)))
+        : 0;
+
     for (int i = 0; i < numSamples; ++i)
     {
         const int nFired = voiceMgr_.tickPending();
@@ -445,6 +483,25 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             voiceMgr_.trigger(trig);
             chain_.killTail();
             chain_.onTrigger(trig.pitchEnvDecayMs);
+
+            if (loopCacheActive && cacheBeatSamples > 0)
+            {
+                if (! loopCache_.valid)
+                {
+                    // Begin a fresh capture of this beat.
+                    loopCache_.capturing       = true;
+                    loopCache_.valid           = false;
+                    loopCache_.writePos        = 0;
+                    loopCache_.readPos         = 0;
+                    loopCache_.beatSamples     = cacheBeatSamples;
+                    loopCache_.capturedParams  = chainParams_;
+                }
+                else
+                {
+                    // Sync replay cursor to the new trigger.
+                    loopCache_.readPos = 0;
+                }
+            }
         }
 
         const float dry = voiceMgr_.renderSample();
@@ -457,6 +514,32 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         // StereoFinalizer.h for the rationale.
         float oL = out, oR = out;
         stereoFin_.process(out, oL, oR);
+
+        // Loop cache capture / playback.
+        if (loopCacheActive)
+        {
+            if (loopCache_.capturing
+                && loopCache_.writePos < loopCache_.beatSamples)
+            {
+                loopCache_.buf.setSample(0, loopCache_.writePos, oL);
+                loopCache_.buf.setSample(1, loopCache_.writePos, oR);
+                ++loopCache_.writePos;
+                if (loopCache_.writePos >= loopCache_.beatSamples)
+                {
+                    loopCache_.capturing = false;
+                    loopCache_.valid     = true;
+                    loopCache_.readPos   = loopCache_.beatSamples;  // wait for next trig
+                }
+            }
+            else if (loopCache_.valid
+                     && loopCache_.readPos < loopCache_.beatSamples)
+            {
+                // Override live output with the captured beat.
+                oL = loopCache_.buf.getSample(0, loopCache_.readPos);
+                oR = loopCache_.buf.getSample(1, loopCache_.readPos);
+                ++loopCache_.readPos;
+            }
+        }
 
         if (left)  left[i]  = oL;
         if (right) right[i] = oR;

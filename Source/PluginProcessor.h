@@ -255,6 +255,27 @@ private:
     juce::String pendingRestorePath_;
     bool pendingRestoreIsFolder_ = false;
 
+    // Loop-cache (capture-and-replay). When LOOP is on AND TAIL KILL is
+    // on, the first beat after entering this state is processed live
+    // and its stereo output is captured into loopCache_. Subsequent
+    // triggers in the same loop replay the captured beat from cache
+    // instead of relying on per-trig DSP chop to maintain per-beat
+    // identity. Eliminates the audible bleed + click that the
+    // microsecond-scale chop window would otherwise introduce; ANY
+    // chain-param change invalidates the cache so the next trigger
+    // re-captures with the new settings.
+    struct LoopCache
+    {
+        juce::AudioBuffer<float> buf;        // stereo, sized once
+        int     writePos      = 0;
+        int     readPos       = 0;
+        int     beatSamples   = 0;
+        bool    capturing     = false;
+        bool    valid         = false;
+        bombo::ChainParams capturedParams{};
+    };
+    LoopCache loopCache_{};
+
     bombo::WaveBuffer       waveBuffer_{};
     bombo::PresetBank       presetBank_{};
     bombo::PersistentState  persistentState_{};
