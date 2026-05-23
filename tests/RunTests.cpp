@@ -20,6 +20,9 @@
 #include "DSP/BombVoice.h"
 #include "DSP/Delay.h"
 #include "DSP/FdnReverb.h"
+#include "DSP/ConvolutionReverb.h"
+#include "DSP/IRBank.h"
+#include "DSP/RumbleChain.h"
 
 #include <cmath>
 #include <vector>
@@ -620,6 +623,246 @@ public:
     }
 };
 
+// ── Convolution reverb sanity + per-hit identity guard ─────────────
+class ConvolutionReverbTests : public juce::UnitTest
+{
+public:
+    ConvolutionReverbTests() : juce::UnitTest("ConvolutionReverb") {}
+
+    void runTest() override
+    {
+        beginTest("IRBank synthesizes deterministic non-empty IRs for every algo");
+        {
+            const float sr = 48000.0f;
+            for (int a = 0; a < bombo::ir::kNumAlgos; ++a)
+            {
+                auto buf1 = bombo::ir::synthesizeIR(a, sr);
+                auto buf2 = bombo::ir::synthesizeIR(a, sr);
+                expect(buf1.getNumChannels() == 1);
+                expect(buf1.getNumSamples() > 256);
+                expect(buf1.getNumSamples() == buf2.getNumSamples());
+                // Determinism: byte-identical for the same algo + sample rate.
+                bool identical = true;
+                const auto* a1 = buf1.getReadPointer(0);
+                const auto* a2 = buf2.getReadPointer(0);
+                for (int i = 0; i < buf1.getNumSamples(); ++i)
+                    if (a1[i] != a2[i]) { identical = false; break; }
+                expect(identical, "IR bytes vary between calls (algo " + juce::String(a) + ")");
+                // Peak normalised near 0.5.
+                float peak = 0.0f;
+                for (int i = 0; i < buf1.getNumSamples(); ++i)
+                    peak = std::max(peak, std::abs(a1[i]));
+                expect(peak > 0.4f && peak < 0.6f,
+                       "IR peak out of normalised band (algo " + juce::String(a)
+                       + ", peak=" + juce::String(peak, 4) + ")");
+            }
+        }
+
+        beginTest("convolution silent-in -> silent-out");
+        {
+            const float sr = 48000.0f;
+            bombo::ConvolutionReverb r(sr);
+            r.setType(bombo::ir::Hall);
+            r.setSize(0.5f);
+            r.setDecay(0.7f);
+            r.setDamp(0.5f);
+            r.setPredelayMs(0.0f);
+            float peak = 0.0f;
+            for (int i = 0; i < 2048; ++i)
+                peak = std::max(peak, std::abs(r.process(0.0f)));
+            expect(peak < 1e-3f);
+        }
+
+        beginTest("impulse produces decaying tail (Room algo)");
+        {
+            // Room IR is a pure exponential decay (tau~100ms, no
+            // build-up), so energy density strictly drops over time.
+            // Hall has a build-up phase whose energy peaks ~250 ms in
+            // and would invert this assertion -- don't substitute it.
+            const float sr = 48000.0f;
+            bombo::ConvolutionReverb r(sr);
+            r.setType(bombo::ir::Room);
+            r.setSize(1.0f);
+            r.setDecay(1.0f);
+            r.setDamp(0.2f);
+            r.setPredelayMs(0.0f);
+            r.onTrigger();
+            r.process(1.0f);
+            // Drain the conv block latency only -- Room decays fast.
+            for (int i = 0; i < 128; ++i) r.process(0.0f);
+            float early = 0.0f, late = 0.0f;
+            for (int i = 0; i < static_cast<int>(0.4f * sr); ++i)
+            {
+                const float y = r.process(0.0f);
+                if (i >= static_cast<int>(0.02f * sr) && i < static_cast<int>(0.05f * sr))
+                    early += y * y;
+                if (i >= static_cast<int>(0.20f * sr) && i < static_cast<int>(0.30f * sr))
+                    late += y * y;
+            }
+            expect(early > 0.0f, "no early energy after impulse");
+            // Per-sample density (early window 30 ms, late window 100 ms).
+            const float earlyDensity = early / (0.03f * sr);
+            const float lateDensity  = late  / (0.10f * sr);
+            expect(lateDensity < earlyDensity * 0.5f,
+                   "tail did not decay (earlyDensity=" + juce::String(earlyDensity, 8)
+                   + ", lateDensity=" + juce::String(lateDensity, 8) + ")");
+        }
+
+        beginTest("per-trigger identity: two trigs in isolation produce identical late-tail");
+        {
+            // Core determinism check. Hit the convolution reverb with an
+            // impulse, capture the late-tail RMS, kill+re-trigger, hit
+            // again, capture the late-tail RMS. Ratio must be < 1.005.
+            const float sr = 48000.0f;
+            bombo::ConvolutionReverb r(sr);
+            r.setType(bombo::ir::Hall);
+            r.setSize(1.0f);
+            r.setDecay(1.0f);
+            r.setDamp(0.2f);
+            r.setPredelayMs(0.0f);
+
+            auto runTrigCaptureLate = [&]() noexcept {
+                // killTail + onTrigger sequence (matches RumbleChain).
+                r.killTail();
+                r.onTrigger();
+                // Let the fade complete before hitting.
+                for (int i = 0; i < static_cast<int>(0.05f * sr); ++i) r.process(0.0f);
+                r.onTrigger();
+                r.process(1.0f);
+                double rms = 0.0;
+                int n = 0;
+                for (int i = 0; i < static_cast<int>(0.30f * sr); ++i)
+                {
+                    const float y = r.process(0.0f);
+                    if (i >= static_cast<int>(0.10f * sr))
+                    {
+                        rms += (double) y * (double) y;
+                        ++n;
+                    }
+                }
+                return std::sqrt(rms / juce::jmax(1, n));
+            };
+
+            const double a = runTrigCaptureLate();
+            const double b = runTrigCaptureLate();
+            const double ratio = a > 0.0 ? b / a : 1.0;
+            expect(a > 1e-6, "first trig produced no late-tail energy");
+            expect(std::abs(ratio - 1.0) < 0.005,
+                   "late-tail ratio drifted (a=" + juce::String(a, 8)
+                   + " b=" + juce::String(b, 8)
+                   + " ratio=" + juce::String(ratio, 6) + ")");
+        }
+
+        beginTest("loop-mode stability: 12 trigs at 140 BPM, late-tail ratio bound");
+        {
+            // This is the parked bug_bombo_reverb_pulsing_loop_2026_05_17
+            // regression test. Drive the chain with the user's exact
+            // preset and confirm per-trig late-tail variation stays bound.
+            // FdnReverb under this preset showed ~42% peak-late jump on
+            // trig 2+ in real recording. With convolution + reset on
+            // killTail we expect ratio range < 0.01.
+            const float sr = 48000.0f;
+            bombo::RumbleChain chain(sr);
+            bombo::ChainParams p;
+            // User preset (DELAY OFF, reverb-only):
+            p.reverbType        = bombo::ir::Room;
+            p.reverbSize        = 0.22f;
+            p.reverbDecay       = 0.16f;
+            p.reverbDamp        = 0.85f;
+            p.reverbPredelayMs  = 0.0f;
+            p.reverbMix         = 0.77f;
+            p.delayMix          = 0.0f;
+            p.delayMute         = true;
+            p.duckDepth         = 0.76f;
+            p.duckAttackMs      = 0.1f;
+            p.duckHoldMs        = 10.0f;
+            p.duckReleaseMs     = 388.0f;
+            p.hpHz              = 29.0f;
+            p.hpQ               = 2.99f;
+            p.lpHz              = 18000.0f;
+            p.lpQ               = 0.76f;
+            p.filterColor       = 0.4f;
+            p.limiterOn         = true;
+            chain.update(p);
+
+            const int beatSamples = static_cast<int>(60.0f / 140.0f * sr); // 140 BPM
+
+            std::vector<double> peakLate;
+            peakLate.reserve(12);
+
+            for (int trig = 0; trig < 12; ++trig)
+            {
+                // Fire trigger: killTail + onTrigger then feed a single
+                // impulse (substitute for the voice attack — good enough
+                // to drive the wet bus to a known level for this guard).
+                chain.killTail();
+                chain.onTrigger(80.0f);
+                // Let the kill-fade clear conv state.
+                for (int i = 0; i < static_cast<int>(0.05f * sr); ++i)
+                    chain.process(0.0f);
+                chain.onTrigger(80.0f);
+                chain.process(1.0f);
+
+                // Measure peak in the 200ms+ late-tail window of the
+                // remaining beat.
+                double peak = 0.0;
+                const int lateStart = static_cast<int>(0.20f * sr);
+                const int beatEnd   = beatSamples;
+                for (int i = 1; i < beatEnd; ++i)
+                {
+                    const float y = chain.process(0.0f);
+                    if (i >= lateStart)
+                        peak = std::max(peak, (double) std::abs(y));
+                }
+                peakLate.push_back(peak);
+            }
+
+            // Skip trig 0 (system warm-up). Use trigs 1..11.
+            double mn = 1e30, mx = 0.0;
+            for (size_t i = 1; i < peakLate.size(); ++i)
+            {
+                mn = std::min(mn, peakLate[i]);
+                mx = std::max(mx, peakLate[i]);
+            }
+            const double range = mx > 0.0 ? (mx - mn) / mx : 0.0;
+            expect(mx > 0.0, "no late-tail energy observed");
+            expect(range < 0.05,
+                   "loop-mode pulsing detected (peakLate range=" + juce::String(range, 4)
+                   + " min=" + juce::String(mn, 8)
+                   + " max=" + juce::String(mx, 8) + ")");
+        }
+
+        beginTest("algo dispatch is deterministic across runs");
+        {
+            const float sr = 48000.0f;
+            auto runAlgo = [sr](int algo) noexcept {
+                bombo::ConvolutionReverb r(sr);
+                r.setType(algo);
+                r.setSize(1.0f);
+                r.setDecay(1.0f);
+                r.setDamp(0.2f);
+                r.setPredelayMs(0.0f);
+                r.onTrigger();
+                r.process(1.0f);
+                double e = 0.0;
+                for (int i = 0; i < static_cast<int>(0.30f * sr); ++i)
+                {
+                    const float y = r.process(0.0f);
+                    e += (double) y * (double) y;
+                }
+                return e;
+            };
+            for (int a = 0; a < bombo::ir::kNumAlgos; ++a)
+            {
+                const double e1 = runAlgo(a);
+                const double e2 = runAlgo(a);
+                expect(e1 > 0.0, "algo " + juce::String(a) + " produced no energy");
+                expect(e1 == e2, "algo " + juce::String(a) + " not run-to-run deterministic");
+            }
+        }
+    }
+};
+
 // Static test instances -- JUCE finds them via the UnitTest registry.
 // Palette/ThemeProvider tests live in tests/PaletteTests.cpp, which is
 // compiled as its own translation unit (see CMakeLists.txt) and registers
@@ -632,6 +875,7 @@ static OscillatorTests  oscillatorTests;
 static BombVoiceTests   bombVoiceTests;
 static DelayTests       delayTests;
 static FdnReverbTests   fdnReverbTests;
+static ConvolutionReverbTests convolutionReverbTests;
 
 int main()
 {

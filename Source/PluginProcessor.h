@@ -177,6 +177,7 @@ private:
     juce::AudioParameterFloat*  pDelayMorph = nullptr;
     juce::AudioParameterFloat*  pDelaySmear = nullptr;
     juce::AudioParameterFloat*  pDelayMix = nullptr;
+    juce::AudioParameterChoice* pReverbType = nullptr;
     juce::AudioParameterFloat*  pReverbSize = nullptr;
     juce::AudioParameterFloat*  pReverbDecay = nullptr;
     juce::AudioParameterFloat*  pReverbDamp = nullptr;

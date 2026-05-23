@@ -64,9 +64,16 @@ namespace pid
     inline constexpr const char* delayMorph      = "delay_morph";
     inline constexpr const char* delaySmear      = "delay_smear";
     inline constexpr const char* delayMix        = "delay_mix";
+    // reverbType: Choice over the IRBank algos (Room/Plate/Hall/Spring/
+    // Chamber/Bunker). Added 2026-05-23 with the convolution rework — see
+    // ConvolutionReverb.h. Default index 2 = Hall.
+    inline constexpr const char* reverbType      = "reverb_type";
     inline constexpr const char* reverbSize      = "reverb_size";
     inline constexpr const char* reverbDecay     = "reverb_decay";
     inline constexpr const char* reverbDamp      = "reverb_damp";
+    // reverbDiffusion: hidden after the convolution rework — IR has
+    // built-in diffusion. Kept in APVTS so old presets round-trip; not
+    // wired to any UI control.
     inline constexpr const char* reverbDiffusion = "reverb_diffusion";
     inline constexpr const char* reverbPredelay  = "reverb_predelay";
     inline constexpr const char* reverbMix       = "reverb_mix";

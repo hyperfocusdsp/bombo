@@ -161,14 +161,16 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     }
     {
         Section s;
-        s.name = "REVERB"; s.moduleId = "RVB-FDN"; s.mutePid = pid::reverbMute;
+        s.name = "REVERB"; s.moduleId = "RVB-CONV"; s.mutePid = pid::reverbMute;
         s.accent = col::reverb(); s.labelOnBg = col::ink();
-        addKnob(s, pid::reverbSize,      "SIZE",  s.labelOnBg);
-        addKnob(s, pid::reverbDecay,     "DECAY", s.labelOnBg);
-        addKnob(s, pid::reverbDamp,      "DAMP",  s.labelOnBg);
-        addKnob(s, pid::reverbDiffusion, "DIFF",  s.labelOnBg);
-        addKnob(s, pid::reverbPredelay,  "PRE",   s.labelOnBg);
-        addKnob(s, pid::reverbMix,       "MIX",   s.labelOnBg);
+        // TYPE (Choice) replaces the deprecated DIFFUSION knob — the
+        // convolution engine carries diffusion in the IR itself.
+        addChoice(s, pid::reverbType,    "TYPE",  s.labelOnBg);
+        addKnob  (s, pid::reverbSize,    "SIZE",  s.labelOnBg);
+        addKnob  (s, pid::reverbDecay,   "DECAY", s.labelOnBg);
+        addKnob  (s, pid::reverbDamp,    "DAMP",  s.labelOnBg);
+        addKnob  (s, pid::reverbPredelay,"PRE",   s.labelOnBg);
+        addKnob  (s, pid::reverbMix,     "MIX",   s.labelOnBg);
         sections_.push_back(std::move(s));
     }
     {

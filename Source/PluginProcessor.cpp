@@ -54,6 +54,7 @@ void BomboProcessor::cacheParameterPointers()
     pDelayMorph      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMorph));
     pDelaySmear    = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delaySmear));
     pDelayMix        = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(delayMix));
+    pReverbType      = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(reverbType));
     pReverbSize      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbSize));
     pReverbDecay     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbDecay));
     pReverbDamp      = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(reverbDamp));
@@ -106,6 +107,7 @@ bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
     p.delayMorph      = pDelayMorph->get();
     p.delaySmear    = pDelaySmear->get();
     p.delayMix        = pDelayMix->get();
+    p.reverbType      = pReverbType != nullptr ? pReverbType->getIndex() : 2;
     p.reverbSize      = pReverbSize->get();
     p.reverbDecay     = pReverbDecay->get();
     p.reverbDamp      = pReverbDamp->get();
@@ -766,10 +768,12 @@ void BomboProcessor::randomizeBombo()
     setNorm  (delayMix,      rng(  0.0f,   0.35f));
 
     // ── REVERB ──────────────────────────────────────────────────────
+    // Pick any algo with equal weight. Diffusion is hidden post-rework
+    // so we leave its value alone (preset-compat only).
+    setChoice(reverbType, (int) (rng(0.0f, (float) bombo::ir::kNumAlgos)));
     setNorm  (reverbSize,      rng(0.3f, 0.8f));
     setNorm  (reverbDecay,     rng(0.3f, 0.7f));
     setNorm  (reverbDamp,      rng(0.3f, 0.7f));
-    setNorm  (reverbDiffusion, rng(0.4f, 0.7f));
     setPlain (reverbPredelay,  rng(0.0f, 80.0f));
     setNorm  (reverbMix,       rng(0.0f, 0.4f));
 

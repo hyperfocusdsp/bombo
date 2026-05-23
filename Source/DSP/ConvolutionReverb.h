@@ -1,0 +1,356 @@
+#pragma once
+
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_core/juce_core.h>
+#include <juce_dsp/juce_dsp.h>
+
+#include "IRBank.h"
+
+#include <array>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <memory>
+#include <thread>
+#include <vector>
+
+namespace bombo
+{
+
+// IR-based reverb with multi-algo dispatch. Six juce::dsp::Convolution
+// instances are pre-loaded at prepare() time with synthesized IRs (see
+// IRBank.h); process() dispatches to the currently-selected algo.
+//
+// Per-hit identity guarantee
+// --------------------------
+//  Convolution is LTI: same input + same IR + same state → bit-identical
+//  output. We hard-reset the active convolution's state on every
+//  killTail() (the 30 ms fade then resets, mirroring FdnReverb's flow)
+//  and we suppress input writes during the fade — so each new trigger
+//  starts the convolution from clean zero state. The only sources of
+//  per-trigger variance (LFO, allpass modulation, accumulating FDN
+//  state) that plagued the previous algorithmic engine are absent by
+//  construction. This closes the parked
+//  `bug_bombo_reverb_pulsing_loop_2026_05_17` regression class.
+//
+// Sample-by-sample API, block-buffered internally
+// -----------------------------------------------
+//  The chain wants per-sample process() calls (TEETH etc.). juce::dsp::
+//  Convolution is block-based, so we accumulate kBlockSize input samples,
+//  convolve, and drain output one-by-one. Latency = kBlockSize samples
+//  (1.3 ms @ 48 kHz), inaudible against the dry voice path.
+class ConvolutionReverb
+{
+public:
+    static constexpr int   kBlockSize        = 64;
+    static constexpr float kStopFadeMs       = 80.0f;
+    static constexpr float kKillFadeMs       = 30.0f;
+    static constexpr int   kMaxPredelaySamples = 32768; // ~683 ms @ 48 k
+
+    explicit ConvolutionReverb (float sampleRate = 48000.0f)
+        : predelay_ ((std::size_t) kMaxPredelaySamples, 0.0f),
+          inBlock_  (1, kBlockSize),
+          wetBlock_ (1, kBlockSize)
+    {
+        for (int i = 0; i < ir::kNumAlgos; ++i)
+            convs_[(std::size_t) i].reset (new juce::dsp::Convolution());
+
+        prepareInternal (sampleRate);
+    }
+
+    void setSampleRate (float sampleRate) noexcept
+    {
+        // Non-RT path — called from PluginProcessor::prepareToPlay only.
+        prepareInternal (sampleRate);
+    }
+
+    // Hard reset — instant, no fade. Called from prepareToPlay.
+    void reset() noexcept
+    {
+        for (auto& c : convs_) c->reset();
+        for (auto& s : predelay_) s = 0.0f;
+        predelayPos_ = 0;
+        inBlock_.clear();
+        wetBlock_.clear();
+        blockWp_ = 0;
+        blockRp_ = 0;
+        stopFadeRemaining_ = 0;
+        killFadeRemaining_ = 0;
+        killFadeTotal_     = 0;
+        stopMuted_         = false;
+        wetLpfZ_           = 0.0f;
+        decayEnv_          = 0.0f;
+        trigAge_           = INT32_MAX;
+    }
+
+    // Per-trigger smooth tail kill: linear fade of wet output down to 0
+    // over kKillFadeMs ms, while suppressing convolution input writes
+    // (so the new trigger's audio doesn't fold into the dying tail).
+    // Conv state is reset at the bottom of the fade. Mirrors FdnReverb's
+    // kill-tail behaviour 1:1 so the RumbleChain integration is a
+    // drop-in.
+    void killTail() noexcept
+    {
+        stopFadeRemaining_ = 0;
+        stopMuted_ = false;
+        if (killFadeRemaining_ == 0)
+        {
+            std::uint32_t fadeSamples = (std::uint32_t) (kKillFadeMs * 0.001f * sampleRate_);
+            if (fadeSamples < 1) fadeSamples = 1;
+            killFadeRemaining_ = fadeSamples;
+            killFadeTotal_     = fadeSamples;
+        }
+    }
+
+    // Called per trigger alongside killTail(). Resets the wet-bus decay
+    // envelope and the trigger-age counter that drives the Size window.
+    // Determinism: this is the per-trigger reset point — every kick
+    // starts from identical wet-side state.
+    void onTrigger() noexcept
+    {
+        decayEnv_ = 1.0f;
+        trigAge_  = 0;
+    }
+
+    // Transport-stop smooth fade. Mirrors FdnReverb::stopAndMute().
+    void stopAndMute() noexcept
+    {
+        if (! stopMuted_ && stopFadeRemaining_ == 0)
+        {
+            std::uint32_t f = (std::uint32_t) (kStopFadeMs * 0.001f * sampleRate_);
+            if (f < 1) f = 1;
+            stopFadeRemaining_ = f;
+            stopFadeTotal_     = f;
+        }
+    }
+
+    // ── PARAM SETTERS ──────────────────────────────────────────────────
+    // Map ITU-style 0..1 knobs onto musically useful internal ranges.
+    void setType (int algo) noexcept
+    {
+        if (algo < 0 || algo >= ir::kNumAlgos) algo = ir::Hall;
+        activeAlgo_ = algo;
+    }
+
+    // 0..1 → 50 ms .. (algo length seconds, sample-count) for the
+    // Size window. Tail cuts to 0 after this many samples post-trigger.
+    void setSize (float n01) noexcept
+    {
+        n01 = juce::jlimit (0.0f, 1.0f, n01);
+        const float maxLenSec = ir::kAlgoLengthSec[(std::size_t) activeAlgo_];
+        const float minLenSec = 0.05f;
+        const float sec = minLenSec + (maxLenSec - minLenSec) * n01;
+        sizeWindowSamples_ = juce::jmax (1, (int) (sec * sampleRate_));
+        sizeFadeSamples_   = juce::jmax (1, sizeWindowSamples_ / 5);
+    }
+
+    // 0..1 → exponential decay tau between 50 ms and 4 s. Resets to 1.0
+    // on every onTrigger().
+    void setDecay (float n01) noexcept
+    {
+        n01 = juce::jlimit (0.0f, 1.0f, n01);
+        const float tauSec = 0.05f + n01 * 3.95f;
+        // Per-sample coef so env *= coef → exp(-t/tau).
+        decayCoef_ = std::exp (-1.0f / (tauSec * sampleRate_));
+    }
+
+    // 0..1 → post-conv 1-pole LP cutoff between 12 kHz (open) and 200 Hz
+    // (dark). Higher knob value = darker tail (matches FdnReverb semantics).
+    void setDamp (float n01) noexcept
+    {
+        n01 = juce::jlimit (0.0f, 1.0f, n01);
+        const float fc = 12000.0f * std::pow (0.0167f, n01);  // 12k → 200 Hz, exponential
+        const float x  = std::exp (-6.28318530717958f * fc / sampleRate_);
+        wetLpfCoef_ = 1.0f - x;
+    }
+
+    void setPredelayMs (float ms) noexcept
+    {
+        const int s = juce::jlimit (0, kMaxPredelaySamples - 1,
+                                    (int) (ms * 0.001f * sampleRate_));
+        predelaySamples_ = s;
+    }
+
+    // ── PROCESS ────────────────────────────────────────────────────────
+    float process (float in) noexcept
+    {
+        // 1) Predelay write/read.
+        const float dryIn = in;
+        predelay_[(std::size_t) predelayPos_] = dryIn;
+        int rPos = predelayPos_ - predelaySamples_;
+        if (rPos < 0) rPos += kMaxPredelaySamples;
+        const float delayed = predelay_[(std::size_t) rPos];
+        if (++predelayPos_ >= kMaxPredelaySamples) predelayPos_ = 0;
+
+        // 2) Push delayed sample into the input block — UNLESS a killTail
+        // fade is in flight, in which case write zero so the new trigger's
+        // audio doesn't fold into the dying tail.
+        const bool suppress = (killFadeRemaining_ > 0);
+        inBlock_.setSample (0, blockWp_, suppress ? 0.0f : delayed);
+        ++blockWp_;
+
+        // 3) When the input block is full, convolve it through the active
+        // algo and drain into wetBlock_. Reset the read cursor.
+        if (blockWp_ >= kBlockSize)
+        {
+            auto& conv = *convs_[(std::size_t) activeAlgo_];
+            // ProcessContextNonReplacing requires distinct in/out blocks.
+            juce::dsp::AudioBlock<const float> inBk  (inBlock_);
+            juce::dsp::AudioBlock<float>       outBk (wetBlock_);
+            juce::dsp::ProcessContextNonReplacing<float> ctx (inBk, outBk);
+            conv.process (ctx);
+            blockWp_ = 0;
+            blockRp_ = 0;
+        }
+
+        // 4) Read one wet sample out of the wet block.
+        float wet = wetBlock_.getSample (0, blockRp_);
+        ++blockRp_;
+        if (blockRp_ >= kBlockSize) blockRp_ = kBlockSize - 1; // clamp (next block will reset)
+
+        // 5) Post-LP (Damp).
+        wetLpfZ_ += wetLpfCoef_ * (wet - wetLpfZ_);
+        if (std::fpclassify (wetLpfZ_) == FP_SUBNORMAL) wetLpfZ_ = 0.0f;
+        wet = wetLpfZ_;
+
+        // 6) Per-trigger decay envelope.
+        if (decayEnv_ > 1e-7f)
+        {
+            wet *= decayEnv_;
+            decayEnv_ *= decayCoef_;
+        }
+        else
+        {
+            wet = 0.0f;
+        }
+
+        // 7) Size window — full level until tail-fade region, then linear
+        // ramp to 0, then silence.
+        if (trigAge_ >= sizeWindowSamples_)
+        {
+            wet = 0.0f;
+        }
+        else
+        {
+            const int tail = sizeWindowSamples_ - trigAge_;
+            if (tail < sizeFadeSamples_)
+                wet *= (float) tail / (float) sizeFadeSamples_;
+        }
+        if (trigAge_ < INT32_MAX - 1) ++trigAge_;
+
+        // 8) Per-trigger killTail linear fade — at bottom, reset state.
+        // Mirrors FdnReverb 1:1 so RumbleChain doesn't need to change.
+        if (killFadeRemaining_ > 0)
+        {
+            const float ramp = (float) killFadeRemaining_ / (float) killFadeTotal_;
+            wet *= ramp;
+            --killFadeRemaining_;
+            if (killFadeRemaining_ == 0)
+            {
+                // Reset conv state on ALL algos so any future algo switch
+                // also starts clean. Cheap (just clears small overlap buffers).
+                for (auto& c : convs_) c->reset();
+                inBlock_.clear();
+                wetBlock_.clear();
+                blockWp_ = 0;
+                blockRp_ = 0;
+                wetLpfZ_ = 0.0f;
+                // Clear predelay so stale samples don't bleed back in.
+                for (auto& s : predelay_) s = 0.0f;
+                predelayPos_ = 0;
+            }
+        }
+
+        // 9) Transport-stop fade — mirrors FdnReverb::stopAndMute().
+        if (stopFadeRemaining_ > 0)
+        {
+            const float ramp = (float) stopFadeRemaining_ / (float) stopFadeTotal_;
+            wet *= ramp;
+            --stopFadeRemaining_;
+            if (stopFadeRemaining_ == 0)
+            {
+                stopMuted_ = true;
+                for (auto& c : convs_) c->reset();
+                for (auto& s : predelay_) s = 0.0f;
+                predelayPos_ = 0;
+                wetLpfZ_ = 0.0f;
+            }
+        }
+        if (stopMuted_) wet = 0.0f;
+
+        return wet;
+    }
+
+private:
+    void prepareInternal (float sampleRate) noexcept
+    {
+        sampleRate_ = sampleRate;
+        juce::dsp::ProcessSpec spec;
+        spec.sampleRate       = sampleRate;
+        spec.maximumBlockSize = (juce::uint32) kBlockSize;
+        spec.numChannels      = 1;
+
+        // Load IRs BEFORE prepare(). Per JUCE docs: prepare() will ensure
+        // the IR from the most recent loadImpulseResponse() is fully
+        // initialised and active on the first process() call. The
+        // opposite order (prepare → load) leaves currentEngine null in
+        // release builds and process() then silently outputs nothing.
+        for (int i = 0; i < ir::kNumAlgos; ++i)
+        {
+            auto& c = *convs_[(std::size_t) i];
+            auto irBuf = ir::synthesizeIR (i, sampleRate);
+            c.loadImpulseResponse (std::move (irBuf), sampleRate,
+                                   juce::dsp::Convolution::Stereo::no,
+                                   juce::dsp::Convolution::Trim::no,
+                                   juce::dsp::Convolution::Normalise::no);
+            c.prepare (spec);
+        }
+
+        // Default state mirrors FdnReverb's "size=0.5" feel.
+        sizeWindowSamples_ = (int) (1.0f * sampleRate);
+        sizeFadeSamples_   = sizeWindowSamples_ / 5;
+        setDecay (0.7f);
+        setDamp  (0.45f);
+        wetLpfZ_ = 0.0f;
+
+        reset();
+    }
+
+    float sampleRate_ { 48000.0f };
+
+    std::array<std::unique_ptr<juce::dsp::Convolution>, ir::kNumAlgos> convs_{};
+    int activeAlgo_ { ir::Hall };
+
+    // Predelay ring.
+    std::vector<float> predelay_;
+    int predelayPos_     { 0 };
+    int predelaySamples_ { 0 };
+
+    // Block-buffered conv I/O.
+    juce::AudioBuffer<float> inBlock_;
+    juce::AudioBuffer<float> wetBlock_;
+    int blockWp_ { 0 };
+    int blockRp_ { 0 };
+
+    // Post-LP (Damp).
+    float wetLpfCoef_ { 0.1f };
+    float wetLpfZ_    { 0.0f };
+
+    // Per-trigger decay env.
+    float decayCoef_  { 0.999f };
+    float decayEnv_   { 0.0f };
+
+    // Per-trigger size window.
+    int sizeWindowSamples_ { 48000 };
+    int sizeFadeSamples_   { 9600 };
+    int trigAge_           { INT32_MAX };
+
+    // Kill-tail and stop fades.
+    std::uint32_t killFadeRemaining_ { 0 };
+    std::uint32_t killFadeTotal_     { 0 };
+    std::uint32_t stopFadeRemaining_ { 0 };
+    std::uint32_t stopFadeTotal_     { 0 };
+    bool          stopMuted_         { false };
+};
+
+} // namespace bombo

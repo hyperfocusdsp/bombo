@@ -2,7 +2,7 @@
 
 #include "BiquadFilter.h"
 #include "Delay.h"
-#include "FdnReverb.h"
+#include "ConvolutionReverb.h"
 #include "Ducker.h"
 #include "MultibandLimiter.h"
 #include "MasterBus.h"
@@ -46,10 +46,14 @@ struct ChainParams
     float delayMorph    = 0.5f;
     float delayMix      = 0.0f;
     // REVERB
+    // reverbType: index into IRBank algos (0=Room, 1=Plate, 2=Hall,
+    // 3=Spring, 4=Chamber, 5=Bunker). Replaces the FdnReverb's single
+    // engine — see ConvolutionReverb.h for the per-hit identity story.
+    int   reverbType       = 2;   // Hall
     float reverbSize       = 0.5f;
     float reverbDecay      = 0.6f;
     float reverbDamp       = 0.3f;
-    float reverbDiffusion  = 0.5f;
+    float reverbDiffusion  = 0.5f; // hidden — kept for preset back-compat
     float reverbPredelayMs = 20.0f;
     float reverbMix        = 0.0f;
     // DUCKER
@@ -91,9 +95,9 @@ public:
     {
         sampleRate_ = sampleRate;
         delay_.setSampleRate(sampleRate);
-        // Reverb has a single-shot constructor; rebuild only if user changes
-        // SR mid-session — acceptable for now (not an audio-thread path).
-        reverb_ = FdnReverb(sampleRate);
+        // Reverb resynthesizes its IR bank at the new sample rate.
+        // Non-audio-thread path (prepareToPlay only).
+        reverb_.setSampleRate(sampleRate);
         ducker_.setSampleRate(sampleRate);
         multiband_.setSampleRate(sampleRate);
         masterBus_.setSampleRate(sampleRate);
@@ -121,12 +125,15 @@ public:
     }
 
     // Called at each kick trigger alongside killTail(). Starts the TEETH
-    // pitch-tracking envelope so the LP cutoff sweeps with the pitch.
+    // pitch-tracking envelope so the LP cutoff sweeps with the pitch,
+    // and resets the convolution reverb's per-trigger decay envelope so
+    // every hit starts the wet bus from identical state.
     void onTrigger(float pitchDecayMs) noexcept
     {
         teethEnv_ = 1.0f;
         const float decayS = (pitchDecayMs < 1.0f ? 1.0f : pitchDecayMs) * 0.001f;
         teethEnvCoef_ = std::exp(-1.0f / (decayS * sampleRate_));
+        reverb_.onTrigger();
     }
 
     void update(const ChainParams& p) noexcept
@@ -181,10 +188,13 @@ public:
         delay_.setDrift(p.delaySmear);
         delay_.setFilterMorph(p.delayMorph);
 
-        reverb_.setParams(p.reverbDecay, p.reverbDamp);
+        reverb_.setType(p.reverbType);
         reverb_.setSize(p.reverbSize);
-        reverb_.setDiffusion(p.reverbDiffusion);
+        reverb_.setDecay(p.reverbDecay);
+        reverb_.setDamp(p.reverbDamp);
         reverb_.setPredelayMs(p.reverbPredelayMs);
+        // p.reverbDiffusion intentionally ignored — param kept for
+        // preset back-compat but the IR has built-in diffusion.
 
         ducker_.setTimesMs(p.duckAttackMs, p.duckReleaseMs);
         ducker_.setHoldMs(p.duckHoldMs);
@@ -245,7 +255,7 @@ private:
     BiquadFilter hpFilter_;
     BiquadFilter lpFilter_;
     Delay delay_;
-    FdnReverb reverb_;
+    ConvolutionReverb reverb_;
     Ducker ducker_;
     MultibandLimiter multiband_;
     MasterBus masterBus_;

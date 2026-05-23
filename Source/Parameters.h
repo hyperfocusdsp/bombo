@@ -180,6 +180,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::delayMix, 1},
         "Delay Mix", Range(0.0f, 1.0f, 0.001f), 0.25f, normFormat));
 
+    p.push_back(std::make_unique<Choice>(juce::ParameterID{pid::reverbType, 1},
+        "Reverb Type",
+        juce::StringArray{ "Room", "Plate", "Hall", "Spring", "Chamber", "Bunker" },
+        2));   // Hall = default. Old presets without reverb_type land here.
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbSize, 1},
         "Reverb Size", Range(0.0f, 1.0f, 0.001f), 0.55f, normFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::reverbDecay, 1},
