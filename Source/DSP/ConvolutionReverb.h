@@ -44,7 +44,13 @@ class ConvolutionReverb
 public:
     static constexpr int   kBlockSize        = 64;
     static constexpr float kStopFadeMs       = 80.0f;
-    static constexpr float kKillFadeMs       = 30.0f;
+    // 6 ms killTail fade — matches the dry voice's 5 ms steal-fadeout
+    // window so the wet bus doesn't audibly hang past the new kick's
+    // attack. FdnReverb used 30 ms to mask FDN-tail clicks at high
+    // feedback; convolution's wet content doesn't have that pressure
+    // (no resonant FDN loop), so we can run the fade tight to avoid
+    // the "old tail bleeds into new kick" sensation in loop mode.
+    static constexpr float kKillFadeMs       = 6.0f;
     static constexpr int   kMaxPredelaySamples = 32768; // ~683 ms @ 48 k
 
     explicit ConvolutionReverb (float sampleRate = 48000.0f)
@@ -81,6 +87,7 @@ public:
         wetLpfZ_           = 0.0f;
         decayEnv_          = 0.0f;
         trigAge_           = INT32_MAX;
+        triggerResetPending_ = false;
     }
 
     // Per-trigger smooth tail kill: linear fade of wet output down to 0
@@ -102,14 +109,32 @@ public:
         }
     }
 
-    // Called per trigger alongside killTail(). Resets the wet-bus decay
-    // envelope and the trigger-age counter that drives the Size window.
-    // Determinism: this is the per-trigger reset point — every kick
-    // starts from identical wet-side state.
+    // Called per trigger alongside killTail(). The visible reset of the
+    // wet-bus decay envelope + Size-window age counter is DEFERRED to
+    // when the kill-tail fade actually ends and conv state has been
+    // cleared. Reasoning: if we reset decayEnv to 1.0 right at the
+    // trigger moment, the OLD conv residue (which is being faded out
+    // over the next 30 ms) suddenly gets multiplied by a HIGHER decay
+    // env than it had a sample ago — the wet level bumps UP at the
+    // trigger instant, then ramps down. That bump reads as "the
+    // previous tail bleeds across the trigger" even though we're
+    // actively trying to kill it. Apply the reset only AT the moment
+    // conv state actually goes to zero, so the new trigger's wet
+    // contribution comes in cleanly at full level on top of true
+    // silence. If no fade is in flight (rare — caller would normally
+    // pair killTail with onTrigger), reset immediately.
     void onTrigger() noexcept
     {
-        decayEnv_ = 1.0f;
-        trigAge_  = 0;
+        if (killFadeRemaining_ > 0)
+        {
+            triggerResetPending_ = true;
+        }
+        else
+        {
+            decayEnv_ = 1.0f;
+            trigAge_  = 0;
+            triggerResetPending_ = false;
+        }
     }
 
     // Transport-stop smooth fade. Mirrors FdnReverb::stopAndMute().
@@ -258,6 +283,15 @@ public:
                 // Clear predelay so stale samples don't bleed back in.
                 for (auto& s : predelay_) s = 0.0f;
                 predelayPos_ = 0;
+                // Apply the deferred per-trigger reset NOW that the conv
+                // state is genuinely zero. See onTrigger() for the
+                // rationale (avoids the wet-bus level bump on trigger).
+                if (triggerResetPending_)
+                {
+                    decayEnv_ = 1.0f;
+                    trigAge_  = 0;
+                    triggerResetPending_ = false;
+                }
             }
         }
 
@@ -351,6 +385,11 @@ private:
     std::uint32_t stopFadeRemaining_ { 0 };
     std::uint32_t stopFadeTotal_     { 0 };
     bool          stopMuted_         { false };
+
+    // onTrigger() defers the decayEnv/trigAge reset until kill-tail
+    // fade ends, so the old wet residue keeps decaying smoothly
+    // through the fade instead of getting bumped up by the reset.
+    bool          triggerResetPending_ { false };
 };
 
 } // namespace bombo
