@@ -1,6 +1,7 @@
 // Source/GUI/BBS/Game/Entities.h
 #pragma once
 #include "Constants.h"
+#include <array>
 #include <cstdint>
 
 namespace bombo::game
@@ -33,6 +34,19 @@ namespace bombo::game
         bool  wide = false;
         bool  active = false;
         int   pierceLeft = 0;
+    };
+
+    class BulletPool
+    {
+    public:
+        static constexpr int kMax = 64;
+        Bullet* spawn(float x, float y, float vx, float vy,
+                      int damage = 1, bool wide = false, int pierce = 0) noexcept;
+        void    tick() noexcept;
+        const std::array<Bullet, kMax>& bullets() const noexcept { return slots_; }
+        std::array<Bullet, kMax>&        bullets() noexcept       { return slots_; }
+    private:
+        std::array<Bullet, kMax> slots_{};
     };
 
     enum class EnemyKind : uint8_t

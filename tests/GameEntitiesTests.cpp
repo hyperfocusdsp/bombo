@@ -58,4 +58,25 @@ public:
 static PlayerMovesByVelocityTest a;
 static PlayerAutofireEvery16TicksTest b;
 static PlayerInvincibilityFramesTest c;
+
+class BulletPoolSpawnAndCullTest : public juce::UnitTest
+{
+public:
+    BulletPoolSpawnAndCullTest() : juce::UnitTest("BulletPool: spawn and offscreen cull") {}
+    void runTest() override
+    {
+        beginTest("spawn returns an active bullet");
+        BulletPool pool;
+        Bullet* b = pool.spawn(10, 50, 180, 0);
+        expect(b != nullptr);
+        expect(b->active);
+
+        beginTest("bullet culled after leaving the framebuffer to the right");
+        for (int i = 0; i < 200; ++i) pool.tick();
+        int alive = 0;
+        for (const auto& b2 : pool.bullets()) if (b2.active) ++alive;
+        expectEquals(alive, 0);
+    }
+};
+static BulletPoolSpawnAndCullTest bulletPoolTest;
 }

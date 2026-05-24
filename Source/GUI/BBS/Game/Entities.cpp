@@ -40,4 +40,32 @@ namespace bombo::game
     {
         invincTimer = kInvincTicks;
     }
+
+    Bullet* BulletPool::spawn(float x, float y, float vx, float vy,
+                              int damage, bool wide, int pierce) noexcept
+    {
+        for (auto& s : slots_)
+        {
+            if (! s.active)
+            {
+                s.x = x; s.y = y; s.vx = vx; s.vy = vy;
+                s.damage = damage; s.wide = wide;
+                s.pierceLeft = pierce; s.active = true;
+                return &s;
+            }
+        }
+        return nullptr;   // pool full
+    }
+
+    void BulletPool::tick() noexcept
+    {
+        for (auto& s : slots_)
+        {
+            if (! s.active) continue;
+            s.x += s.vx * kTickDt;
+            s.y += s.vy * kTickDt;
+            if (s.x < -8 || s.x > kFbW + 8 || s.y < -8 || s.y > kFbH + 8)
+                s.active = false;
+        }
+    }
 }
