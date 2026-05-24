@@ -119,6 +119,10 @@ void BBSComponent::timerCallback()
     if (screens_.current() == BBSScreen::Game)
     {
 #if BOMBO_GAME_V2
+        // TODO(Task 14): feed real host BPM here via gameV2_.setHostBpm(bpm).
+        // BBSComponent has no BPM source yet (host tempo is processor-side on
+        // the AudioPlayHead); until Task 14 plumbs it, the game runs at its
+        // kBpmRef default (speedMult == 1.0).
         gameV2_.tick();
         if (gameV2_.wantsExit()) exitGame();
 #else
