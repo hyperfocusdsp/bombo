@@ -116,4 +116,34 @@ public:
 
 static ChargedShotChargeRateTest    chargeRateTest;
 static ChargedShotConsumesMeterTest chargeConsumeTest;
+
+class EnemyPoolBulletCollisionTest : public juce::UnitTest
+{
+public:
+    EnemyPoolBulletCollisionTest() : juce::UnitTest("EnemyPool: bullet decrements HP, kill at 0") {}
+    void runTest() override
+    {
+        beginTest("3-HP Mudball takes 3 single-damage bullets to kill");
+        EnemyPool ep;
+        BulletPool bp;
+        Enemy* e = ep.spawn(EnemyKind::Mudball, 80, 50, -30, 0);
+        expect(e != nullptr);
+        expectEquals(e->hp, 3);   // defaultHp(Mudball)
+
+        // First hit: bullet placed so it collides this tick
+        bp.spawn(78, 50, 180, 0, /*damage=*/1);
+        bp.tick();
+        int kills = ep.applyBulletDamage(bp);
+        expectEquals(kills, 0);
+        expectEquals(e->hp, 2);
+
+        // Two more hits -> kill
+        bp.spawn(78, 50, 180, 0, 1); bp.tick(); ep.applyBulletDamage(bp);
+        bp.spawn(78, 50, 180, 0, 1); bp.tick();
+        int killCount = ep.applyBulletDamage(bp);
+        expectEquals(killCount, 1);
+        expect(! e->active);
+    }
+};
+static EnemyPoolBulletCollisionTest collisionTest;
 }

@@ -67,4 +67,21 @@ namespace bombo::game
         float phase = 0.0f;     // sine / timer state
         int   subState = 0;
     };
+
+    // Centralised default HP per enemy kind.
+    int defaultHp(EnemyKind k) noexcept;
+
+    class EnemyPool
+    {
+    public:
+        static constexpr int kMax = 48;
+        Enemy* spawn(EnemyKind kind, float x, float y, float vx, float vy) noexcept;
+        void   tick() noexcept;
+        // Returns number of enemies killed this call.
+        int    applyBulletDamage(BulletPool& bullets) noexcept;
+        const std::array<Enemy, kMax>& enemies() const noexcept { return slots_; }
+        std::array<Enemy, kMax>&        enemies() noexcept       { return slots_; }
+    private:
+        std::array<Enemy, kMax> slots_{};
+    };
 }
