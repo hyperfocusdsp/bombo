@@ -64,4 +64,27 @@ namespace bombo::game
     {
         return timeRem * 10 + peakChain * 5 + lives * 50;
     }
+
+    void ChainState::onKill() noexcept
+    {
+        ++count_;
+        if (count_ > peak_) peak_ = count_;
+        idle_ = 0.0f;
+    }
+
+    void ChainState::tick(float dt) noexcept
+    {
+        if (count_ == 0) return;
+        idle_ += dt;
+        if (idle_ >= kChainDrainSec) { count_ = 0; idle_ = 0.0f; }
+    }
+
+    float chainMultiplierFor(int c) noexcept
+    {
+        if (c >= kChainThresholds[4]) return kChainMultipliers[4];
+        if (c >= kChainThresholds[3]) return kChainMultipliers[3];
+        if (c >= kChainThresholds[2]) return kChainMultipliers[2];
+        if (c >= kChainThresholds[1]) return kChainMultipliers[1];
+        return kChainMultipliers[0];
+    }
 }

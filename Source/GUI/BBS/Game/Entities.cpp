@@ -216,6 +216,62 @@ namespace bombo::game
         }
     }
 
+    bool isCurrency(Pickup::Kind k) noexcept
+    {
+        return k == Pickup::Kind::DbSmall || k == Pickup::Kind::DbMed ||
+               k == Pickup::Kind::DbBig   || k == Pickup::Kind::DbCluster;
+    }
+
+    Pickup* PickupPool::spawn(Pickup::Kind kind, float x, float y) noexcept
+    {
+        for (auto& s : slots_)
+        {
+            if (! s.active)
+            {
+                s = Pickup{};
+                s.kind = kind;
+                s.x = x; s.y = y;
+                s.vx = -kDropDriftPxS;   // drift left
+                s.vy = 0.0f;
+                s.ttl = kDropLifetimeSec;
+                s.active = true;
+                return &s;
+            }
+        }
+        return nullptr;
+    }
+
+    void PickupPool::tick(float playerX, float playerY, bool magnetActive) noexcept
+    {
+        for (auto& s : slots_)
+        {
+            if (! s.active) continue;
+
+            if (magnetActive && isCurrency(s.kind))
+            {
+                // Pull toward the player.
+                const float dx = playerX - s.x;
+                const float dy = playerY - s.y;
+                const float len = std::sqrt(dx*dx + dy*dy);
+                if (len > 0.001f)
+                {
+                    const float pull = 120.0f;   // px/s
+                    s.x += (dx / len) * pull * kTickDt;
+                    s.y += (dy / len) * pull * kTickDt;
+                }
+            }
+            else
+            {
+                s.x += s.vx * kTickDt;
+                s.y += s.vy * kTickDt;
+            }
+
+            s.ttl -= kTickDt;
+            if (s.ttl <= 0.0f || s.x < -16.0f || s.x > kFbW + 16.0f)
+                s.active = false;
+        }
+    }
+
     int EnemyPool::applyBulletDamage(BulletPool& bullets) noexcept
     {
         int kills = 0;

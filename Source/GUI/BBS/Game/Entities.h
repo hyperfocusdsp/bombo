@@ -84,4 +84,36 @@ namespace bombo::game
     private:
         std::array<Enemy, kMax> slots_{};
     };
+
+    struct Pickup
+    {
+        enum class Kind : uint8_t
+        {
+            DbSmall, DbMed, DbBig, OneUp, TransientBurst, Compression,
+            EqFilter, ChainBank, DbCluster,
+            TimeFreeze, SidechainPulse, Mute, PhaseLock,
+            Mystery
+        };
+        Kind  kind = Kind::DbSmall;
+        float x = 0.0f, y = 0.0f, vx = 0.0f, vy = 0.0f;
+        float ttl = kDropLifetimeSec;
+        bool  active = false;
+    };
+
+    class PickupPool
+    {
+    public:
+        static constexpr int kMax = 32;
+        // Spawns a pickup that drifts left at kDropDriftPxS by default.
+        Pickup* spawn(Pickup::Kind kind, float x, float y) noexcept;
+        // playerX/Y + magnetActive used to pull currency pickups toward the player.
+        void    tick(float playerX, float playerY, bool magnetActive) noexcept;
+        const std::array<Pickup, kMax>& pickups() const noexcept { return slots_; }
+        std::array<Pickup, kMax>&        pickups() noexcept       { return slots_; }
+    private:
+        std::array<Pickup, kMax> slots_{};
+    };
+
+    // True for currency-type pickups (affected by the dB Magnet).
+    bool isCurrency(Pickup::Kind k) noexcept;
 }

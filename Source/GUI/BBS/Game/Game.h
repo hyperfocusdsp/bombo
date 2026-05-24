@@ -76,4 +76,19 @@ namespace bombo::game
 
     // Wave-clear bonus: timeRemaining*10 + peakChain*5 + livesRemaining*50
     int computeWaveClearBonus(int timeRemaining, int peakChain, int livesRemaining) noexcept;
+
+    struct ChainState
+    {
+        void onKill() noexcept;
+        void tick(float dt) noexcept;       // resets count to 0 after kChainDrainSec idle
+        int  count() const noexcept { return count_; }
+        int  peak()  const noexcept { return peak_; }
+        void resetForWave() noexcept { peak_ = 0; count_ = 0; idle_ = 0.0f; }
+    private:
+        int   count_ = 0;
+        int   peak_  = 0;
+        float idle_  = 0.0f;
+    };
+
+    float chainMultiplierFor(int count) noexcept;
 }
