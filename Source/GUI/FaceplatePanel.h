@@ -184,9 +184,9 @@ private:
     };
 
     Control* addKnob       (Section& s, const juce::String& paramId, const juce::String& displayName,
-                            juce::Colour labelColour);
+                            juce::Colour labelColour, const juce::String& tooltip = {});
     Control* addChoice     (Section& s, const juce::String& paramId, const juce::String& displayName,
-                            juce::Colour labelColour);
+                            juce::Colour labelColour, const juce::String& tooltip = {});
     Control* addSampleSlot (Section& s, const juce::String& displayName,
                             juce::Colour labelColour);
 

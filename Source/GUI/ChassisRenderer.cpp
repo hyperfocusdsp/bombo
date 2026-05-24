@@ -108,11 +108,10 @@ void drawChassis(juce::Graphics& g, const Ctx& ctx)
     }
 
     // Silhouette outline — bone stroke above the orange region only.
-    // Below redRegionTopY, the noseRed fill is full alpha and its chassisPath
-    // edge anti-aliases directly against the host bg, providing the silhouette
-    // there with no stroke. A stroke below would be visible either inside
-    // (contrast against orange, theme-dependent) or outside (darker outline
-    // against host bg) — both have been observed across all themes.
+    // Skipped on neon themes: bone IS the vivid neon colour there, which
+    // produces a bright neon border the user doesn't want. The silhouette
+    // reads fine on neon via the body gradient contrast alone.
+    if (!col::isNeon())
     {
         juce::Graphics::ScopedSaveState ss(g);
         g.excludeClipRegion(juce::Rectangle<int>(0,

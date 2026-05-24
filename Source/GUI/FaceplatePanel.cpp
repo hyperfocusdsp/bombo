@@ -26,7 +26,7 @@ namespace
 // so the JUCE resize-corner has a dark, unambiguous background.
 // Chassis is now flush with the window on the sides + top. The only
 // "outside chassis" region is the bottom-left + bottom-right wedges
-// formed by the bomb-tail V — and the backdrop colour matches the
+// formed by the bomb-tail V - and the backdrop colour matches the
 // chassis interior so those wedges are invisible at the edge. The JUCE
 // resize-corner widget paints its own stripes against this backdrop in
 // the bottom-right wedge.
@@ -37,7 +37,7 @@ constexpr int kChassisCornerR   = 0;
 constexpr int kTailH            = 160;
 
 // Bands inside the chassis rect portion. The macro-row strip is gone
-// 2026-05-17 — macros live in the bomb's nose (see layoutMacrosInNose).
+// 2026-05-17 - macros live in the bomb's nose (see layoutMacrosInNose).
 constexpr int kHeaderH      = 50;
 constexpr int kScopeH       = 100;
 constexpr int kRackPadX     = 2;        // padding between chassis edge and column 0/N-1
@@ -50,7 +50,7 @@ constexpr int kColGap       = 0;       // colors butt up; the per-FX accent IS t
 constexpr int kColTitleH    = 18;      // was 20
 constexpr int kColAccentH   = 3;
 constexpr int kModuleIdH    = 12;      // was 14
-constexpr int kInnerPadX    = 1;       // was 3 — eliminates inter-column gap
+constexpr int kInnerPadX    = 1;       // was 3 - eliminates inter-column gap
 constexpr int kRowH         = 68;      // tight rows after squaring knobs: knob
                                        // box scales with min(kColW, rowH-label-1)
                                        // so bumping kColW + kRowH together gives
@@ -71,7 +71,7 @@ void FaceplatePanel::changeListenerCallback(juce::ChangeBroadcaster* bc)
 
     // Refresh section accent + label colors for the new theme. Accents are
     // identified by mutePid since the colour assigned at build time is now
-    // stale — without this every theme switch keeps the FX rack rendered in
+    // stale - without this every theme switch keeps the FX rack rendered in
     // whatever palette was active at editor construction (Day 5 cohesion
     // sweep bug; reported 2026-05-24).
     for (auto& s : sections_)
@@ -103,7 +103,7 @@ void FaceplatePanel::changeListenerCallback(juce::ChangeBroadcaster* bc)
         }
     }
 
-    // Macro labels live in the nose — always dark grey regardless of
+    // Macro labels live in the nose - always dark grey regardless of
     // theme (the nose is high-chroma on every palette; cream-on-red and
     // neon-on-neon both lose contrast). Re-applying on theme change is
     // a no-op visually since graphite stays the same colour, but keeps
@@ -152,37 +152,37 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     addAndMakeVisible(scope_);
     scope_.setWaveBuffer(waveBuffer);
 
-    // ── 7 FX columns — order matches the pre-port reference ─────────
+    // ── 7 FX columns - order matches the pre-port reference ─────────
     {
         Section s;
         s.name = "VOICE A"; s.moduleId = "AMP-1"; s.mutePid = pid::voiceAMute;
         s.accent = col::voice(); s.labelOnBg = col::bone();
-        addChoice(s, pid::waveform,   "WAVE",   s.labelOnBg);
-        addKnob  (s, pid::pitchStart, "PITCH",  s.labelOnBg);
-        addKnob  (s, pid::pitchEnd,   "END",    s.labelOnBg);
-        addKnob  (s, pid::pitchDecay, "P.DEC",  s.labelOnBg);
-        addKnob  (s, pid::pitchCurve, "CURVE",  s.labelOnBg);
-        // SUB HPF — one-pole high-pass on the SUB layer only. Carves muddy
+        addChoice(s, pid::waveform,   "WAVE",   s.labelOnBg, "Oscillator waveform - sine, triangle, saw, square");
+        addKnob  (s, pid::pitchStart, "PITCH",  s.labelOnBg, "Start pitch in semitones (0 = fundamental)");
+        addKnob  (s, pid::pitchEnd,   "END",    s.labelOnBg, "Pitch sweep target - where the pitch lands at end of decay");
+        addKnob  (s, pid::pitchDecay, "P.DEC",  s.labelOnBg, "Pitch envelope decay - speed of the pitch sweep");
+        addKnob  (s, pid::pitchCurve, "CURVE",  s.labelOnBg, "Pitch curve shape - 0 = linear, 1 = exponential");
+        // SUB HPF - one-pole high-pass on the SUB layer only. Carves muddy
         // ultra-lows for tight psytrance/hard-techno kicks. 20 Hz = bypass.
-        addKnob  (s, pid::subHpf,     "SUB HP", s.labelOnBg);
+        addKnob  (s, pid::subHpf,     "SUB HP", s.labelOnBg, "Sub layer high-pass - rolls off sub below this frequency (20 Hz = off)");
         sections_.push_back(std::move(s));
     }
     {
         Section s;
         s.name = "VOICE B"; s.moduleId = "OSS-1"; s.mutePid = pid::voiceBMute;
         s.accent = col::voice(); s.labelOnBg = col::bone();
-        addKnob      (s, pid::ampAttack,   "ATK",    s.labelOnBg);
+        addKnob      (s, pid::ampAttack,   "ATK",    s.labelOnBg, "Amp attack - time from trigger to peak level");
         // VOICE B's audible content (mid osc + click + noise + sample) all
         // ride midAmpEnv_, driven by pid::midDecay. The DEC knob now uses
         // a RoutedDecayBinding instead of a SliderAttachment so a sibling
         // A/B/+ pill can switch its target between ampDecay (Voice A),
-        // midDecay (Voice B), or both at once — added 2026-05-24 so
+        // midDecay (Voice B), or both at once - added 2026-05-24 so
         // users have direct UI access to Voice A's amp tail without
         // losing per-voice DEC scoping. The Control is otherwise built
         // exactly like a regular knob (slider + label widgets); we just
         // drop the SliderAttachment immediately and remember the Control
         // pointer so resized() can pin the routing pill next to it.
-        decControl_ = addKnob(s, pid::midDecay, "DEC", s.labelOnBg);
+        decControl_ = addKnob(s, pid::midDecay, "DEC", s.labelOnBg, "Decay - tail length for mid osc, click, noise, and sample layers");
         if (decControl_ != nullptr)
         {
             decControl_->sAtt.reset();
@@ -191,9 +191,9 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         }
         decRoutingPill_ = std::make_unique<DecRoutingPill>(apvts_);
         addAndMakeVisible(*decRoutingPill_);
-        addKnob      (s, pid::clickAmount, "CLICK",  s.labelOnBg);
-        addKnob      (s, pid::noiseAmount, "BODY",   s.labelOnBg);
-        addKnob      (s, pid::noiseColor,  "COLOR",  s.labelOnBg);
+        addKnob      (s, pid::clickAmount, "CLICK",  s.labelOnBg, "Click layer amount - transient stick hit at the start");
+        addKnob      (s, pid::noiseAmount, "BODY",   s.labelOnBg, "Noise layer amount - adds texture and body to the attack");
+        addKnob      (s, pid::noiseColor,  "COLOR",  s.labelOnBg, "Noise color - low = dark thud, high = bright snappy noise");
         addSampleSlot(s,                   "SAMPLE", s.labelOnBg);
         sections_.push_back(std::move(s));
     }
@@ -202,12 +202,12 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.name = "DRIVE"; s.moduleId = "SAT-A"; s.mutePid = pid::driveMute;
         s.accent = col::drive(); s.labelOnBg = col::ink();
         s.reorderable = true; s.fxId = FxId::Drive;
-        addKnob  (s, pid::driveAmount,   "V.AMT",  s.labelOnBg);
-        addChoice(s, pid::driveMode,     "V.MODE", s.labelOnBg);
-        addKnob  (s, pid::driveBias,     "BIAS",   s.labelOnBg);
-        addKnob  (s, pid::fxDriveAmount, "B.AMT",  s.labelOnBg);
-        addChoice(s, pid::fxDriveMode,   "B.MODE", s.labelOnBg);
-        addKnob  (s, pid::fxDriveMix,    "MIX",    s.labelOnBg);
+        addKnob  (s, pid::driveAmount,   "V.AMT",  s.labelOnBg, "Voice drive amount - saturation intensity on the synth voice");
+        addChoice(s, pid::driveMode,     "V.MODE", s.labelOnBg, "Voice shaper mode - Off/Tanh/Diode/Cubic/Fuzz/Fold/Phase/Rect/Crush");
+        addKnob  (s, pid::driveBias,     "BIAS",   s.labelOnBg, "Drive bias - DC offset into shaper, adds asymmetric even harmonics");
+        addKnob  (s, pid::fxDriveAmount, "B.AMT",  s.labelOnBg, "Rumble chain drive amount - saturation on the sub/FX bus");
+        addChoice(s, pid::fxDriveMode,   "B.MODE", s.labelOnBg, "Rumble shaper mode - Off/Tanh/Diode/Cubic/Fuzz/Fold/Phase/Rect/Crush");
+        addKnob  (s, pid::fxDriveMix,    "MIX",    s.labelOnBg, "Rumble drive wet/dry mix");
         sections_.push_back(std::move(s));
     }
     {
@@ -215,12 +215,12 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.name = "DELAY"; s.moduleId = "DLY-1"; s.mutePid = pid::delayMute;
         s.accent = col::delayC(); s.labelOnBg = col::ink();
         s.reorderable = true; s.fxId = FxId::Delay;
-        addKnob(s, pid::delayTime,     "TIME",  s.labelOnBg);
-        addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg);
-        addChoice(s, pid::delayTimeMode, "SYNC", s.labelOnBg);
-        addKnob(s, pid::delayMorph,    "TONE",    s.labelOnBg);
-        addKnob(s, pid::delaySmear,    "SMEAR",   s.labelOnBg);
-        addKnob(s, pid::delayMix,      "MIX",     s.labelOnBg);
+        addKnob(s, pid::delayTime,     "TIME",  s.labelOnBg, "Delay time - in ms (free) or note divisions (tempo-sync)");
+        addKnob(s, pid::delayFeedback, "FBK",   s.labelOnBg, "Feedback - repeat level, turn up for long echoes");
+        addChoice(s, pid::delayTimeMode, "SYNC", s.labelOnBg, "Sync mode - free (ms) or tempo-locked note divisions");
+        addKnob(s, pid::delayMorph,    "TONE",    s.labelOnBg, "Delay tone - filters the feedback path, darkens repeats");
+        addKnob(s, pid::delaySmear,    "SMEAR",   s.labelOnBg, "Smear - diffuses the echo for a washed, chorus-like texture");
+        addKnob(s, pid::delayMix,      "MIX",     s.labelOnBg, "Delay wet/dry mix");
         sections_.push_back(std::move(s));
     }
     {
@@ -228,14 +228,14 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.name = "REVERB"; s.moduleId = "RVB-CONV"; s.mutePid = pid::reverbMute;
         s.accent = col::reverb(); s.labelOnBg = col::ink();
         s.reorderable = true; s.fxId = FxId::Reverb;
-        // TYPE (Choice) replaces the deprecated DIFFUSION knob — the
+        // TYPE (Choice) replaces the deprecated DIFFUSION knob - the
         // convolution engine carries diffusion in the IR itself.
-        addChoice(s, pid::reverbType,    "TYPE",  s.labelOnBg);
-        addKnob  (s, pid::reverbSize,    "SIZE",  s.labelOnBg);
-        addKnob  (s, pid::reverbDecay,   "DECAY", s.labelOnBg);
-        addKnob  (s, pid::reverbDamp,    "DAMP",  s.labelOnBg);
-        addKnob  (s, pid::reverbPredelay,"PRE",   s.labelOnBg);
-        addKnob  (s, pid::reverbMix,     "MIX",   s.labelOnBg);
+        addChoice(s, pid::reverbType,    "TYPE",  s.labelOnBg, "Reverb algorithm - Room / Plate / Hall / Spring / Chamber / Bunker");
+        addKnob  (s, pid::reverbSize,    "SIZE",  s.labelOnBg, "Room size - larger = more spacious, longer early reflections");
+        addKnob  (s, pid::reverbDecay,   "DECAY", s.labelOnBg, "Reverb tail decay time");
+        addKnob  (s, pid::reverbDamp,    "DAMP",  s.labelOnBg, "High-frequency damping - simulates soft room surfaces, darkens tail");
+        addKnob  (s, pid::reverbPredelay,"PRE",   s.labelOnBg, "Pre-delay - gap before reverb onset, adds perceived depth");
+        addKnob  (s, pid::reverbMix,     "MIX",   s.labelOnBg, "Reverb wet/dry mix");
         sections_.push_back(std::move(s));
     }
     {
@@ -243,29 +243,29 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.name = "FILTER"; s.moduleId = "SVF-2P"; s.mutePid = pid::filterMute;
         s.accent = col::filterC(); s.labelOnBg = col::ink();
         s.reorderable = true; s.fxId = FxId::Filter;
-        addKnob(s, pid::filterHp,    "HP",    s.labelOnBg);
-        addKnob(s, pid::filterHpQ,   "HP Q",  s.labelOnBg);
-        addKnob(s, pid::filterLp,    "LP",    s.labelOnBg);
-        addKnob(s, pid::filterLpQ,   "LP Q",  s.labelOnBg);
-        addKnob(s, pid::filterColor, "COLOR", s.labelOnBg);
-        addKnob(s, pid::filterTeeth, "TEETH", s.labelOnBg);
+        addKnob(s, pid::filterHp,    "HP",    s.labelOnBg, "High-pass cutoff - removes low end below this frequency");
+        addKnob(s, pid::filterHpQ,   "HP Q",  s.labelOnBg, "High-pass resonance - adds a peak at the HP cutoff");
+        addKnob(s, pid::filterLp,    "LP",    s.labelOnBg, "Low-pass cutoff - removes high end above this frequency");
+        addKnob(s, pid::filterLpQ,   "LP Q",  s.labelOnBg, "Low-pass resonance - adds a peak at the LP cutoff");
+        addKnob(s, pid::filterColor, "COLOR", s.labelOnBg, "Filter color - tonal character / drive inside the filter");
+        addKnob(s, pid::filterTeeth, "TEETH", s.labelOnBg, "Teeth - resonant bite at both cutoffs simultaneously");
         sections_.push_back(std::move(s));
     }
     {
         Section s;
         s.name = "DUCK"; s.moduleId = "SC-CMP"; s.mutePid = pid::duckMute;
         s.accent = col::duck(); s.labelOnBg = col::ink();
-        addKnob(s, pid::duckAtk,   "ATK",   s.labelOnBg);
-        addKnob(s, pid::duckHold,  "HOLD",  s.labelOnBg);
-        addKnob(s, pid::duckRel,   "REL",   s.labelOnBg);
-        addKnob(s, pid::duckDepth, "DEPTH", s.labelOnBg);
-        addKnob(s, pid::duckShape, "SHAPE", s.labelOnBg);
-        addKnob(s, pid::duckGrowl,   "GROWL",   s.labelOnBg);
+        addKnob(s, pid::duckAtk,   "ATK",   s.labelOnBg, "Duck attack - how fast the sidechain gain reduction engages");
+        addKnob(s, pid::duckHold,  "HOLD",  s.labelOnBg, "Duck hold - how long the gain reduction stays at maximum depth");
+        addKnob(s, pid::duckRel,   "REL",   s.labelOnBg, "Duck release - how fast the gain recovers after the hold phase");
+        addKnob(s, pid::duckDepth, "DEPTH", s.labelOnBg, "Duck depth - maximum gain reduction amount");
+        addKnob(s, pid::duckShape, "SHAPE", s.labelOnBg, "Duck shape - contour of the gain curve (punch vs smooth)");
+        addKnob(s, pid::duckGrowl, "GROWL", s.labelOnBg, "Growl - saturates the sidechain path for a driven duck texture");
         sections_.push_back(std::move(s));
     }
 
     // ── Visual-order permutation ────────────────────────────────────
-    // Default: identity — column N renders sections_[N]. The four FX in
+    // Default: identity - column N renders sections_[N]. The four FX in
     // the middle (indices 2..5) get reshuffled by drag; slots 0, 1, and
     // 6 stay pinned to VOICE A, VOICE B, DUCK forever.
     visualOrder_.resize(sections_.size());
@@ -276,7 +276,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     // Macros live in the saturated nose region (red on classic, bright
     // neon on matrix/cyber/plasma). Either way the nose is HIGH chroma,
     // and cream-coloured `bone` labels turned out hard to read on both
-    // (low contrast on red, text-on-glow on neon — user feedback
+    // (low contrast on red, text-on-glow on neon - user feedback
     // 2026-05-24 image #2 showed barely-visible labels on VAULT). Going
     // dark grey unconditionally gives consistent high-contrast labels
     // regardless of theme.
@@ -295,6 +295,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     macro_[4] = makePlaceholderKnob("MOOD",   macroLbl);
     macro_[5] = makePlaceholderKnob("SPACE",  macroLbl);
     macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::knobCap(), macroLbl);
+    if (macro_[6] && macro_[6]->slider)
+        macro_[6]->slider->setTooltip("Master output level");
     for (auto& m : macro_)
     {
         if (m == nullptr) continue;
@@ -308,6 +310,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     limPill_->setColour(juce::ToggleButton::textColourId, col::bone());
     limPill_->setWantsKeyboardFocus(false);
     limPill_->setMouseClickGrabsKeyboardFocus(false);
+    limPill_->setTooltip("Limiter - brickwall ceiling on the master output");
     limAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts_, pid::limiterOn, *limPill_);
     addAndMakeVisible(*limPill_);
@@ -319,14 +322,16 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     tailPill_->setColour(juce::ToggleButton::textColourId, col::bone());
     tailPill_->setWantsKeyboardFocus(false);
     tailPill_->setMouseClickGrabsKeyboardFocus(false);
+    tailPill_->setTooltip("Tail kill - ON: trims delay/reverb tails between triggers. OFF: tails ring freely");
     tailAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts_, pid::tailKillOn, *tailPill_);
     addAndMakeVisible(*tailPill_);
 
-    // ── Loop toggle — icon-only circular-arrow button ──────────────
+    // ── Loop toggle - icon-only circular-arrow button ──────────────
     loopBtn_ = std::make_unique<LoopButton>();
     loopBtn_->setWantsKeyboardFocus(false);
     loopBtn_->setMouseClickGrabsKeyboardFocus(false);
+    loopBtn_->setTooltip("Loop - continuously retrigger the kick at the current BPM");
     loopAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts_, pid::loopOn, *loopBtn_);
     addAndMakeVisible(*loopBtn_);
@@ -358,7 +363,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     diceButton_->onClick = std::move(randomizeCb);
     addAndMakeVisible(*diceButton_);
 
-    // ── BNC pill — single bounce button with format popup ──────────
+    // ── BNC pill - single bounce button with format popup ──────────
     // Click shows WAV / AIFF choice; ticks the last-used format.
     // Callbacks stored as members so the popup lambda can reach them.
     bounceWavCb_  = std::move(bounceWavCb);
@@ -411,7 +416,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
 
 FaceplatePanel::Control*
 FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
-                        const juce::String& displayName, juce::Colour labelColour)
+                        const juce::String& displayName, juce::Colour labelColour,
+                        const juce::String& tooltip)
 {
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Knob;
@@ -440,6 +446,7 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
         const float plainDefault = range.convertFrom0to1(rp->getDefaultValue());
         c->slider->setDoubleClickReturnValue(true, plainDefault);
     }
+    if (tooltip.isNotEmpty()) c->slider->setTooltip(tooltip);
     addAndMakeVisible(*c->slider);
     addAndMakeVisible(*c->label);
     Control* raw = c.get();
@@ -449,11 +456,12 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
 
 FaceplatePanel::Control*
 FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
-                          const juce::String& displayName, juce::Colour labelColour)
+                          const juce::String& displayName, juce::Colour labelColour,
+                          const juce::String& tooltip)
 {
     // Choice parameters render as discrete-stepped rotary knobs (integer
     // setRange + numChoices/choiceNames hints picked up by BomboLookAndFeel).
-    // The SliderAttachment round-trips fine with AudioParameterChoice — the
+    // The SliderAttachment round-trips fine with AudioParameterChoice - the
     // parameter is already a stepped float internally.
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Knob;
@@ -496,6 +504,7 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
         const float plainDefault = range.convertFrom0to1(rp->getDefaultValue());
         c->slider->setDoubleClickReturnValue(true, plainDefault);
     }
+    if (tooltip.isNotEmpty()) c->slider->setTooltip(tooltip);
     addAndMakeVisible(*c->slider);
     addAndMakeVisible(*c->label);
     Control* raw = c.get();
@@ -520,7 +529,7 @@ FaceplatePanel::addSampleSlot(Section& s, const juce::String& displayName,
     c->sampleSlot->onLoadFactory   = sampleSlotCb_.onLoadFactory;
     c->sampleSlot->getNames        = sampleSlotCb_.getNames;
     c->sampleSlot->getCurrentIndex = sampleSlotCb_.getCurrentIdx;
-    // Initial population — restore any state the processor already holds
+    // Initial population - restore any state the processor already holds
     // (DAW session restore may have populated it before the editor opened).
     c->sampleSlot->refresh();
 
@@ -606,7 +615,7 @@ void FaceplatePanel::paint(juce::Graphics& g)
     chassisRenderer::drawCapAndFins(g, ctx);
     chassisRenderer::drawChassis(g, ctx);
     chassisRenderer::drawRedRegion(g, ctx);
-    // Yellow BOMBO-TEC cartouche band removed 2026-05-17 — the strip is
+    // Yellow BOMBO-TEC cartouche band removed 2026-05-17 - the strip is
     // now the preset bar's home (PresetBarComponent paints itself there).
 
     headerRenderer::draw(g, headerBounds_, chassisPath_);
@@ -614,7 +623,7 @@ void FaceplatePanel::paint(juce::Graphics& g)
 
     // Rack painting is hard-clipped to the chassis silhouette via an
     // alpha-image mask (pre-rasterised in resized()). Path-based clips
-    // were leaking at the curves — VOICE A / DUCK outer corners poked
+    // were leaking at the curves - VOICE A / DUCK outer corners poked
     // through the bone outline. The image-mask form is pixel-perfect.
     // The per-column rounded corners (paintSection's roundLeft/
     // roundRight) shape the visible edge; the mask enforces it.
@@ -640,7 +649,7 @@ void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
 
     // Match the fin/nose red so the scope reads as attached to the
     // rear-cap assembly. U-shape: top + left + right borders ONLY (no
-    // bottom — the bottom opens into the macro row).
+    // bottom - the bottom opens into the macro row).
     constexpr int kBorder = 3;
     g.setColour(col::noseRed());
 
@@ -677,7 +686,7 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
     const bool muted = isMuted(s);
 
     // VAULT direction round 3 (2026-05-17): the FX columns get FULL
-    // accent-colored bodies again — the colors themselves act as the
+    // accent-colored bodies again - the colors themselves act as the
     // separators (no kColGap, no outline). Body olive shows on the LEFT
     // and RIGHT of the entire rack strip; the rack reads as a band of
     // industrial sticker labels glued onto the bomb. Muted columns
@@ -712,7 +721,7 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
     g.setColour(bodyColour);
     g.fillPath(bodyPath);
 
-    // Subtle top gloss for raised-panel feel — kept from the original
+    // Subtle top gloss for raised-panel feel - kept from the original
     // styling, looks good against both the body olive and the accent
     // column color.
     {
@@ -726,8 +735,8 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
     }
 
     // Detect whether THIS section is the one currently being dragged so
-    // we can give it a "lifted" treatment — brighter accent + tinted
-    // title bar — without moving its bounds (live-reflow handles the
+    // we can give it a "lifted" treatment - brighter accent + tinted
+    // title bar - without moving its bounds (live-reflow handles the
     // positional feedback; this provides the visual identity cue).
     const bool isDragLifted = (dragState_ == DragState::Dragging)
         && (dragOriginSection_ >= 0)
@@ -744,7 +753,7 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
                                                    s.rectBounds.getY() + kColAccentH,
                                                    s.rectBounds.getWidth(),
                                                    kColTitleH - kColAccentH);
-        // Accent strip — darker shade of the column accent (was full
+        // Accent strip - darker shade of the column accent (was full
         // brightness; now slightly darker so the tab + body don't merge).
         // Lifted state brightens to full saturation so the moving section
         // reads as the active one even mid-reflow.
@@ -778,7 +787,7 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
 
         // Drag-handle dots on reorderable sections (DRIVE / DELAY / REVERB /
         // FILTER). A 2×3 grid of small bone dots on the LEFT of the title bar
-        // — the universal "grip" affordance. Static, paint-only, so the
+        // - the universal "grip" affordance. Static, paint-only, so the
         // novelty (draggable FX rack) reads in a still-frame screenshot.
         // Day 3 polish 2026-05-24.
         if (s.reorderable && ! muted && ! isDragLifted)
@@ -795,8 +804,8 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
                                   dotR * 2.0f, dotR * 2.0f);
         }
     }
-    // Module-ID strip REMOVED — saves ~12 px vertically per column.
-    // No separator lines between columns either — the accent color IS
+    // Module-ID strip REMOVED - saves ~12 px vertically per column.
+    // No separator lines between columns either - the accent color IS
     // the separator (kColGap = 0 above).
 }
 
@@ -819,7 +828,7 @@ std::vector<LayoutElem> FaceplatePanel::getEditableElements() const
         out.push_back({ "presetBar", presetBarBounds_,    false, "macro_row"   });
     if (balanceFader_ != nullptr)
     {
-        // Hit-box inflated vertically — the 16px tall fader is unreachable
+        // Hit-box inflated vertically - the 16px tall fader is unreachable
         // in edit mode otherwise. First drag persists the inflated rect to
         // Layout.json, so the runtime fader grows to the same easier-to-grab
         // size. Horizontal is left as-is (already 88px between V.A/V.B).
@@ -852,7 +861,7 @@ void FaceplatePanel::resized()
     // Build the chassis path via the parametric Mini-Nuke silhouette
     // generator (locked R4B-CLASSIC 2026-05-17). The path is a single
     // continuous egg-shape from rear-cap area down through the bulge to
-    // the rounded nose tip — no seam between body and "nose"; the red
+    // the rounded nose tip - no seam between body and "nose"; the red
     // region (drawn in paintRedRegion) is a clipped paint inside the
     // same silhouette. Body, cap, and fin paths are owned by FaceplatePanel
     // as members so paint() can reference them per-stage.
@@ -862,8 +871,8 @@ void FaceplatePanel::resized()
     chassisPath_   = bombo::BombShape::buildBombPath(boundsF);
 
     // Rasterise the chassis silhouette once into an alpha image. paint()
-    // uses this as the rack clip — pixel-accurate, no curve seams.
-    // SingleChannel (not ARGB) so reduceClipRegion works on X11 — ARGB
+    // uses this as the rack clip - pixel-accurate, no curve seams.
+    // SingleChannel (not ARGB) so reduceClipRegion works on X11 - ARGB
     // image masks silently no-op on transparent windows under X11/XCB.
     chassisMask_ = juce::Image(juce::Image::SingleChannel, juce::jmax(1, w), juce::jmax(1, h), true);
     {
@@ -878,7 +887,7 @@ void FaceplatePanel::resized()
     bandRect_      = bombo::BombShape::bandRect(boundsF);
     redRegionTopY_ = bombo::BombShape::redRegionTopYInBounds(boundsF);
 
-    // Band bounds — layout-override hook so the user can drag the
+    // Band bounds - layout-override hook so the user can drag the
     // yellow cartouche around in edit mode.
     {
         const auto bandDefault = bandRect_.toNearestInt();
@@ -887,12 +896,12 @@ void FaceplatePanel::resized()
         bandBoundsTracked_     = bandFinal;
     }
 
-    // ── Inscribed UI region — the band-bottom to red-region-top zone of
+    // ── Inscribed UI region - the band-bottom to red-region-top zone of
     //    the body interior. chassisRectArea_ used to be "rect above V-tail";
     //    now it's "the body interior the rack lives in." kRackBotGap of
     //    headroom above the red region so the bottom row doesn't kiss the
     //    nose split line. Width = body bulge width (the widest usable
-    //    horizontal strip — narrows the rack OUTER bounds slightly so the
+    //    horizontal strip - narrows the rack OUTER bounds slightly so the
     //    rack columns sit inside the silhouette rather than overflowing it.
     const int chassisL = kChassisMarginX;
     const int chassisR = w - kChassisMarginX;
@@ -935,7 +944,7 @@ void FaceplatePanel::resized()
     // Preset bar = the cartouche footprint, full stop. No extending
     // past the band edges into chassis-graphite territory (looked like
     // a grey overlap on top of the bomb). Buttons must fit INSIDE the
-    // band rect — see PresetBarComponent::resized for the slim sizing.
+    // band rect - see PresetBarComponent::resized for the slim sizing.
     int macroTop = static_cast<int>(bandRect_.getBottom()) + 8;
     if (presetBar_ != nullptr)
     {
@@ -946,7 +955,7 @@ void FaceplatePanel::resized()
     }
     // Macros now live in the bomb's nose (red region) rather than in a
     // horizontal strip above the rack. The nose interior runs from the
-    // red-region top down to the chassis tip — NOT down to panel height
+    // red-region top down to the chassis tip - NOT down to panel height
     // (which would include space below the rounded silhouette tip and
     // let the cluster's bottom satellite spill outside the bomb).
     const bombo::BombShape::Params bsParams{};
@@ -967,7 +976,7 @@ void FaceplatePanel::resized()
     // ── Rack columns ────────────────────────────────────────────────
     // Explicit column width (locked 2026-05-17 per user feedback): each
     // section is ~44 px wide so the rack reads as a compact strip with
-    // body olive showing through on the sides — NOT a wall-to-wall rack
+    // body olive showing through on the sides - NOT a wall-to-wall rack
     // chewing the full chassis width. The total rack is centered
     // horizontally inside the chassis interior.
     constexpr int kColW      = 54;
@@ -985,7 +994,7 @@ void FaceplatePanel::resized()
     // Uniform section height (reverted 2026-05-17 per user feedback after
     // b506649): all columns share the height of the tallest one for
     // visual balance. Shorter columns (DUCK = 4 knobs, V.A / DRV / DLY /
-    // FLT = 5) leave empty olive-tinted slots below their last knob —
+    // FLT = 5) leave empty olive-tinted slots below their last knob -
     // intentional placeholders for whichever extra knobs land per-column
     // to round everything out to 6 controls.
     constexpr int kRectBotPad = 4;
@@ -1002,7 +1011,7 @@ void FaceplatePanel::resized()
         if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
         auto& s = sections_[(std::size_t) sIdx];
         const int x = leftMargin + col * (colW + kColGap);
-        // Default section bounds — overridable via LayoutManager. The
+        // Default section bounds - overridable via LayoutManager. The
         // layout-editor key stays tied to the section *identity*
         // (s.name), not the column position, so a section dragged
         // visually keeps any bespoke layout overrides that were saved
@@ -1012,7 +1021,7 @@ void FaceplatePanel::resized()
             + s.name.replaceCharacter(' ', '_').toLowerCase();
         const auto layoutOverride = layout_.boundsOr(secId, defaultBounds);
         // If the user dragged this section to a new column, its saved
-        // override (if any) holds the OLD x — we want the column position
+        // override (if any) holds the OLD x - we want the column position
         // to track visualOrder_, so always force x + width from the
         // default while preserving any user-edited y/h.
         s.rectBounds = juce::Rectangle<int>(x, layoutOverride.getY(),
@@ -1030,7 +1039,7 @@ void FaceplatePanel::resized()
         layoutSection(s);
     }
 
-    // Balance fader — default position is in the kRackTopGap above
+    // Balance fader - default position is in the kRackTopGap above
     // VOICE A + VOICE B title strips, but layout_.boundsOr lets the user
     // drag it anywhere in edit mode. Bug fix 2026-05-17: previously the
     // bounds were hard-applied, so drag-edits never moved the actual knob.
@@ -1043,7 +1052,7 @@ void FaceplatePanel::resized()
         balanceFader_->setBounds(layout_.boundsOr("balanceFader", balDefault));
     }
 
-    // Voice B synth-toggle pill — sits in the same horizontal strip as
+    // Voice B synth-toggle pill - sits in the same horizontal strip as
     // the A/B balance fader, pinned to the right edge of the VOICE B
     // section (sections_[1]). User wanted it visually adjacent to the
     // A/B mix control rather than buried in the section title bar
@@ -1052,7 +1061,7 @@ void FaceplatePanel::resized()
     if (voiceBSynthPill_ && ! sections_.empty())
     {
         constexpr int kSynthPillW = 26;
-        // Match the fader strip height — visually subordinate but in line.
+        // Match the fader strip height - visually subordinate but in line.
         const int pillH = kBalFaderH;
         bool placed = false;
         for (const auto& s : sections_)
@@ -1071,10 +1080,10 @@ void FaceplatePanel::resized()
         if (! placed) voiceBSynthPill_->setVisible(false);
     }
 
-    // DEC routing pill — small 1-char A/B/+ cycle button. Pinned to the
+    // DEC routing pill - small 1-char A/B/+ cycle button. Pinned to the
     // top-right corner of the DEC knob's slider so it reads as a
     // "modifier" attached to that knob, not as a section-level control.
-    // Sized small (12x12) — purely a status/cycle affordance, not a
+    // Sized small (12x12) - purely a status/cycle affordance, not a
     // primary input.
     if (decRoutingPill_ && decControl_ && decControl_->slider)
     {
@@ -1097,13 +1106,13 @@ void FaceplatePanel::layoutSection(Section& s)
 {
     if (s.rectBounds.isEmpty() || s.controls.empty()) return;
 
-    // Module-ID strip removed — no bottom trim needed. Each section's
+    // Module-ID strip removed - no bottom trim needed. Each section's
     // rect height is now sized exactly to its controls (see resized).
     auto inner = s.rectBounds.reduced(kInnerPadX, 0)
                               .withTrimmedTop(kColTitleH);
     if (inner.isEmpty()) return;
 
-    // Uniform row height across all sections — every knob the same size.
+    // Uniform row height across all sections - every knob the same size.
     const int rowH = kRowH;
 
     // Per-row layout: SQUARE knob (knobW × knobW) with the label flush
@@ -1151,12 +1160,12 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
     // in editor coords (bottom-right corner, beneath the chassis tip) and
     // never collides with on-chassis components like the preset bar.
 
-    // Left  fin row1: BNC (pill) | DICE (square icon)   — one row only
+    // Left  fin row1: BNC (pill) | DICE (square icon)   - one row only
     // Right fin row1: LIM (pill) | TAIL (pill)
     //         row2:  LOOP (square icon) | BPM display
     //
     // kPillW = 62 px (fits "BNC" and "LIM"/"TAIL" with comfortable margins).
-    // kSq    = 22 px — square side used for DICE and LOOP icons.
+    // kSq    = 22 px - square side used for DICE and LOOP icons.
     constexpr int kPillW = 62;
     constexpr int kPillH = 22;
     constexpr int kSq    = 22;   // square icon size
@@ -1177,7 +1186,7 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
         int lx = leftFinCx - totalW / 2;
         if (bncPill_)    bncPill_   ->setBounds(lx,           row1Y, kPillW, kPillH);
         lx += kPillW + kGap;
-        // DICE is square — centre it vertically in the pill height
+        // DICE is square - centre it vertically in the pill height
         const int diceY = row1Y + (kPillH - kSq) / 2;
         if (diceButton_) diceButton_->setBounds(lx,           diceY, kSq,    kSq);
     }
@@ -1237,7 +1246,7 @@ void FaceplatePanel::toggleMute(const Section& s)
 }
 
 // ────────────────────────────────────────────────────────────────────
-//  FX chain order — UI ↔ DSP bridge
+//  FX chain order - UI ↔ DSP bridge
 // ────────────────────────────────────────────────────────────────────
 
 FxOrder FaceplatePanel::currentFxOrder() const noexcept
@@ -1292,7 +1301,7 @@ void FaceplatePanel::applyFxOrder(FxOrder o)
 }
 
 // ────────────────────────────────────────────────────────────────────
-//  Mouse events — section title click toggles mute OR begins reorder drag
+//  Mouse events - section title click toggles mute OR begins reorder drag
 // ────────────────────────────────────────────────────────────────────
 
 namespace
@@ -1314,7 +1323,7 @@ int FaceplatePanel::hitTestReorderableTitle(juce::Point<int> pt) const noexcept
 
 int FaceplatePanel::insertionColumnForX(int mouseX) const noexcept
 {
-    // Determine the range of reorderable column slots — first and last
+    // Determine the range of reorderable column slots - first and last
     // slots whose currently-occupying section is reorderable.
     int firstReorderableCol = -1, lastReorderableCol = -1;
     for (int col = 0; col < static_cast<int>(visualOrder_.size()); ++col)
@@ -1328,7 +1337,7 @@ int FaceplatePanel::insertionColumnForX(int mouseX) const noexcept
     if (firstReorderableCol < 0) return -1;
 
     // Find the column whose center is closest to mouseX. Midpoint rule
-    // for crisp snap behavior — once the cursor crosses a neighbor's
+    // for crisp snap behavior - once the cursor crosses a neighbor's
     // midpoint the swap commits.
     int bestCol = firstReorderableCol;
     int bestDist = std::numeric_limits<int>::max();
@@ -1350,7 +1359,7 @@ void FaceplatePanel::swapReorderableColumns(int fromCol, int toCol)
     if (fromCol >= static_cast<int>(visualOrder_.size())) return;
     if (toCol   >= static_cast<int>(visualOrder_.size())) return;
 
-    // Validate both endpoints are reorderable slots — the constraint comes
+    // Validate both endpoints are reorderable slots - the constraint comes
     // from insertionColumnForX, but belt-and-suspenders is cheap.
     auto isReorderableCol = [&](int col) noexcept {
         const int sIdx = visualOrder_[(std::size_t) col];
@@ -1360,7 +1369,7 @@ void FaceplatePanel::swapReorderableColumns(int fromCol, int toCol)
     };
     if (! isReorderableCol(fromCol) || ! isReorderableCol(toCol)) return;
 
-    // Shift slice — pull the dragged section into toCol, sliding the
+    // Shift slice - pull the dragged section into toCol, sliding the
     // intervening reorderable sections by one position the other way.
     // This produces the iOS "rest of the list slides under your finger"
     // behavior rather than a hard 2-element swap.
@@ -1394,7 +1403,7 @@ void FaceplatePanel::mouseDown(const juce::MouseEvent& e)
 {
     const auto pt = e.getPosition();
 
-    // Reorderable header — arm both intents (mute on tap, drag on move).
+    // Reorderable header - arm both intents (mute on tap, drag on move).
     const int hitReorderable = hitTestReorderableTitle(pt);
     if (hitReorderable >= 0)
     {
@@ -1411,7 +1420,7 @@ void FaceplatePanel::mouseDown(const juce::MouseEvent& e)
         return;
     }
 
-    // Fixed (non-reorderable) header — single-purpose mute toggle.
+    // Fixed (non-reorderable) header - single-purpose mute toggle.
     for (const auto& s : sections_)
     {
         if (s.reorderable) continue;
@@ -1438,7 +1447,7 @@ void FaceplatePanel::mouseDrag(const juce::MouseEvent& e)
         const int dy = std::abs(pt.getY() - dragStartPos_.getY());
         if (std::max(dx, dy) < kDragThresholdPx) return;
 
-        // Crossing the threshold commits to drag — cancel the mute intent.
+        // Crossing the threshold commits to drag - cancel the mute intent.
         dragState_ = DragState::Dragging;
         pushOrderUndoSnapshot();
         setMouseCursor(juce::MouseCursor::DraggingHandCursor);
@@ -1464,7 +1473,7 @@ void FaceplatePanel::mouseUp(const juce::MouseEvent& e)
 
     if (state == DragState::Armed)
     {
-        // Tap without drag — fire mute on the originally-pressed section.
+        // Tap without drag - fire mute on the originally-pressed section.
         if (dragOriginSection_ >= 0
             && dragOriginSection_ < static_cast<int>(sections_.size()))
             toggleMute(sections_[(std::size_t) dragOriginSection_]);
@@ -1482,7 +1491,7 @@ void FaceplatePanel::mouseUp(const juce::MouseEvent& e)
 
 bool FaceplatePanel::keyPressed(const juce::KeyPress& key)
 {
-    // Cmd/Ctrl+Z — pop the last fx-order snapshot.
+    // Cmd/Ctrl+Z - pop the last fx-order snapshot.
     const bool isUndo =
         (key.getKeyCode() == 'Z' || key.getKeyCode() == 'z')
         && (key.getModifiers().isCommandDown() || key.getModifiers().isCtrlDown())
@@ -1501,7 +1510,7 @@ bool FaceplatePanel::keyPressed(const juce::KeyPress& key)
 void FaceplatePanel::mouseMove(const juce::MouseEvent& e)
 {
     const auto pt = e.getPosition();
-    // Reorderable headers get the grab cursor as a discoverability hint —
+    // Reorderable headers get the grab cursor as a discoverability hint -
     // the affordance is the cursor, not chrome on the header.
     for (const auto& s : sections_)
     {
@@ -1529,7 +1538,7 @@ void FaceplatePanel::mouseMove(const juce::MouseEvent& e)
 void FaceplatePanel::wireMacroFanOut()
 {
     // Each macro is a 0..1 slider that fans out to a small set of params.
-    // The mappings below were picked by ear for a kick — at v=0.5 the
+    // The mappings below were picked by ear for a kick - at v=0.5 the
     // sound sits close to a default-ish kick; the macro then sweeps the
     // target params through musically useful ranges.
     //
@@ -1544,28 +1553,28 @@ void FaceplatePanel::wireMacroFanOut()
         s->onValueChange = [s, fn = std::move(fn)] { fn(static_cast<float>(s->getValue())); };
     };
 
-    // PITCH — sweeps the pitch envelope start/end frequencies.
+    // PITCH - sweeps the pitch envelope start/end frequencies.
     wire(macro_[0]->slider.get(), [this](float v)
     {
         writeParam(pid::pitchStart, juce::jmap(v, 60.0f, 280.0f));
         writeParam(pid::pitchEnd,   juce::jmap(v, 25.0f,  90.0f));
     });
 
-    // DECAY — overall length: amp decay (primary) + pitch envelope decay.
+    // DECAY - overall length: amp decay (primary) + pitch envelope decay.
     wire(macro_[1]->slider.get(), [this](float v)
     {
         writeParam(pid::ampDecay,   juce::jmap(v, 120.0f, 1500.0f));
         writeParam(pid::pitchDecay, juce::jmap(v,  30.0f,  400.0f));
     });
 
-    // PUNCH — click amount up, amp attack down (snappier).
+    // PUNCH - click amount up, amp attack down (snappier).
     wire(macro_[2]->slider.get(), [this](float v)
     {
         writeParam(pid::clickAmount, juce::jmap(v, 0.0f,  0.85f));
         writeParam(pid::ampAttack,   juce::jmap(v, 5.0f,  0.2f));   // inverse
     });
 
-    // WEIGHT — body up, LP opens up, HP shelves down.
+    // WEIGHT - body up, LP opens up, HP shelves down.
     wire(macro_[3]->slider.get(), [this](float v)
     {
         writeParam(pid::noiseAmount, juce::jmap(v,  0.05f, 0.6f));
@@ -1573,21 +1582,21 @@ void FaceplatePanel::wireMacroFanOut()
         writeParam(pid::filterHp,    juce::jmap(v,  120.0f,  25.0f)); // inverse
     });
 
-    // MOOD — drives both voice clip and rumble-bus saturator together.
+    // MOOD - drives both voice clip and rumble-bus saturator together.
     wire(macro_[4]->slider.get(), [this](float v)
     {
         writeParam(pid::driveAmount,   juce::jmap(v, 0.0f, 0.80f));
         writeParam(pid::fxDriveAmount, juce::jmap(v, 0.0f, 0.60f));
     });
 
-    // SPACE — reverb + delay send levels together.
+    // SPACE - reverb + delay send levels together.
     wire(macro_[5]->slider.get(), [this](float v)
     {
         writeParam(pid::reverbMix, juce::jmap(v, 0.0f, 0.65f));
         writeParam(pid::delayMix,  juce::jmap(v, 0.0f, 0.45f));
     });
 
-    // macro_[6] (OUT) is APVTS-bound directly — no fan-out needed.
+    // macro_[6] (OUT) is APVTS-bound directly - no fan-out needed.
 }
 
 void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
@@ -1606,7 +1615,7 @@ void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
 
     // Sizes tuned to fit inside the actual bomb silhouette (not just the
     // rectangular nose bounding box). The teardrop tapers steeply below
-    // the body-bottom line, so the cluster has to be modest — but big
+    // the body-bottom line, so the cluster has to be modest - but big
     // enough to read at a glance. Tuned iteratively against screenshots.
     constexpr int kSatSize   = 38;     // satellite knob diameter
     constexpr int kHeroSize  = 66;     // OUT hero diameter
@@ -1621,7 +1630,7 @@ void FaceplatePanel::layoutMacrosInNose(juce::Rectangle<int> noseInterior)
     // rather than a scatter.
     const int radius = (kHeroSize / 2) + kRingGap + (kSatSize / 2);
 
-    // Cluster footprint — used for centering in the nose and for the
+    // Cluster footprint - used for centering in the nose and for the
     // F2-editor hit-box. Width: 2*radius + satellite diameter.
     // Height: same vertically, plus the bottom-satellite's label strip.
     const int clusterW = 2 * radius + kSatSize;

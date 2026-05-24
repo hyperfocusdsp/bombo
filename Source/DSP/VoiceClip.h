@@ -7,20 +7,20 @@ namespace bombo
 
 // Per-voice soft-clip stage. Sits between layer mix (SUB+MID+click+noise)
 // and the final amp-env multiplication so the shaper sees raw oscillator
-// sum at full level — adds harmonics that survive into the tail.
+// sum at full level - adds harmonics that survive into the tail.
 //
 // Distinct-by-construction palette (no two modes are the same family):
-//   0 OFF   — pass-through, zero cost
-//   1 TANH  — symmetric, odd harmonics
-//   2 DIODE — asymmetric (pos compresses faster than neg) — even-rich,
+//   0 OFF   - pass-through, zero cost
+//   1 TANH  - symmetric, odd harmonics
+//   2 DIODE - asymmetric (pos compresses faster than neg) - even-rich,
 //             2nd-harmonic dominant; matches TR-909 signature
-//   3 CUBIC — x - x³/3 fast soft-clip, 3rd harmonic only
-//   4 FUZZ  — hard clip: all harmonics equally, brutal transient crush
-//   5 FOLD  — bipolar wave folder: metallic/industrial, Buchla-style
-//   6 PHASE — power-law bend: compresses near zero-crossing, CZ-like resonant character
-//   7 RECT  — full-wave rectify: octave doubler (DC filtered downstream by HPF)
-//   8 CRUSH — bit-depth reduction: quantisation grit, lo-fi staircase
-// All return identity at drive=0 — every preset's harmonics survive a
+//   3 CUBIC - x - x³/3 fast soft-clip, 3rd harmonic only
+//   4 FUZZ  - hard clip: all harmonics equally, brutal transient crush
+//   5 FOLD  - bipolar wave folder: metallic/industrial, Buchla-style
+//   6 PHASE - power-law bend: compresses near zero-crossing, CZ-like resonant character
+//   7 RECT  - full-wave rectify: octave doubler (DC filtered downstream by HPF)
+//   8 CRUSH - bit-depth reduction: quantisation grit, lo-fi staircase
+// All return identity at drive=0 - every preset's harmonics survive a
 // drive automation pass through zero.
 constexpr int VC_OFF   = 0;
 constexpr int VC_TANH  = 1;
@@ -32,7 +32,7 @@ constexpr int VC_PHASE = 6;
 constexpr int VC_RECT  = 7;
 constexpr int VC_CRUSH = 8;
 
-// Bipolar triangle wave folder — reflects x back at ±1 boundaries.
+// Bipolar triangle wave folder - reflects x back at ±1 boundaries.
 static inline float wfold(float x) noexcept
 {
     x = std::fmod(x + 1.0f, 4.0f);
@@ -88,7 +88,7 @@ inline float voiceClipApply(int mode, float drive, float x) noexcept
         }
         case VC_RECT:
         {
-            // Full-wave rectify — creates DC + strong 2nd harmonic (octave doubler).
+            // Full-wave rectify - creates DC + strong 2nd harmonic (octave doubler).
             // HPF downstream removes DC; use at low mix to layer an octave-up texture.
             const float g = 1.0f + drive * 8.0f;
             const float xg = x * g;
