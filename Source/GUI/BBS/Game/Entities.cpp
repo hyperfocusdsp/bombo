@@ -41,7 +41,11 @@ namespace
     }
     void tickAliaser(Enemy& e) noexcept
     {
-        e.x += -90.0f * kTickDt;
+        // Use stored velocity so wave formations control speed; fall back to a
+        // brisk left drift if spawned with no vx (keeps mini-split svx coupling honest).
+        if (e.vx == 0.0f) e.vx = -90.0f;
+        e.x += e.vx * kTickDt;
+        e.y += e.vy * kTickDt;
     }
 
     void tickAliaserMini(Enemy& e) noexcept
