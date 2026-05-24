@@ -174,25 +174,25 @@ public:
 
     void runTest() override
     {
-        beginTest("after loadBundledThemes, all four names present");
+        beginTest("after loadBundledThemes, all bundled names present");
         bombo::ThemeProvider::get().loadBundledThemes();
         const auto& names = bombo::ThemeProvider::get().registeredNames();
+        auto registered = [&] (const char* n) {
+            return std::find(names.begin(), names.end(), std::string(n)) != names.end();
+        };
 
-        const bool hasBandw    = std::find(names.begin(), names.end(), std::string("bandw"))    != names.end();
-        const bool hasPhosphor = std::find(names.begin(), names.end(), std::string("phosphor")) != names.end();
-        const bool hasNightrun = std::find(names.begin(), names.end(), std::string("nightrun")) != names.end();
-        const bool hasVault    = std::find(names.begin(), names.end(), std::string("vault"))    != names.end();
+        expect(registered("bandw"),    "bandw registered");
+        expect(registered("nightrun"), "nightrun registered");
+        expect(registered("vault"),    "vault registered");
+        expect(registered("matrix"),   "matrix registered");
+        expect(registered("cyber"),    "cyber registered");
+        expect(registered("plasma"),   "plasma registered");
 
-        expect(hasBandw,    "bandw registered");
-        expect(hasPhosphor, "phosphor registered");
-        expect(hasNightrun, "nightrun registered");
-        expect(hasVault,    "vault registered");
-
-        beginTest("switching to phosphor changes accentAmber");
-        bombo::ThemeProvider::get().setActive("phosphor");
+        beginTest("switching to matrix changes accentAmber");
+        bombo::ThemeProvider::get().setActive("matrix");
         bombo::ThemeProvider::get().dispatchPendingMessages();
-        expect(bombo::ThemeProvider::current().accentAmber == juce::Colour { 0xFFCC8A00u },
-               "phosphor accent matches JSON");
+        expect(bombo::ThemeProvider::current().accentAmber == juce::Colour { 0xFF00FF41u },
+               "matrix accent matches JSON");
 
         beginTest("vault palette carries the Mini-Nuke chassis fields");
         bombo::ThemeProvider::get().setActive("vault");

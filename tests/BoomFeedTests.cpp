@@ -87,22 +87,21 @@ public:
     BoomFeedWaveformTest() : juce::UnitTest("BoomFeed: waveform is 18 chars") {}
     void runTest() override
     {
-        beginTest("waveform ASCII string has correct character count after advance");
+        beginTest("waveform string has 18 glyphs after advance");
         bombo::BoomFeed feed;
         feed.advance(bombo::BoomFeed::Mode::Random);
         const juce::String wf = feed.currentWaveformAscii();
-        // Waveform is single-byte ASCII (post-mojibake-fix 2026-05-19);
-        // glyph count == byte count == String length.
         expect(wf.length() == 18,
                "waveform must have 18 glyphs, got " + juce::String(wf.length())
                + " raw: " + wf);
 
         beginTest("waveform first glyph is loudest gradient char (loud attack)");
         // env = 1.0 at i = 0 picks the last entry in the gradient array,
-        // currently 'H' (top-of-gradient ASCII). See BoomFeed.cpp blockChars[].
-        expect(wf[0] == 'H',
-               "first glyph must be 'H' (loudest gradient), got '"
-               + juce::String::charToString(wf[0]) + "'");
+        // currently U+2588 (full block). See BoomFeed.cpp kBlocks[].
+        constexpr juce::juce_wchar kFullBlock = 0x2588;
+        expect(wf[0] == kFullBlock,
+               "first glyph must be U+2588 full block, got codepoint "
+               + juce::String((int) wf[0]));
     }
 };
 
