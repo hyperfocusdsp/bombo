@@ -117,6 +117,10 @@ public:
             // GameOver OR Initials (empty score table qualifies) — both are post-victory.
             expect(g.state() == GameState::GameOver || g.state() == GameState::Initials);
             expectEquals(g.score(), scoreBefore + 5000 + lives * 200);
+            // Ticking further must not re-add the victory bonus (added exactly once).
+            const int scoreAfterWin = g.score();
+            for (int i = 0; i < 10; ++i) g.tick();
+            expectEquals(g.score(), scoreAfterWin);
         }
 
         beginTest("lives hitting 0 -> GameOver; if score qualifies -> Initials");

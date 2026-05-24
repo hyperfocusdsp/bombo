@@ -190,6 +190,10 @@ namespace bombo::game
 
     void Game::onGameOver(bool victory)
     {
+        // Tripwire: never re-enter the game-over flow once it's begun.
+        if (state_ == GameState::GameOver || state_ == GameState::Initials || state_ == GameState::Results)
+            return;
+
         victory_ = victory;
         highScores_.load();   // refresh from disk before checking qualification
         if (highScores_.qualifiesForTopTen(score_))
