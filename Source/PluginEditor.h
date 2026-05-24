@@ -8,6 +8,7 @@
 #include "GUI/LayoutEditOverlay.h"
 #include "GUI/BBS/BBSComponent.h"
 #include "GUI/Theme/ThemeProvider.h"
+#include "GUI/ThemeTileStrip.h"
 #include "State/PersistentState.h"
 #include "Bounce/OfflineBouncer.h"
 
@@ -40,9 +41,11 @@ private:
     // setSize fired from the ctor can't clobber the persisted value.
     bool initialSizeApplied_ = false;
 
-    // Temporary theme-switching UI (Plan A T7). Replaced by HeaderBar
-    // selector in Plan B.
-    juce::ComboBox themeSelector_;
+    // In-skin theme selector — replaces the temporary juce::ComboBox from
+    // Plan A T7. Sits in the header band, right of the BOMBO logo. Owns its
+    // own ThemeProvider listener; clicks route through the onChosen lambda
+    // wired in the editor ctor so persistence stays here.
+    std::unique_ptr<bombo::ThemeTileStrip> themeStrip_;
 
     // BBS hidden terminal overlay. Sibling of `faceplate`, sized to the
     // full editor bounds, invisible by default. Dev affordances:

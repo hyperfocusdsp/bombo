@@ -66,18 +66,23 @@ public:
 
     void drawButtonBackground(juce::Graphics& g, juce::Button& btn,
                               const juce::Colour& /*backgroundColour*/,
-                              bool /*shouldDrawButtonAsHighlighted*/,
+                              bool shouldDrawButtonAsHighlighted,
                               bool shouldDrawButtonAsDown) override
     {
         const auto r = btn.getLocalBounds().toFloat();
-        const bool on = shouldDrawButtonAsDown || btn.getToggleState();
+        const bool on    = shouldDrawButtonAsDown || btn.getToggleState();
+        const bool hover = shouldDrawButtonAsHighlighted;
         // Off: dark graphite fill so bone text is legible on the orange fin.
         // On:  amber fill; text switches to ink (dark) for contrast.
-        g.setColour(on ? col::accentAmber().withAlpha(0.40f)
+        // Hover brightens both fill and border so the affordance reads before
+        // the user commits the click (Day 5 polish).
+        const float hoverFill   = hover ? 0.10f : 0.0f;
+        const float hoverBorder = hover ? 0.20f : 0.0f;
+        g.setColour(on ? col::accentAmber().withAlpha(0.40f + hoverFill)
                        : col::graphite().withAlpha(0.88f));
         g.fillRoundedRectangle(r, kPillCorner);
         g.setColour(on ? col::accentAmber()
-                       : col::boneDim().withAlpha(0.45f));
+                       : col::boneDim().withAlpha(0.45f + hoverBorder));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
     }
 
@@ -94,18 +99,22 @@ public:
     }
 
     void drawToggleButton(juce::Graphics& g, juce::ToggleButton& btn,
-                          bool /*shouldDrawButtonAsHighlighted*/,
+                          bool shouldDrawButtonAsHighlighted,
                           bool /*shouldDrawButtonAsDown*/) override
     {
         const auto r = btn.getLocalBounds().toFloat();
-        const bool on = btn.getToggleState();
-        g.setColour(on ? col::accentAmber().withAlpha(0.40f)
+        const bool on    = btn.getToggleState();
+        const bool hover = shouldDrawButtonAsHighlighted;
+        const float hoverFill   = hover ? 0.10f : 0.0f;
+        const float hoverBorder = hover ? 0.20f : 0.0f;
+        g.setColour(on ? col::accentAmber().withAlpha(0.40f + hoverFill)
                        : col::graphite().withAlpha(0.88f));
         g.fillRoundedRectangle(r, kPillCorner);
         // Toggle buttons always have an amber border (dim when OFF, full when ON)
         // so they're visually distinct from action TextButtons (bone border).
+        // Hover brightens the border so users feel the affordance before clicking.
         g.setColour(on ? col::accentAmber()
-                       : col::accentAmber().withAlpha(0.50f));
+                       : col::accentAmber().withAlpha(0.50f + hoverBorder));
         g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
         g.setColour(on ? col::ink() : col::bone());
         g.setFont(fonts::value(16.0f));
@@ -157,9 +166,16 @@ public:
                       (coreOuterR + 1.5f) * 2.0f, (coreOuterR + 1.5f) * 2.0f);
 
         // 4. Cap core. Subtle top-down gradient sells the moulded-plastic feel.
+        // Hover state (Day 3 polish ported from SquelchPro): brighten the cap
+        // gradient when the mouse is over the slider so the user gets
+        // immediate tactile feedback before they click. drawRotarySlider is
+        // a paint hook — slider.isMouseOverOrDragging() is the JUCE-idiomatic
+        // hover-or-active probe.
+        const bool isHover = slider.isMouseOverOrDragging();
+        const float hoverBoost = isHover ? 0.08f : 0.0f;
         const float coreR = coreOuterR - 1.0f;
-        const auto coreTop = core.brighter(0.10f);
-        const auto coreBot = core.darker (0.18f);
+        const auto coreTop = core.brighter(0.10f + hoverBoost);
+        const auto coreBot = core.darker (0.18f - hoverBoost * 0.5f);
         g.setGradientFill(juce::ColourGradient(coreTop, cx, cy - coreR,
                                                coreBot, cx, cy + coreR, false));
         g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
@@ -265,13 +281,24 @@ public:
         // 2026-05-17: "make them legible and not clashing ffs". So we
         // now always render the FULL value string single-line. Choice
         // knobs render their string label as-is.
-        const float valueFontSize = juce::jlimit(9.0f, 14.0f, capInner * 0.55f);
-        g.setColour(valueColour.withAlpha(0.95f));
+        //
+        // Day 2 polish (KVRDC 2026 screenshot legibility): bumped the size
+        // ratio + min so the readout stays legible at gallery-thumbnail
+        // resolution, and added a subtle inset drop-shadow so the text
+        // separates from any cap colour (mid-tone caps like duck/drive
+        // lost the bone/ink contrast at small sizes).
+        const float valueFontSize = juce::jlimit(10.0f, 16.0f, capInner * 0.60f);
         g.setFont(fonts::value(valueFontSize).boldened());
-        g.drawText(text,
-                   juce::Rectangle<float>(cx - capInner, cy - capInner,
-                                          capInner * 2.0f, capInner * 2.0f),
+        const auto textRect = juce::Rectangle<float>(cx - capInner, cy - capInner,
+                                                     capInner * 2.0f, capInner * 2.0f);
+        // Drop shadow — black at low alpha, offset 1px down. Adds definition
+        // without darkening the cap centre when the readout is short.
+        g.setColour(juce::Colour::fromRGBA(0, 0, 0, 90));
+        g.drawText(text, textRect.translated(0.0f, 1.0f),
                    juce::Justification::centred);
+        // Primary readout.
+        g.setColour(valueColour.withAlpha(0.97f));
+        g.drawText(text, textRect, juce::Justification::centred);
     }
 
     void drawLabel(juce::Graphics& g, juce::Label& label) override

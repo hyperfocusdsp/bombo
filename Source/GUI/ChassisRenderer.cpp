@@ -2,12 +2,38 @@
 
 #include "Colours.h"
 
+#include <BinaryData.h>
+
+#include <juce_graphics/juce_graphics.h>
+
 namespace bombo::chassisRenderer
 {
 
+namespace
+{
+    // Baked surface texture (scratches + suspension band + edge AO + grain + spec).
+    // Loaded once via ImageCache; redraws after the body gradient and clipped to
+    // chassisPath so it never bleeds outside the silhouette. Master alpha comes
+    // from the active palette (col::chassisOverlayOpacity) so dark themes can
+    // dial it back to ~0.20 while VAULT/BANDW carry it at ~0.55.
+    juce::Image loadOverlayImage()
+    {
+        return juce::ImageCache::getFromMemory(BinaryData::chassis_overlay_png,
+                                               BinaryData::chassis_overlay_pngSize);
+    }
+}
+
 void drawBackground(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::transparentBlack);
+    // Normal use: keep the corners transparent so the bomb silhouette reads
+    // as a shaped window against any DAW background. Marketing-screenshot
+    // mode (BOMBO_SOLID_BG=1) fills with a brand-dark backdrop so grim
+    // captures clean corners instead of bleeding through to the host
+    // workspace behind the standalone window.
+    if (std::getenv("BOMBO_SOLID_BG") != nullptr)
+        g.fillAll(juce::Colour(0xFF14161B));
+    else
+        g.fillAll(juce::Colours::transparentBlack);
 }
 
 void drawCapAndFins(juce::Graphics& g, const Ctx& ctx)
@@ -60,6 +86,26 @@ void drawChassis(juce::Graphics& g, const Ctx& ctx)
 
     g.setGradientFill(grad);
     g.fillPath(ctx.chassisPath);
+
+    // Surface texture overlay (chassis_overlay.png), clipped to the silhouette
+    // so the baked scratches + AO + grain only paint inside the bomb. Per-theme
+    // opacity lets dark palettes (NIGHTRUN/MATRIX/CYBER/PLASMA) dial it back.
+    {
+        const float opacity = col::chassisOverlayOpacity();
+        if (opacity > 0.001f)
+        {
+            const auto overlay = loadOverlayImage();
+            if (overlay.isValid())
+            {
+                juce::Graphics::ScopedSaveState ss(g);
+                g.reduceClipRegion(ctx.chassisPath);
+                g.setOpacity(juce::jlimit(0.0f, 1.0f, opacity));
+                g.drawImage(overlay,
+                            ctx.chassisPath.getBounds(),
+                            juce::RectanglePlacement::stretchToFit);
+            }
+        }
+    }
 
     // Silhouette outline — bone stroke above the orange region only.
     // Below redRegionTopY, the noseRed fill is full alpha and its chassisPath

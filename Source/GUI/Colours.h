@@ -38,4 +38,6 @@ inline juce::Colour cap()         { return bombo::ThemeProvider::current().cap; 
 inline juce::Colour noseRed()     { return bombo::ThemeProvider::current().noseRed; }
 inline juce::Colour bandYellow()  { return bombo::ThemeProvider::current().bandYellow; }
 
+inline float chassisOverlayOpacity() { return bombo::ThemeProvider::current().chassisOverlayOpacity; }
+
 } // namespace bombo::col

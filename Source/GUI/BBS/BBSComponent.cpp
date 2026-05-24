@@ -81,7 +81,12 @@ void BBSComponent::show()
     refreshSysopVoice();
     screens_.transitionTo(BBSScreen::Intro);
 
+    // 200 ms alpha fade-in — feels less jarring than a hard cut, especially
+    // when the BBS comes up over a running kick. ComponentAnimator handles
+    // setVisible(true) + alpha 0→1 internally.
+    setAlpha(0.0f);
     setVisible(true);
+    juce::Desktop::getInstance().getAnimator().fadeIn(this, 200);
     toFront(true);
     grabKeyboardFocus();
     startTimer(40);
@@ -91,11 +96,20 @@ void BBSComponent::show()
 
 void BBSComponent::hide()
 {
-    stopTimer();
-    setVisible(false);
-    if (onDismissed) onDismissed();
-    if (auto* p = getParentComponent())
-        p->grabKeyboardFocus();
+    // Fade out 200 ms then drop visibility. Keep the intro timer running
+    // until the fade is done so the scroll/intro animation doesn't freeze
+    // mid-frame as it's disappearing.
+    juce::Desktop::getInstance().getAnimator().fadeOut(this, 200);
+    juce::Timer::callAfterDelay(220, [safe = juce::Component::SafePointer<BBSComponent>(this)]
+    {
+        if (safe == nullptr) return;
+        safe->stopTimer();
+        safe->setVisible(false);
+        safe->setAlpha(1.0f);  // restore for next show()
+        if (safe->onDismissed) safe->onDismissed();
+        if (auto* p = safe->getParentComponent())
+            p->grabKeyboardFocus();
+    });
 }
 
 void BBSComponent::resized() {}
@@ -229,11 +243,11 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
             repaint();
             return true;
         }
-        if (key == juce::KeyPress::spaceKey)
-        {
-            if (triggerCb_) triggerCb_();
-            return true;
-        }
+        // Space deliberately NOT handled here — falls through to the editor's
+        // keyPressed so BBS inherits the main window's transport semantics
+        // (space toggles loop in main, must toggle loop in BBS too). T still
+        // fires a one-shot via the handler above. User-reported regression
+        // 2026-05-24: looping kick couldn't be stopped from inside BBS.
         if (ch == 's' || ch == 'S')
         {
             if (apvts_ != nullptr && presetBank_ != nullptr)

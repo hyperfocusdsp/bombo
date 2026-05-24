@@ -42,6 +42,11 @@ struct Palette
     juce::Colour cap;
     juce::Colour noseRed;
     juce::Colour bandYellow;
+
+    // Master alpha for the baked chassis surface texture (scratches + AO + grain).
+    // Light-bodied themes carry the overlay near 0.55; already-dark themes dial to
+    // ~0.20 so the overlay doesn't muddy them further. 0 disables the overlay.
+    float chassisOverlayOpacity = 0.55f;
 };
 
 // Hard-coded BANDW palette = exact values from pre-refactor Colours.h.
@@ -72,6 +77,7 @@ inline Palette bandwPalette()
     p.cap        = juce::Colour { 0xFF0A0B0Du };
     p.noseRed    = juce::Colour { 0xFFD27845u };
     p.bandYellow = juce::Colour { 0xFFFFB800u };
+    p.chassisOverlayOpacity = 0.55f;
     return p;
 }
 

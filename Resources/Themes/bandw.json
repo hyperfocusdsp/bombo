@@ -16,6 +16,7 @@
     "knobCap":     "#FF1B1C1E",
     "knobBevel":   "#FF606066",
     "knobRubber":  "#FF151517",
-    "accentAmber": "#FFFFB800"
+    "accentAmber": "#FFFFB800",
+    "chassisOverlayOpacity": 0.55
   }
 }

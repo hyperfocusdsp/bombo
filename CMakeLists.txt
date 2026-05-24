@@ -70,7 +70,8 @@ juce_add_binary_data(BomboResources
         Resources/Samples/kick_03.wav
         Resources/Samples/kick_04.wav
         Resources/Samples/kick_05.wav
-        Resources/Samples/kick_06.wav)
+        Resources/Samples/kick_06.wav
+        Resources/Textures/chassis_overlay.png)
 
 target_sources(Bombo
     PRIVATE
@@ -103,6 +104,9 @@ target_sources(Bombo
         Source/GUI/HeaderRenderer.cpp
         Source/GUI/ChassisRenderer.h
         Source/GUI/ChassisRenderer.cpp
+        Source/GUI/ThemeTileStrip.h
+        Source/GUI/ThemeTileStrip.cpp
+        Source/GUI/BomboKnob.h
         Source/GUI/SampleSlotWidget.h
         Source/GUI/WaveBuffer.h
         Source/GUI/ScopeComponent.h

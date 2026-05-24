@@ -21,6 +21,7 @@
     "bodyLo":      "#020608",
     "cap":         "#020608",
     "noseRed":     "#00AACC",
-    "bandYellow":  "#00E5FF"
+    "bandYellow":  "#00E5FF",
+    "chassisOverlayOpacity": 0.20
   }
 }

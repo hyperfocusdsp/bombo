@@ -46,27 +46,26 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // Idempotent across multiple plugin instances in the same process.
     bombo::ThemeProvider::get().loadBundledThemes();
 
-    // Populate selector from registered themes.
-    {
-        int itemId = 1;
-        for (const auto& name : bombo::ThemeProvider::get().registeredNames())
-            themeSelector_.addItem(juce::String(name), itemId++);
-    }
-
-    // Restore persisted theme (set the provider FIRST, then sync the selector
-    // text so its onChange is not triggered with the wrong order).
+    // Restore persisted theme BEFORE building the tile strip so its initial
+    // active-marker paint reflects the right theme on first show.
     {
         const juce::String saved = processorRef.persistentState().getActiveTheme();
         bombo::ThemeProvider::get().setActive(saved.toStdString());
-        themeSelector_.setText(saved, juce::dontSendNotification);
+        // Marketing screenshots want a specific theme regardless of what the
+        // user has been working in. BOMBO_FORCE_THEME=<name> overrides without
+        // touching persistent state, so the next normal launch returns to the
+        // user's last-used theme.
+        if (const char* forced = std::getenv("BOMBO_FORCE_THEME"))
+            bombo::ThemeProvider::get().setActive(forced);
     }
 
-    themeSelector_.onChange = [this]
-    {
-        const juce::String name = themeSelector_.getText();
-        bombo::ThemeProvider::get().setActive(name.toStdString());
-        processorRef.persistentState().setActiveTheme(name);
-    };
+    // Build the in-skin theme tile strip. Tile click → setActive + persist.
+    themeStrip_ = std::make_unique<bombo::ThemeTileStrip>(
+        [this](const std::string& name)
+        {
+            bombo::ThemeProvider::get().setActive(name);
+            processorRef.persistentState().setActiveTheme(juce::String(name));
+        });
 
    #if JUCE_LINUX
     // Run exactly once per process. Inside a DAW host, the host's own X
@@ -76,17 +75,19 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     (void) compositorClaimed;
    #endif
 
-    setOpaque(false);
+    // Marketing-screenshot mode keeps the editor opaque so the WM doesn't
+    // alpha-clip the corner wedges (Hyprland shows whatever's behind when
+    // alpha=0). Normal use stays transparent for the shaped-bomb silhouette.
+    setOpaque(std::getenv("BOMBO_SOLID_BG") != nullptr);
     setLookAndFeel(&lnf);
     // Wire the factory preset bank BEFORE addAndMakeVisible so the panel's
     // first resized() lays the preset bar out alongside the macros/rack.
     faceplate.setPresetBank(p.presetBank());
     addAndMakeVisible(faceplate);
-    // Selector added AFTER faceplate so it paints on TOP of the chassis
-    // (faceplate fills the full editor surface; without this order the
-    // ComboBox is occluded). Temporary in T7; HeaderBar in Plan B owns
-    // the proper layout.
-    addAndMakeVisible(themeSelector_);
+    // Theme tile strip is an editor-level sibling so it sits in the
+    // transparent gutter beneath the chassis tip rather than fighting any
+    // on-chassis component for real estate.
+    addAndMakeVisible(*themeStrip_);
 
     // BBS overlay — added LAST so it paints above everything (faceplate,
     // selector). Stays invisible until activation. The callbacks persist
@@ -312,9 +313,21 @@ BomboEditor::~BomboEditor()
 
 void BomboEditor::paint(juce::Graphics& g)
 {
-    // Transparent — the faceplate's chassisPath_ fill covers everything
-    // inside the bomb shape; corner wedges stay alpha=0.
-    g.fillAll(juce::Colours::transparentBlack);
+    // Marketing-screenshot mode: when BOMBO_SOLID_BG is set, paint a solid
+    // brand-dark backdrop behind the chassis so the transparent corners
+    // (where the bomb silhouette tapers) capture cleanly instead of bleeding
+    // through to whatever's behind the standalone window. No-op for normal
+    // hosted use — plugins keep their transparent corners so DAW skins read.
+    if (std::getenv("BOMBO_SOLID_BG") != nullptr)
+    {
+        g.fillAll(juce::Colour(0xFF14161B));
+    }
+    else
+    {
+        // Transparent — the faceplate's chassisPath_ fill covers everything
+        // inside the bomb shape; corner wedges stay alpha=0.
+        g.fillAll(juce::Colours::transparentBlack);
+    }
     paintGlitchOverlay(g);
 }
 
@@ -530,9 +543,21 @@ void BomboEditor::resized()
                         static_cast<int>(kDesignW),
                         static_cast<int>(kDesignH));
 
-    // Temporary theme selector — bottom-right; goes away when Plan B's
-    // HeaderBar ships.
-    themeSelector_.setBounds(getWidth() - 110, getHeight() - 26, 100, 22);
+    // Theme strip — bottom-right of editor, in the transparent gutter
+    // beneath the chassis tip. Scales with the editor so it stays a
+    // consistent visual weight at any window size.
+    if (themeStrip_)
+    {
+        constexpr int kTileN = 6;
+        const int stripW = kTileN * bombo::ThemeTileStrip::kTileSize
+                         + (kTileN - 1) * bombo::ThemeTileStrip::kTileGap;
+        const int stripH = bombo::ThemeTileStrip::kTileSize;
+        const int rightMargin  = 12;
+        const int bottomMargin = 14;
+        themeStrip_->setBounds(getWidth()  - rightMargin  - stripW,
+                                getHeight() - bottomMargin - stripH,
+                                stripW, stripH);
+    }
 
     // BBS overlay covers only the "square effects section" (the FX rack
     // columns). Extracted to updateBbsBounds() so the layout editor can

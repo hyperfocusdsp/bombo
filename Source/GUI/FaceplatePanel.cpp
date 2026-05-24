@@ -2,6 +2,7 @@
 
 #include "BalanceFader.h"
 #include "BombShape.h"
+#include "BomboKnob.h"
 #include "BpmDisplay.h"
 #include "ChassisRenderer.h"
 #include "Colours.h"
@@ -66,13 +67,23 @@ void FaceplatePanel::changeListenerCallback(juce::ChangeBroadcaster* bc)
 {
     ThemedComponent::changeListenerCallback(bc); // calls repaint()
 
-    // Refresh section label colors for the new theme. VOICE sections use
-    // bone (accent text on dark voice bg); FX sections use ink. Identified
-    // by mutePid because accent color captured at build time is stale.
+    // Refresh section accent + label colors for the new theme. Accents are
+    // identified by mutePid since the colour assigned at build time is now
+    // stale — without this every theme switch keeps the FX rack rendered in
+    // whatever palette was active at editor construction (Day 5 cohesion
+    // sweep bug; reported 2026-05-24).
     for (auto& s : sections_)
     {
         const bool isVoice = (s.mutePid == pid::voiceAMute
                            || s.mutePid == pid::voiceBMute);
+
+        if      (isVoice)                          s.accent = col::voice();
+        else if (s.mutePid == pid::driveMute)      s.accent = col::drive();
+        else if (s.mutePid == pid::delayMute)      s.accent = col::delayC();
+        else if (s.mutePid == pid::reverbMute)     s.accent = col::reverb();
+        else if (s.mutePid == pid::filterMute)     s.accent = col::filterC();
+        else if (s.mutePid == pid::duckMute)       s.accent = col::duck();
+
         const juce::Colour newLabel = isVoice ? col::bone() : col::ink();
         s.labelOnBg = newLabel;
         for (auto& c : s.controls)
@@ -92,6 +103,16 @@ void FaceplatePanel::setPresetBank(PresetBank& bank)
     presetBar_ = std::make_unique<PresetBarComponent>(bank, apvts_);
     addAndMakeVisible(*presetBar_);
     if (! getBounds().isEmpty()) resized();
+}
+
+void FaceplatePanel::setThemeStrip(juce::Component* strip)
+{
+    themeStripPtr_ = strip;
+    if (themeStripPtr_ != nullptr)
+    {
+        addAndMakeVisible(*themeStripPtr_);
+        if (! getBounds().isEmpty()) resized();
+    }
 }
 
 FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
@@ -128,7 +149,13 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.name = "VOICE B"; s.moduleId = "OSS-1"; s.mutePid = pid::voiceBMute;
         s.accent = col::voice(); s.labelOnBg = col::bone();
         addKnob      (s, pid::ampAttack,   "ATK",    s.labelOnBg);
-        addKnob      (s, pid::ampDecay,    "DEC",    s.labelOnBg);
+        // VOICE B's audible content (mid osc + click + noise + sample) all
+        // ride midAmpEnv_, driven by pid::midDecay. The DEC knob was wired to
+        // pid::ampDecay (which drives VOICE A's sub-layer envelope) — turning
+        // it had no audible effect on VOICE B in isolation. User report
+        // 2026-05-24. ampDecay still controls the sub layer; it's just no
+        // longer exposed under VOICE B where it doesn't belong.
+        addKnob      (s, pid::midDecay,    "DEC",    s.labelOnBg);
         addKnob      (s, pid::clickAmount, "CLICK",  s.labelOnBg);
         addKnob      (s, pid::noiseAmount, "BODY",   s.labelOnBg);
         addKnob      (s, pid::noiseColor,  "COLOR",  s.labelOnBg);
@@ -329,7 +356,7 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
 {
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Knob;
-    c->slider = std::make_unique<juce::Slider>();
+    c->slider = std::make_unique<bombo::BomboKnob>();
     c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
@@ -361,7 +388,7 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
     // parameter is already a stepped float internally.
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Knob;
-    c->slider = std::make_unique<juce::Slider>();
+    c->slider = std::make_unique<bombo::BomboKnob>();
     c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
@@ -438,7 +465,7 @@ FaceplatePanel::makeBoundKnob(const juce::String& paramId,
 {
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Knob;
-    c->slider = std::make_unique<juce::Slider>();
+    c->slider = std::make_unique<bombo::BomboKnob>();
     c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
@@ -462,7 +489,7 @@ FaceplatePanel::makePlaceholderKnob(const juce::String& displayName,
 {
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::Knob;
-    c->slider = std::make_unique<juce::Slider>();
+    c->slider = std::make_unique<bombo::BomboKnob>();
     c->slider->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     c->slider->setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
                                    juce::MathConstants<float>::pi * 2.75f, true);
@@ -549,6 +576,17 @@ void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
     g.fillRect(x, y, kBorder, hF);
     // Right edge
     g.fillRect(x + w - kBorder, y, kBorder, hF);
+
+    // Recess polish (Day 5): a bone hairline along the top inside of the
+    // scope rect + a 1 px dark shadow line just beneath it. Sells the
+    // "recessed window" feel without changing the U-frame footprint.
+    const int sx = scopeBounds_.getX();
+    const int sy = scopeBounds_.getY();
+    const int sw = scopeBounds_.getWidth();
+    g.setColour(col::bone().withAlpha(0.18f));
+    g.fillRect(sx, sy, sw, 1);
+    g.setColour(juce::Colour(0xFF000000).withAlpha(0.40f));
+    g.fillRect(sx, sy + 1, sw, 1);
 }
 
 void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
@@ -648,6 +686,25 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
             g.setColour(col::boneDim().withAlpha(0.55f));
             g.drawLine(titleBar.getX() + 8.0f, midY,
                        titleBar.getRight() - 8.0f, midY, 1.0f);
+        }
+
+        // Drag-handle dots on reorderable sections (DRIVE / DELAY / REVERB /
+        // FILTER). A 2×3 grid of small bone dots on the LEFT of the title bar
+        // — the universal "grip" affordance. Static, paint-only, so the
+        // novelty (draggable FX rack) reads in a still-frame screenshot.
+        // Day 3 polish 2026-05-24.
+        if (s.reorderable && ! muted && ! isDragLifted)
+        {
+            constexpr float dotR    = 1.0f;
+            constexpr float dotPad  = 3.0f;
+            const float gridX = static_cast<float>(titleBar.getX() + 5);
+            const float gridY = titleBar.getCentreY() - dotPad;
+            g.setColour(col::bone().withAlpha(0.55f));
+            for (int row = 0; row < 3; ++row)
+                for (int colIdx = 0; colIdx < 2; ++colIdx)
+                    g.fillEllipse(gridX + static_cast<float>(colIdx) * dotPad - dotR,
+                                  gridY + static_cast<float>(row)    * dotPad - dotR,
+                                  dotR * 2.0f, dotR * 2.0f);
         }
     }
     // Module-ID strip REMOVED — saves ~12 px vertically per column.
@@ -957,6 +1014,10 @@ void FaceplatePanel::layoutSection(Section& s)
 
 void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
 {
+    // Theme tile strip placement moved to PluginEditor::resized so it sits
+    // in editor coords (bottom-right corner, beneath the chassis tip) and
+    // never collides with on-chassis components like the preset bar.
+
     // Left  fin row1: BNC (pill) | DICE (square icon)   — one row only
     // Right fin row1: LIM (pill) | TAIL (pill)
     //         row2:  LOOP (square icon) | BPM display

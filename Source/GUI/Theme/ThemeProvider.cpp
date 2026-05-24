@@ -33,6 +33,13 @@ void ThemeProvider::registerPalette(const std::string& name, const Palette& pale
     registry_[name] = palette;
 }
 
+const Palette* ThemeProvider::getRegisteredPalette(const std::string& name) const
+{
+    JUCE_ASSERT_MESSAGE_THREAD;
+    auto it = registry_.find(name);
+    return it == registry_.end() ? nullptr : &it->second;
+}
+
 void ThemeProvider::setActive(const std::string& name)
 {
     JUCE_ASSERT_MESSAGE_THREAD;

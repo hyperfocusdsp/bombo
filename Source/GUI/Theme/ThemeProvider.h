@@ -55,6 +55,11 @@ public:
     // All registered theme names, in insertion order.
     const std::vector<std::string>& registeredNames() const { return order_; }
 
+    // Returns the palette registered under `name`, or nullptr if unknown.
+    // Used by the in-skin theme-tile strip to paint each theme's thumbnail
+    // from its own palette without needing to activate the theme first.
+    const Palette* getRegisteredPalette(const std::string& name) const;
+
 private:
     ThemeProvider();
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ThemeProvider)

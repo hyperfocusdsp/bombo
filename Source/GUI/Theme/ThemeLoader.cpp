@@ -7,9 +7,25 @@ namespace
 {
 bool parseHexColour(const juce::String& hex, juce::Colour& out)
 {
-    // Expect format "#AARRGGBB" (length 9, '#' prefix).
-    if (hex.length() != 9 || hex[0] != '#') return false;
-    const auto n = static_cast<uint32_t>(hex.substring(1).getHexValue64());
+    // Accept "#AARRGGBB" (length 9) or "#RRGGBB" (length 7, implicit alpha=FF).
+    // 2026-05-24: matrix.json / cyber.json / plasma.json shipped with 7-char
+    // values, which silently failed parsing, so those palettes never got
+    // registered and BOMBO_FORCE_THEME=cyber was a no-op.
+    if (hex[0] != '#') return false;
+    uint32_t n = 0;
+    if (hex.length() == 9)
+    {
+        n = static_cast<uint32_t>(hex.substring(1).getHexValue64());
+    }
+    else if (hex.length() == 7)
+    {
+        n = 0xFF000000u
+          | static_cast<uint32_t>(hex.substring(1).getHexValue64());
+    }
+    else
+    {
+        return false;
+    }
     out = juce::Colour(n);
     return true;
 }
@@ -71,6 +87,10 @@ bool fillPalette(const juce::var& pal, Palette& out, std::string& err)
     takeOr("cap",        out.cap,        out.ink);
     takeOr("noseRed",    out.noseRed,    out.drive);
     takeOr("bandYellow", out.bandYellow, out.accentAmber);
+
+    if (pal.hasProperty("chassisOverlayOpacity"))
+        out.chassisOverlayOpacity = juce::jlimit(0.0f, 1.0f,
+                                                  static_cast<float>(static_cast<double>(pal["chassisOverlayOpacity"])));
     return true;
 }
 } // anonymous namespace

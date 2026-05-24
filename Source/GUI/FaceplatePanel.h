@@ -70,6 +70,12 @@ public:
     // adds it to the panel. Call once after construction; safe to call
     // before the first resized().
     void setPresetBank(PresetBank& bank);
+
+    // Attach the editor-owned theme tile strip so it lives inside the
+    // faceplate's transform/scale. Non-owning pointer — caller retains
+    // ownership. Positioned in layoutHeader() at the right of the BOMBO
+    // logo, inside headerBounds_. Pass nullptr to detach.
+    void setThemeStrip(juce::Component* strip);
     // Defined out-of-line in .cpp so the forward-declared SampleSlotWidget
     // is complete by the time unique_ptr destructors instantiate.
     ~FaceplatePanel() override;
@@ -320,6 +326,11 @@ private:
     // Factory preset bar (Phase 3). nullptr until setPresetBank is called.
     std::unique_ptr<PresetBarComponent> presetBar_;
     juce::Rectangle<int> presetBarBounds_;
+
+    // In-skin theme tile strip. Non-owning pointer; PluginEditor holds the
+    // unique_ptr. Positioned in layoutHeader() at the right side of
+    // headerBounds_ so it inherits the chassis transform/scale.
+    juce::Component* themeStripPtr_ = nullptr;
 
     // Macro row — 7 controls, aligned 1:1 with FX columns. The seventh
     // (rightmost) is bound to master OUT and tinted amber as the hero.
