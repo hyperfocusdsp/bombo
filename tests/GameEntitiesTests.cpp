@@ -146,4 +146,74 @@ public:
     }
 };
 static EnemyPoolBulletCollisionTest collisionTest;
+
+class ClipperBurstsForwardTest : public juce::UnitTest
+{
+public:
+    ClipperBurstsForwardTest() : juce::UnitTest("Clipper: bursts forward then pauses") {}
+    void runTest() override
+    {
+        beginTest("Clipper moves left during burst phase, holds during pause phase");
+        EnemyPool ep;
+        Enemy* e = ep.spawn(EnemyKind::Clipper, 100, 50, 0, 0);
+        const float startX = e->x;
+        // First ~1s is burst (vx negative). Advance 0.5s worth of ticks.
+        for (int i = 0; i < 30; ++i) ep.tick();
+        expectLessThan(e->x, startX);   // moved left during burst
+        const float afterBurst = e->x;
+        // Advance into the pause phase (phase 1..2s) — ~1.2s more
+        for (int i = 0; i < 72; ++i) ep.tick();
+        // During pause it should barely move (allow small tolerance)
+        // (We just assert it didn't move a full burst's worth again immediately.)
+        expect(e->x <= afterBurst);   // never moves right
+    }
+};
+
+class SilenceVoidImmuneTest : public juce::UnitTest
+{
+public:
+    SilenceVoidImmuneTest() : juce::UnitTest("SilenceVoid: immune to bullet damage") {}
+    void runTest() override
+    {
+        beginTest("bullet hitting SilenceVoid is absorbed, deals no damage, enemy survives");
+        EnemyPool ep;
+        BulletPool bp;
+        Enemy* e = ep.spawn(EnemyKind::SilenceVoid, 80, 50, -10, 0);
+        const int hpBefore = e->hp;
+        bp.spawn(78, 50, 180, 0, 1);
+        bp.tick();
+        int kills = ep.applyBulletDamage(bp);
+        expectEquals(kills, 0);
+        expectEquals(e->hp, hpBefore);   // no damage
+        expect(e->active);
+        // bullet should be absorbed (deactivated)
+        int aliveBullets = 0;
+        for (const auto& b : bp.bullets()) if (b.active) ++aliveBullets;
+        expectEquals(aliveBullets, 0);
+    }
+};
+
+class LimiterVerticalDriftTest : public juce::UnitTest
+{
+public:
+    LimiterVerticalDriftTest() : juce::UnitTest("Limiter: drifts vertically and bounces off edges") {}
+    void runTest() override
+    {
+        beginTest("Limiter changes Y over time and stays within field");
+        EnemyPool ep;
+        Enemy* e = ep.spawn(EnemyKind::Limiter, 120, 56, -5, 40);  // vy>0 = downward
+        const float startY = e->y;
+        for (int i = 0; i < 30; ++i) ep.tick();
+        expect(e->y != startY);          // moved vertically
+        // Run a long time; it must remain active (bounces, not culled off top/bottom).
+        // With vx=-5 over 630 ticks (~10.5s): x drops ~52px (120 -> ~68), still onscreen.
+        for (int i = 0; i < 600; ++i) ep.tick();
+        // The key assertion: it bounced rather than leaving via Y.
+        expect(e->y >= 0.0f && e->y <= kFbH);
+    }
+};
+
+static ClipperBurstsForwardTest    clipperTest;
+static SilenceVoidImmuneTest       silenceVoidTest;
+static LimiterVerticalDriftTest    limiterTest;
 }

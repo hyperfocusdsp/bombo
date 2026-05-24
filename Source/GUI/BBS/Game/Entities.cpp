@@ -3,6 +3,44 @@
 #include <algorithm>
 #include <cmath>
 
+namespace
+{
+    using namespace bombo::game;
+
+    void tickMudball(Enemy& e) noexcept
+    {
+        e.x += e.vx * kTickDt;
+        e.y += e.vy * kTickDt;
+    }
+
+    void tickClipper(Enemy& e) noexcept
+    {
+        // 1s burst (vx = -100), 1s pause (vx = 0), repeating.
+        e.phase += kTickDt;
+        if (e.phase < 1.0f)      e.vx = -100.0f;
+        else if (e.phase < 2.0f) e.vx = 0.0f;
+        else                     e.phase = 0.0f;
+        e.x += e.vx * kTickDt;
+    }
+
+    void tickSilenceVoid(Enemy& e) noexcept
+    {
+        // Slow horizontal drift + sine vertical sway.
+        e.phase += kTickDt;
+        e.x += e.vx * kTickDt;
+        e.y += std::sin(e.phase * 1.5f) * 20.0f * kTickDt;
+    }
+
+    void tickLimiter(Enemy& e) noexcept
+    {
+        // Vertical wall: vy drives, vx slow drift; bounce off top/bottom.
+        e.x += e.vx * kTickDt;
+        e.y += e.vy * kTickDt;
+        if (e.y < 20.0f)         e.vy =  std::abs(e.vy);
+        if (e.y > kFbH - 20.0f)  e.vy = -std::abs(e.vy);
+    }
+} // anonymous namespace
+
 namespace bombo::game
 {
     void Player::tick() noexcept
@@ -125,10 +163,18 @@ namespace bombo::game
         for (auto& s : slots_)
         {
             if (! s.active) continue;
-            // Mudball: pure straight line. (Other kinds get behaviour in Task 11/12.)
-            s.x += s.vx * kTickDt;
-            s.y += s.vy * kTickDt;
-            if (s.x < -16 || s.x > kFbW + 16) s.active = false;
+            switch (s.kind)
+            {
+                case EnemyKind::Mudball:     tickMudball(s);     break;
+                case EnemyKind::Clipper:     tickClipper(s);     break;
+                case EnemyKind::SilenceVoid: tickSilenceVoid(s); break;
+                case EnemyKind::Limiter:     tickLimiter(s);     break;
+                default:                     tickMudball(s);     break;  // Aliaser/DiveBomber/Rumblr: Tasks 12/19
+            }
+            // Cull on all four edges (Y-cull added per Task 10 review — vertical movers).
+            if (s.x < -16.0f || s.x > kFbW + 16.0f ||
+                s.y < -16.0f || s.y > kFbH + 16.0f)
+                s.active = false;
         }
     }
 
@@ -146,11 +192,18 @@ namespace bombo::game
                 const float dy = std::abs(b.y - e.y);
                 if (dx < 6 && dy < 6)
                 {
+                    if (e.kind == EnemyKind::SilenceVoid)
+                    {
+                        b.active = false;   // absorbed, no damage
+                        break;
+                    }
                     e.hp -= b.damage;
                     if (b.pierceLeft > 0) --b.pierceLeft;
                     else                  b.active = false;
                     if (e.hp <= 0) { e.active = false; ++kills; }
-                    break;   // this bullet is done checking enemies
+                    // Pierce: bullet stays active but hits at most one enemy per tick;
+                    // the next enemy is reached within 1-2 ticks at typical bullet speed.
+                    break;
                 }
             }
         }
