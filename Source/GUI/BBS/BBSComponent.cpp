@@ -857,6 +857,24 @@ void BBSComponent::launchGame()
         gameV2Image_ = juce::Image(juce::Image::ARGB, bombo::game::kFbW, bombo::game::kFbH, false);
     }
 
+    // Wire the audio seams (Task 24). onShot fires the active preset/kick —
+    // launchGame has just forced "Pew", so every player shot goes "pew".
+    // Mirrors the v1 path (game_.onKick = triggerCb_).
+    gameV2_.onShot = triggerCb_;
+
+    // Procedural SFX seams -> the processor's GameAudioBus. Reach the
+    // processor the same way timerCallback does (apvts_->processor). All
+    // null-safe; if apvts_ isn't wired we just leave the SFX silent.
+    if (apvts_ != nullptr)
+    {
+        auto* bus = &static_cast<BomboProcessor&>(apvts_->processor).gameAudioBus();
+        gameV2_.onEnemyHit      = [bus](bombo::game::EnemyKind k) { bus->triggerEnemyHit(k); };
+        gameV2_.onWaveClear     = [bus]                          { bus->triggerWaveClearJingle(); };
+        gameV2_.onGameOverFx    = [bus](bool victory)            { bus->triggerGameOverJingle(victory); };
+        gameV2_.onPickup        = [bus](bombo::game::DropTier t) { bus->triggerPickupArpeggio(t); };
+        gameV2_.onBossTelegraph = [bus]                          { bus->triggerBossTelegraph(); };
+    }
+
     gameV2_.startNewRun(/*dailySeed=*/false);
     screens_.transitionTo(BBSScreen::Game);
     commandBuffer_.clear();

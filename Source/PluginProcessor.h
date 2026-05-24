@@ -15,6 +15,7 @@
 #include "State/PresetBank.h"
 #include "State/PersistentState.h"
 #include "GUI/BBS/ProgressionManager.h"
+#include "GUI/BBS/Game/Audio.h"
 
 class BomboProcessor : public juce::AudioProcessor
 {
@@ -130,6 +131,11 @@ public:
     // BBS progression — tracks save count, level, unlocked SYSOPs. Stored
     // in persistentState_ so state survives editor destruction.
     bombo::ProgressionManager& progressionManager() noexcept { return progressionManager_; }
+
+    // Procedural game-audio bus (Kick Impact SFX). BBSComponent reaches it to
+    // fire enemy-hit / jingle / pickup sounds; processBlock mixes its output
+    // into the buffer after the kick chain renders. RT-safe (see Audio.h).
+    bombo::game::GameAudioBus& gameAudioBus() noexcept { return gameAudio_; }
 
     // FX chain order — DRIVE / FILTER / DELAY / REVERB in user-set sequence.
     // Lock-free atomic underneath; safe to call from any thread.
@@ -300,6 +306,8 @@ private:
                                                  // edit on any voice knob → invalidate
     };
     LoopCache loopCache_{};
+
+    bombo::game::GameAudioBus gameAudio_{};   // procedural mini-game SFX
 
     bombo::WaveBuffer       waveBuffer_{};
     bombo::PresetBank       presetBank_{};

@@ -135,6 +135,7 @@ namespace bombo::game
         chain_.resetForWave();
         waveClearTicks_ = kWaveClearFlashTicks;
         transitionTo(GameState::WaveClear);
+        if (onWaveClear) onWaveClear();   // Task 24 SFX seam (additive)
     }
 
     void Game::advanceAfterWaveClear()
@@ -180,6 +181,7 @@ namespace bombo::game
         enemies_.spawn(EnemyKind::Rumblr, static_cast<float>(kFbW) - 30.0f,
                        static_cast<float>(kFbH) / 2.0f, 0.0f, 0.0f);
         transitionTo(GameState::Boss);
+        if (onBossTelegraph) onBossTelegraph();   // Task 24 SFX seam (additive)
     }
 
     bool Game::bossIsDead() const noexcept
@@ -197,6 +199,7 @@ namespace bombo::game
             return;
 
         victory_ = victory;
+        if (onGameOverFx) onGameOverFx(victory);   // Task 24 SFX seam (additive)
         highScores_.load();   // refresh from disk before checking qualification
         if (highScores_.qualifiesForTopTen(score_))
         {
@@ -515,6 +518,8 @@ namespace bombo::game
             if (o.grantRandomShopItem)
                 grantRandomShopItem();
 
+            if (onPickup) onPickup(dropTierOf(p.kind));   // Task 24 SFX seam (additive)
+
             p.active = false;   // consumed
         }
     }
@@ -530,6 +535,7 @@ namespace bombo::game
             const int base = scoreBaseFor(k.kind);
             score_ += static_cast<int>(base * chainMultiplierFor(chain_.count()));
             maybeSpawnDrop(k.kind, k.x, k.y);
+            if (onEnemyHit) onEnemyHit(k.kind);   // Task 24 SFX seam (additive)
         }
 
         // Enemy shots vs player.

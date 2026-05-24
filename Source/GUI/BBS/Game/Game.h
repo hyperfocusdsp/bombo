@@ -97,6 +97,16 @@ namespace bombo::game
         // Null-safe — spawnPlayerShot() invokes it only when set.
         std::function<void()> onShot;
 
+        // Procedural-SFX seams (Task 24): purely additive fire-and-forget hooks
+        // emitted at existing game-logic event points. BBS assigns them to drive
+        // the processor's GameAudioBus. All null-safe — the game never depends on
+        // them being set, so game logic and the headless tests are unaffected.
+        std::function<void(EnemyKind)> onEnemyHit;     // an enemy was destroyed
+        std::function<void()>          onWaveClear;    // a wave was cleared
+        std::function<void(bool)>      onGameOverFx;   // run ended (true = victory)
+        std::function<void(DropTier)>  onPickup;       // a pickup was collected
+        std::function<void()>          onBossTelegraph;// boss (RUMBLR) spawned
+
         // --- Shop interaction (input layer / Task 22 calls these) ---
         // Valid only while state()==Shop. Slot selection is 0..2.
         int  shopSelectedSlot()       const noexcept { return shopSlot_; }

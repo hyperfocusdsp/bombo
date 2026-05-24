@@ -239,6 +239,9 @@ void BomboProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     masterGainSmoothed.reset(sampleRate, 0.010);
     masterGainSmoothed.setCurrentAndTargetValue(
         juce::Decibels::decibelsToGain(pMasterOut->get()));
+
+    // Procedural game-audio bus: store the SR for its phase/envelope math.
+    gameAudio_.prepare(sampleRate);
 }
 
 void BomboProcessor::releaseResources() {}
@@ -572,6 +575,13 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         // for the visual representation).
         waveBuffer_.push(oL);
     }
+
+    // Mix the procedural game SFX additively on top of the rendered kick
+    // (RT-safe: drains a lock-free request ring, no alloc). When no game
+    // sound is pending this is a cheap no-op over the voice pool. Deliberately
+    // AFTER the kick chain + master gain + scope feed so the SFX layer sits at
+    // its own modest level and doesn't get sucked into the loop cache.
+    gameAudio_.renderInto(buffer);
 }
 
 juce::AudioProcessorEditor* BomboProcessor::createEditor()
