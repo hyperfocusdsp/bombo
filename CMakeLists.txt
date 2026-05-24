@@ -233,6 +233,7 @@ if(BOMBO_BUILD_TESTS)
         tests/GameDropsTests.cpp
         tests/GameHighScoresTests.cpp
         tests/GameRumblrTests.cpp
+        tests/GameStateTests.cpp
         tests/GameBalanceSimTests.cpp
         Source/GUI/BBS/Game/Palette.cpp
         Source/GUI/BBS/Game/Framebuffer.cpp
