@@ -81,13 +81,6 @@ public:
     void setVoiceBSampleFolder(const juce::File& filePicked);
     void loadVoiceBSampleByIndex(int idx);
 
-    // Snap midDecay to the currently-loaded Voice B sample's length so
-    // the new sample plays to its end by default. Called from each of
-    // the three sample-load paths (single file, folder browse, by-index)
-    // AFTER voiceBSample_ has been assigned. Safe to call when no sample
-    // is loaded — it's a no-op. Param-write happens via APVTS so host
-    // automation + presets + UI all stay in sync.
-    void snapDecayToSampleLength() noexcept;
     void clearVoiceBSample();
     juce::String voiceBSamplePath() const;
 

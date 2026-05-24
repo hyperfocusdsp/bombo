@@ -41,7 +41,7 @@ constexpr int kTailH            = 160;
 constexpr int kHeaderH      = 50;
 constexpr int kScopeH       = 100;
 constexpr int kRackPadX     = 2;        // padding between chassis edge and column 0/N-1
-constexpr int kRackTopGap   = 22;      // accommodates the A↔B balance fader strip above VOICE A/B
+constexpr int kRackTopGap   = 30;      // accommodates the A↔B balance fader strip above VOICE A/B + keeps section title corners off the chassis curve
 constexpr int kRackBotGap   = 4;
 constexpr int kBalFaderH    = 16;      // horizontal balance fader height
 

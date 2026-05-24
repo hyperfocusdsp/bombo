@@ -646,29 +646,6 @@ void BomboProcessor::loadVoiceBSample(const juce::File& file)
         voiceBIsFactory_    = false;
         voiceBFactoryNames_.clear();
     }
-    snapDecayToSampleLength();
-}
-
-void BomboProcessor::snapDecayToSampleLength() noexcept
-{
-    std::shared_ptr<const juce::AudioBuffer<float>> snap;
-    {
-        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
-        snap = voiceBSample_;
-    }
-    if (! snap || snap->getNumSamples() <= 0 || currentSampleRate_ <= 0.0f) return;
-    const float lenMs = (float) snap->getNumSamples() * 1000.0f / currentSampleRate_;
-    if (auto* p = apvts.getParameter(bombo::pid::midDecay))
-    {
-        // Clamp to the midDecay param max (5000 ms post-2026-05-24 bump)
-        // so very long samples just play to the param ceiling rather than
-        // attempting an out-of-range normalise.
-        const float clamped = juce::jmin(lenMs, 5000.0f);
-        const float norm    = p->convertTo0to1(clamped);
-        p->beginChangeGesture();
-        p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, norm));
-        p->endChangeGesture();
-    }
 }
 
 void BomboProcessor::setVoiceBSampleFolder(const juce::File& filePicked)
@@ -713,7 +690,6 @@ void BomboProcessor::setVoiceBSampleFolder(const juce::File& filePicked)
         voiceBIsFactory_   = false;
         voiceBFactoryNames_.clear();
     }
-    snapDecayToSampleLength();
 }
 
 void BomboProcessor::loadVoiceBSampleByIndex(int idx)
@@ -765,7 +741,6 @@ void BomboProcessor::loadVoiceBSampleByIndex(int idx)
         voiceBSample_      = std::move(buf);
         voiceBSamplePath_  = newPath;
     }
-    snapDecayToSampleLength();
 }
 
 void BomboProcessor::loadFactorySamples()
