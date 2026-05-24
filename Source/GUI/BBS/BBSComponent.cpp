@@ -177,7 +177,11 @@ void BBSComponent::timerCallback()
         {
             // First invader ever seen — power on the cabinet glyph and persist it.
             // setCabinetLit() saves immediately and stamps firstInvaderSeenAt.
+            // Reload from disk first so we merge any scores the game wrote this
+            // session — otherwise setCabinetLit()'s full-document save would
+            // clobber them with cabinetStore_'s stale in-memory top_.
             cabinetLit_ = true;
+            cabinetStore_.load();
             cabinetStore_.setCabinetLit(true);
         }
     }

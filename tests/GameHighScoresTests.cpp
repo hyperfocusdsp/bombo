@@ -119,9 +119,54 @@ public:
     }
 };
 
+// Regression: a stale second HighScores instance (e.g. BBSComponent's
+// cabinetStore_, constructed before the game wrote a score) must reload from
+// disk before setCabinetLit()'s unconditional full-document save, otherwise its
+// empty in-memory top_ clobbers the score the game just persisted this session.
+class CabinetLitReloadNoClobberTest : public juce::UnitTest
+{
+public:
+    CabinetLitReloadNoClobberTest()
+        : juce::UnitTest("HighScores: reload before setCabinetLit preserves scores") {}
+    void runTest() override
+    {
+        beginTest("stale writer reloads before lit-flag save, score survives");
+        auto tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                       .getChildFile("bombo_cabnoclobber_"
+                                     + juce::String(juce::Time::currentTimeMillis()));
+        tmp.createDirectory();
+        auto path = tmp.getChildFile("HighScores.json");
+
+        // Writer A (the game) and writer B (cabinetStore_) both open the same
+        // file while it is empty, so both start with an empty in-memory top_.
+        HighScores a(path);
+        HighScores b(path);
+
+        // A records and persists a score this session.
+        a.recordRun({ "VLD", 5000, 5, "2026-05-24", false, 0 });
+        a.save();
+
+        // B is stale (empty top_). Without the reload, setCabinetLit's save()
+        // would write B's empty scores[] over A's score. The fix reloads first.
+        b.load();
+        b.setCabinetLit(true);
+
+        // Re-read from disk to confirm the merged state was persisted.
+        HighScores c(path);
+        c.load();
+        expect(c.isCabinetLit());
+        expectEquals((int) c.topTen().size(), 1);
+        expectEquals(c.topTen()[0].score, 5000);
+        expectEquals(c.topTen()[0].initials, juce::String("VLD"));
+
+        tmp.deleteRecursively();
+    }
+};
+
 static HighScoresRoundTripTest a;
 static HighScoresSortedTest    b;
 static HighScoresQualifyTest   c;
 static DailySeedTodayTest      d;
 static CabinetLitPersistTest   e;
+static CabinetLitReloadNoClobberTest f;
 } // anonymous namespace
