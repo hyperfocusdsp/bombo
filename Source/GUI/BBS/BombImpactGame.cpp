@@ -39,6 +39,9 @@ void BombImpactGame::startGame()
     toastTick_     = 0;
     enemies_.clear();
     bullets_.clear();
+    lifeUps_.clear();
+    shipX_               = kShipDefaultX;
+    lifeUpSpawnCooldown_ = 300 + rng_.nextInt(300);
 }
 
 void BombImpactGame::stopGame()
@@ -47,6 +50,7 @@ void BombImpactGame::stopGame()
     wantsExit_ = false;
     enemies_.clear();
     bullets_.clear();
+    lifeUps_.clear();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -102,6 +106,10 @@ void BombImpactGame::tick()
                 shipY_ = juce::jmax(10.0f, shipY_ - spd);
             if (juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::downKey))
                 shipY_ = juce::jmin(fieldH_ - 10.0f, shipY_ + spd);
+            if (juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::leftKey))
+                shipX_ = juce::jmax(kShipDefaultX - kShipRangeX, shipX_ - spd);
+            if (juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::rightKey))
+                shipX_ = juce::jmin(kShipDefaultX + kShipRangeX, shipX_ + spd);
 
             // Auto-fire
             if (++autoFireTick_ >= kAutoFireInterval)
@@ -121,6 +129,20 @@ void BombImpactGame::tick()
                                          s.type == Enemy::Clipper  ? 2 :
                                          s.type == Enemy::Limiter  ? 15 : 1 });
             ++spawnTick_;
+
+            // Life-up pickup: rare random spawn, drifts left like enemies
+            if (--lifeUpSpawnCooldown_ <= 0)
+            {
+                lifeUpSpawnCooldown_ = 400 + rng_.nextInt(400); // ~8-16s at 50Hz
+                if (rng_.nextInt(3) == 0) // ~33% chance each window
+                    lifeUps_.push_back({ fieldW_ + 8.0f, 12.0f + rng_.nextFloat() * (fieldH_ - 24.0f), true });
+            }
+            for (auto& p : lifeUps_)
+            {
+                if (!p.alive) continue;
+                p.x -= 1.2f;
+                if (p.x < -12.0f) p.alive = false;
+            }
 
             updateEntities();
             checkCollisions();
@@ -194,11 +216,23 @@ void BombImpactGame::updateEntities()
 
 void BombImpactGame::checkCollisions()
 {
+    // Ship vs life-up pickups
+    for (auto& p : lifeUps_)
+    {
+        if (!p.alive) continue;
+        if (std::abs(p.x - shipX_) < 16.0f && std::abs(p.y - shipY_) < 12.0f)
+        {
+            p.alive = false;
+            lives_ = juce::jmin(lives_ + 1, 5);
+            addToast("+1 UP", 80);
+        }
+    }
+
     // Ship vs enemies
     for (auto& e : enemies_)
     {
         if (!e.alive || e.type == Enemy::SilenceVoid) continue;
-        const float dx = std::abs(e.x - kShipX), dy = std::abs(e.y - shipY_);
+        const float dx = std::abs(e.x - shipX_), dy = std::abs(e.y - shipY_);
         const float hw = e.type == Enemy::Limiter ? 18.0f : 13.0f;
         const float hh = e.type == Enemy::Limiter ? fieldH_ * 0.35f : 10.0f;
         if (dx < hw && dy < hh)
@@ -288,8 +322,11 @@ void BombImpactGame::transitionTo(State s)
             diedThisWave_ = false;
             enemies_.clear();
             bullets_.clear();
-            spawnTick_    = 0;
-            autoFireTick_ = 0;
+            lifeUps_.clear();
+            spawnTick_           = 0;
+            autoFireTick_        = 0;
+            lifeUpSpawnCooldown_ = 300 + rng_.nextInt(300);
+            shipX_ = kShipDefaultX;
             shipY_ = fieldH_ * 0.5f;
             theRoomWave_  = (rng_.nextInt(80) == 0);
             if (theRoomWave_)
@@ -393,13 +430,13 @@ void BombImpactGame::buildSpawnQueue(int waveIdx)
 
 void BombImpactGame::fireAutoShot()
 {
-    bullets_.push_back({ kShipX + 16.0f, shipY_, false, true });
+    bullets_.push_back({ shipX_ + 16.0f, shipY_, false, true });
     if (onKick) onKick();
 }
 
 void BombImpactGame::fireChargedShot()
 {
-    bullets_.push_back({ kShipX + 16.0f, shipY_, true, true });
+    bullets_.push_back({ shipX_ + 16.0f, shipY_, true, true });
     if (onKick) onKick();
 }
 
@@ -484,7 +521,7 @@ void BombImpactGame::paint(juce::Graphics& g, juce::Rectangle<int> content)
     g.fillRect(footer);
     g.setFont(juce::Font(juce::FontOptions(termFont(), 10.0f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFF333333u));
-    g.drawText("[ UP/DN ] DODGE  [ T ] BOOST  [ ESC ] ABORT",
+    g.drawText("[ ARROWS ] DODGE  [ T ] BOOST  [ ESC ] ABORT",
                footer, juce::Justification::centred);
 }
 
@@ -539,8 +576,18 @@ void BombImpactGame::paintField(juce::Graphics& g, juce::Rectangle<int> f)
 
     // Ship
     g.setColour(overdriveActive_ ? juce::Colour(0xFFFFDD00u) : juce::Colour(0xFF88FF44u));
-    g.drawText(">=>", ox + (int)kShipX - 6, oy + (int)shipY_ - 7, 36, 14,
+    g.drawText(">=>", ox + (int)shipX_ - 6, oy + (int)shipY_ - 7, 36, 14,
                juce::Justification::centredLeft);
+
+    // Life-up pickups
+    g.setFont(juce::Font(juce::FontOptions(termFont(), 13.0f, juce::Font::bold)));
+    g.setColour(juce::Colour(0xFFFFDD44u));
+    for (const auto& p : lifeUps_)
+    {
+        if (!p.alive) continue;
+        g.drawText("+1", ox + (int)p.x - 8, oy + (int)p.y - 7, 20, 14,
+                   juce::Justification::centred);
+    }
 
     // Bullets
     for (const auto& b : bullets_)
@@ -586,7 +633,7 @@ void BombImpactGame::paintAttract(juce::Graphics& g, juce::Rectangle<int> f)
 
     g.setFont(juce::Font(juce::FontOptions(termFont(), 10.5f, juce::Font::plain)));
     g.setColour(juce::Colour(0xFF2A5A2Au));
-    g.drawText(">=>  AUTO-FIRE  |  [T] BOOST  |  [UP/DN] DODGE",
+    g.drawText(">=>  AUTO-FIRE  |  [T] BOOST  |  [ARROWS] DODGE",
                f.withTrimmedTop(f.getHeight() / 2 + 6).withBottom(f.getBottom() - 44),
                juce::Justification::centred);
 

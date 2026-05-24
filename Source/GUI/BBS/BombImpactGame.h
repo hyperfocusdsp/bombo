@@ -36,10 +36,17 @@ private:
     // Field geometry — updated at start of paint() each frame
     float fieldW_ = 360.0f, fieldH_ = 350.0f;
 
-    // Ship
+    // Ship — X range is kShipDefaultX +/- kShipRangeX (one ship-width each side)
+    float shipX_ = 52.0f;
     float shipY_ = 175.0f;
-    static constexpr float kShipX    = 52.0f;
-    static constexpr float kShipSpeed = 0.035f; // fraction of fieldH_ per tick
+    static constexpr float kShipDefaultX = 52.0f;
+    static constexpr float kShipRangeX   = 30.0f; // px left/right dodge range
+    static constexpr float kShipSpeed    = 0.035f; // fraction of fieldH_ per tick
+
+    // Life-up pickups
+    struct LifeUp { float x = 0.0f, y = 0.0f; bool alive = true; };
+    std::vector<LifeUp> lifeUps_;
+    int lifeUpSpawnCooldown_ = 0;
 
     struct Enemy {
         enum Type { Mudball, Clipper, SilenceVoid, Limiter } type;
