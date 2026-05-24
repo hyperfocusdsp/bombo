@@ -43,6 +43,13 @@ BBSComponent::BBSComponent()
         if (s == BBSScreen::BoomFeed) refreshSysopVoice();
         repaint();
     };
+
+#if BOMBO_GAME_V2
+    // Load persisted cabinet-lit state so a returning user keeps the powered-on
+    // cabinet glyph. Same JSON store the game's high scores live in.
+    cabinetStore_.load();
+    cabinetLit_ = cabinetStore_.isCabinetLit();
+#endif
 }
 
 BBSComponent::~BBSComponent()
@@ -158,6 +165,24 @@ void BBSComponent::timerCallback()
         scrollSubtick_ = 0;
         scrollOffset_ = (scrollOffset_ + 1) % juce::jmax(1, scrollerText_.length());
     }
+
+#if BOMBO_GAME_V2
+    // Discovery: advance the invader spawn clock + drift while the BBS overlay
+    // is shown and we're NOT inside the game. Timer fires every 40 ms (25 Hz).
+    {
+        const bool bbsVisible = isVisible() && screens_.current() != BBSScreen::Game;
+        discovery_.tick(0.04f, bbsVisible);
+
+        if (discovery_.consumePoweredOnEvent())
+        {
+            // First invader ever seen — power on the cabinet glyph and persist it.
+            // setCabinetLit() saves immediately and stamps firstInvaderSeenAt.
+            cabinetLit_ = true;
+            cabinetStore_.setCabinetLit(true);
+        }
+    }
+#endif
+
     repaint();
 }
 
@@ -415,10 +440,15 @@ void BBSComponent::paint(juce::Graphics& g)
             const int headerH   = 22;
             const int scrollerH = 16;
             const int footerH   = 14;
-            paintHeader    (g, b.removeFromTop(headerH));
+            const auto headerArea = b.removeFromTop(headerH);
+            paintHeader    (g, headerArea);
             b.removeFromBottom(footerH);
-            paintScrollerBar(g, b.removeFromBottom(scrollerH));
+            const auto stripArea = b.removeFromBottom(scrollerH);
+            paintScrollerBar(g, stripArea);
             paintBoomFeed  (g);
+#if BOMBO_GAME_V2
+            paintDiscovery(g, headerArea, stripArea);
+#endif
             break;
         }
 
@@ -427,10 +457,15 @@ void BBSComponent::paint(juce::Graphics& g)
             const int headerH   = 22;
             const int scrollerH = 16;
             const int footerH   = 14;
-            paintHeader     (g, b.removeFromTop(headerH));
+            const auto headerArea = b.removeFromTop(headerH);
+            paintHeader     (g, headerArea);
             b.removeFromBottom(footerH);
-            paintScrollerBar(g, b.removeFromBottom(scrollerH));
+            const auto stripArea = b.removeFromBottom(scrollerH);
+            paintScrollerBar(g, stripArea);
             paintMyDownloads(g);
+#if BOMBO_GAME_V2
+            paintDiscovery(g, headerArea, stripArea);
+#endif
             break;
         }
 
@@ -668,6 +703,112 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
         g.drawText("  (NO DOWNLOADS YET -- PRESS N IN BOOM FEED TO BROWSE)",
                    area.removeFromTop(rowH), juce::Justification::centredLeft);
     }
+}
+
+#if BOMBO_GAME_V2
+void BBSComponent::paintDiscovery(juce::Graphics& g,
+                                  juce::Rectangle<int> headerArea,
+                                  juce::Rectangle<int> stripArea)
+{
+    const auto pal = bombo::game::getGamePalette(
+        bombo::ThemeProvider::get().activeName());
+
+    // --- Cabinet glyph: top-right of the header, dim if unlit, bright if lit ---
+    // kCabinet is 12 wide x 16 tall. Scale to fit the 22px header height.
+    constexpr int cbW = 12, cbH = 16;
+    const int cbScale = juce::jmax(1, (headerArea.getHeight() - 2) / cbH);
+    const int cbPxW = cbW * cbScale;
+    const int cbPxH = cbH * cbScale;
+    // Sit just left of the SYSOP text padding — anchor to the right with margin.
+    const int cbX = headerArea.getRight() - cbPxW - 4;
+    const int cbY = headerArea.getY() + (headerArea.getHeight() - cbPxH) / 2;
+    cabinetRect_ = juce::Rectangle<int>(cbX, cbY, cbPxW, cbPxH);
+
+    for (int r = 0; r < cbH; ++r)
+        for (int c = 0; c < cbW; ++c)
+        {
+            const int idx = bombo::game::sprites::kCabinet[r][c];
+            if (idx == 0) continue;  // transparent
+            juce::Colour col(pal.byIndex(idx));
+            // Unlit: heavily dimmed monochrome silhouette. Lit: full palette colour.
+            if (! cabinetLit_)
+                col = juce::Colour(0xFF333333u).withAlpha(0.7f);
+            g.setColour(col);
+            g.fillRect(cbX + c * cbScale, cbY + r * cbScale, cbScale, cbScale);
+        }
+
+    // --- Invader: drifts across the scope strip when active ---
+    if (! discovery_.hasActiveInvader())
+    {
+        invaderStripRect_ = stripArea;  // keep current for hit-mapping consistency
+        return;
+    }
+    invaderStripRect_ = stripArea;
+
+    constexpr int invW = 8, invH = 8;
+    const int invScale = juce::jmax(1, (stripArea.getHeight() - 2) / invH);
+    const int invPxW = invW * invScale;
+    const int invPxH = invH * invScale;
+
+    // Map logical invaderX in [0, kFbW] -> across the strip width; invaderY in
+    // [0, kFbH] -> across the strip height (clamped so it stays inside the band).
+    const float fx = discovery_.invaderX() / static_cast<float>(bombo::game::kFbW);
+    const float fy = discovery_.invaderY() / static_cast<float>(bombo::game::kFbH);
+    const int sx = stripArea.getX()
+                 + juce::roundToInt(fx * static_cast<float>(stripArea.getWidth()));
+    const int sy = stripArea.getY()
+                 + juce::jlimit(0, juce::jmax(0, stripArea.getHeight() - invPxH),
+                                juce::roundToInt(fy * static_cast<float>(stripArea.getHeight())
+                                                 - invPxH * 0.5f));
+
+    for (int r = 0; r < invH; ++r)
+        for (int c = 0; c < invW; ++c)
+        {
+            const int idx = bombo::game::sprites::kInvader[r][c];
+            if (idx == 0) continue;
+            g.setColour(juce::Colour(pal.byIndex(idx)));
+            g.fillRect(sx + c * invScale, sy + r * invScale, invScale, invScale);
+        }
+}
+#endif
+
+void BBSComponent::mouseDown(const juce::MouseEvent& e)
+{
+#if BOMBO_GAME_V2
+    // Only the discovery surface is clickable, and only on the non-game BBS
+    // screens that render the header + scope strip.
+    if (screens_.current() == BBSScreen::BoomFeed
+        || screens_.current() == BBSScreen::MyDownloads)
+    {
+        // Cabinet glyph click -> launch (regardless of lit state; the glyph is
+        // always drawn, just dim until discovered).
+        if (cabinetLit_ && cabinetRect_.contains(e.getPosition()))
+        {
+            launchGame();
+            return;
+        }
+
+        // Invader click: map the screen position back into the invader's logical
+        // coord space (inverse of paintDiscovery's mapping), then hit-test.
+        if (discovery_.hasActiveInvader() && ! invaderStripRect_.isEmpty()
+            && invaderStripRect_.contains(e.getPosition()))
+        {
+            const float fx = static_cast<float>(e.x - invaderStripRect_.getX())
+                           / static_cast<float>(juce::jmax(1, invaderStripRect_.getWidth()));
+            const float fy = static_cast<float>(e.y - invaderStripRect_.getY())
+                           / static_cast<float>(juce::jmax(1, invaderStripRect_.getHeight()));
+            const float lx = fx * static_cast<float>(bombo::game::kFbW);
+            const float ly = fy * static_cast<float>(bombo::game::kFbH);
+            if (discovery_.tryHitInvader(lx, ly))
+            {
+                launchGame();
+                return;
+            }
+        }
+    }
+#else
+    juce::ignoreUnused(e);
+#endif
 }
 
 void BBSComponent::launchGame()

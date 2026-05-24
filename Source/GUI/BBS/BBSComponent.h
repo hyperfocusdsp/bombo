@@ -12,7 +12,11 @@
 #include "Game/Game.h"
 #include "Game/Framebuffer.h"
 #include "Game/Palette.h"
+#include "Game/Discovery.h"
+#include "Game/HighScores.h"
+#include "Game/SpriteData.h"
 #include "../Theme/ThemeProvider.h"
+#include <random>
 #endif
 
 namespace bombo
@@ -53,6 +57,7 @@ public:
 
     void paint(juce::Graphics&) override;
     bool keyPressed(const juce::KeyPress&) override;
+    void mouseDown(const juce::MouseEvent&) override;
     void resized() override;
 
     // Expose screens for external state queries.
@@ -116,6 +121,22 @@ private:
     bombo::game::Framebuffer gameV2Fb_;     // reused each frame — no alloc cost
     juce::Image             gameV2Image_;  // kFbW x kFbH ARGB, allocated in launchGame()
     int                     prePresetIdx_ = -1;  // stashed preset index restored on exit
+
+    // --- Discovery (Task 23): drifting BBS invader + cabinet glyph ---
+    std::mt19937            discoveryRng_ { std::random_device{}() };
+    bombo::game::Discovery  discovery_ { discoveryRng_ };
+    // cabinetLit is persisted in the SAME store the game uses for high scores
+    // (defaultHighScoresPath()), so the lit state survives restarts and lines up
+    // with the firstInvaderSeenAt stamp that setCabinetLit() writes.
+    bombo::game::HighScores cabinetStore_ { bombo::game::defaultHighScoresPath() };
+    bool                    cabinetLit_ = false;
+    // Cabinet glyph hit rect (BBS-local), set in paint() each frame when shown.
+    juce::Rectangle<int>    cabinetRect_;
+    // Scope-strip rect (BBS-local) the invader's logical coords map into.
+    juce::Rectangle<int>    invaderStripRect_;
+
+    void paintDiscovery(juce::Graphics&, juce::Rectangle<int> headerArea,
+                        juce::Rectangle<int> stripArea);
 #endif
 
     // Konami code detector — runs in parallel, doesn't consume individual keys

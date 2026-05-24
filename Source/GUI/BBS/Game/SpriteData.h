@@ -321,6 +321,19 @@ namespace bombo::game::sprites
         {0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0},
     };
 
+    // Invader 8x8 — classic little alien for the BBS discovery drift.
+    // Palette indices: 0=transparent, 3=accent body, 5=hilite eyes/feet.
+    inline constexpr uint8_t kInvader[8][8] = {
+        {0,0,3,0,0,3,0,0},
+        {0,0,0,3,3,0,0,0},
+        {0,3,3,3,3,3,3,0},
+        {3,3,5,3,3,5,3,3},
+        {3,3,3,3,3,3,3,3},
+        {0,0,3,0,0,3,0,0},
+        {0,3,0,3,3,0,3,0},
+        {3,0,0,0,0,0,0,3},
+    };
+
     // Cabinet glyph 16 rows x 12 cols (BBS header icon, unlit/lit via palette index choice)
     inline constexpr uint8_t kCabinet[16][12] = {
         {0,0,1,1,1,1,1,1,1,1,0,0},

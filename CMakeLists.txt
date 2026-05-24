@@ -250,6 +250,7 @@ if(BOMBO_BUILD_TESTS)
         tests/GameLoopTests.cpp
         tests/GameFlowTests.cpp
         tests/GameInputTests.cpp
+        tests/GameDiscoveryTests.cpp
         Source/GUI/BBS/Game/Palette.cpp
         Source/GUI/BBS/Game/Framebuffer.cpp
         Source/GUI/BBS/Game/Entities.cpp
