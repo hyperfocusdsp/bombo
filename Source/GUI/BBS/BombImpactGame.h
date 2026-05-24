@@ -37,9 +37,9 @@ private:
     float fieldW_ = 360.0f, fieldH_ = 350.0f;
 
     // Ship
-    float shipY_       = 175.0f;
-    float shipTargetY_ = 175.0f;
-    static constexpr float kShipX = 52.0f;
+    float shipY_ = 175.0f;
+    static constexpr float kShipX    = 52.0f;
+    static constexpr float kShipSpeed = 0.035f; // fraction of fieldH_ per tick
 
     struct Enemy {
         enum Type { Mudball, Clipper, SilenceVoid, Limiter } type;

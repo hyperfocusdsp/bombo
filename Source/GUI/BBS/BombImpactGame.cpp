@@ -66,17 +66,10 @@ bool BombImpactGame::keyPressed(const juce::KeyPress& key)
     }
     if (state_ != State::Playing) return true; // swallow in end-screens
 
-    const float step = fieldH_ * 0.13f;
-    if (key == juce::KeyPress::upKey)
-    {
-        shipTargetY_ = juce::jmax(10.0f, shipTargetY_ - step);
-        return true;
-    }
-    if (key == juce::KeyPress::downKey)
-    {
-        shipTargetY_ = juce::jmin(fieldH_ - 10.0f, shipTargetY_ + step);
-        return true;
-    }
+    // Up/Down are handled by polling in tick() for immediate held-key response.
+    if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey)
+        return true; // consume but don't act — tick() polls isCurrentlyDown
+
     const auto ch = juce::CharacterFunctions::toLowerCase(key.getTextCharacter());
     if (ch == 't') { fireChargedShot(); return true; }
 
@@ -103,8 +96,12 @@ void BombImpactGame::tick()
 
         case State::Playing:
         {
-            // Smooth ship movement
-            shipY_ += (shipTargetY_ - shipY_) * 0.22f;
+            // Ship movement — polled every tick so held keys are instant
+            const float spd = fieldH_ * kShipSpeed;
+            if (juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::upKey))
+                shipY_ = juce::jmax(10.0f, shipY_ - spd);
+            if (juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::downKey))
+                shipY_ = juce::jmin(fieldH_ - 10.0f, shipY_ + spd);
 
             // Auto-fire
             if (++autoFireTick_ >= kAutoFireInterval)
@@ -293,8 +290,7 @@ void BombImpactGame::transitionTo(State s)
             bullets_.clear();
             spawnTick_    = 0;
             autoFireTick_ = 0;
-            shipTargetY_  = fieldH_ * 0.5f;
-            shipY_        = fieldH_ * 0.5f;
+            shipY_ = fieldH_ * 0.5f;
             theRoomWave_  = (rng_.nextInt(80) == 0);
             if (theRoomWave_)
             {
