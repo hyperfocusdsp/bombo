@@ -247,6 +247,7 @@ if(BOMBO_BUILD_TESTS)
         tests/GameStateTests.cpp
         tests/GameBalanceSimTests.cpp
         tests/GameScoringTests.cpp
+        tests/GameLoopTests.cpp
         Source/GUI/BBS/Game/Palette.cpp
         Source/GUI/BBS/Game/Framebuffer.cpp
         Source/GUI/BBS/Game/Entities.cpp
@@ -269,6 +270,7 @@ if(BOMBO_BUILD_TESTS)
     target_compile_definitions(Bombo_Tests PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
+        BOMBO_GAME_TEST_HOOKS=1
         $<$<BOOL:${BOMBO_GAME_V2}>:BOMBO_GAME_V2=1>)
     target_link_libraries(Bombo_Tests
         PRIVATE

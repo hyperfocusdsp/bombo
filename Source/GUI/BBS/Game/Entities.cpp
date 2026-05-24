@@ -332,7 +332,7 @@ namespace bombo::game
         }
     }
 
-    int EnemyPool::applyBulletDamage(BulletPool& bullets) noexcept
+    int EnemyPool::applyBulletDamage(BulletPool& bullets, std::vector<KillInfo>* out) noexcept
     {
         int kills = 0;
         for (auto& b : bullets.bullets())
@@ -368,11 +368,13 @@ namespace bombo::game
                             const float sx = e.x, sy = e.y, svx = e.vx;
                             e.active = false;
                             ++kills;
+                            if (out != nullptr) out->push_back({ EnemyKind::Aliaser, sx, sy });
                             spawn(EnemyKind::AliaserMini, sx, sy - 6.0f, svx * 0.7f, -40.0f);
                             spawn(EnemyKind::AliaserMini, sx, sy + 6.0f, svx * 0.7f,  40.0f);
                         }
                         else
                         {
+                            if (out != nullptr) out->push_back({ e.kind, e.x, e.y });
                             e.active = false;
                             ++kills;
                         }

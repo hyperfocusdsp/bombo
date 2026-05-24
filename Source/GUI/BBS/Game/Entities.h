@@ -3,6 +3,7 @@
 #include "Constants.h"
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace bombo::game
 {
@@ -83,8 +84,14 @@ namespace bombo::game
         // enemyShots: optional pool for RUMBLR shockwave projectiles (and future bosses).
         // Both params default to nullptr so existing ep.tick() / ep.tick(&player) callers compile.
         void   tick(const Player* player = nullptr, BulletPool* enemyShots = nullptr) noexcept;
-        // Returns number of enemies killed this call.
-        int    applyBulletDamage(BulletPool& bullets) noexcept;
+
+        // Per-kill report for scoring + drop rolls. Reports the PARENT kill only
+        // (AliaserMini spawns are not reported; the existing split logic is unchanged).
+        struct KillInfo { EnemyKind kind; float x, y; };
+        // Returns number of enemies killed this call. If `out` is non-null, a KillInfo
+        // is pushed for each kill. Default-null keeps existing callers/tests compiling.
+        int    applyBulletDamage(BulletPool& bullets,
+                                 std::vector<KillInfo>* out = nullptr) noexcept;
         const std::array<Enemy, kMax>& enemies() const noexcept { return slots_; }
         std::array<Enemy, kMax>&        enemies() noexcept       { return slots_; }
     private:
