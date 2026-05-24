@@ -1,6 +1,8 @@
 // Source/GUI/BBS/Game/Constants.h
 #pragma once
 
+#include <array>
+
 namespace bombo::game
 {
     // Framebuffer geometry
@@ -22,8 +24,9 @@ namespace bombo::game
 
     // Chain meter
     inline constexpr float kChainDrainSec    = 4.0f;
-    inline constexpr int   kChainThresholds[5] = { 1, 5, 15, 30, 50 };
-    inline constexpr float kChainMultipliers[5] = { 1.0f, 1.5f, 2.0f, 3.0f, 4.0f };
+    inline constexpr int   kChainTierCount   = 5;
+    inline constexpr std::array<int,   kChainTierCount> kChainThresholds  = { 1, 5, 15, 30, 50 };
+    inline constexpr std::array<float, kChainTierCount> kChainMultipliers = { 1.0f, 1.5f, 2.0f, 3.0f, 4.0f };
 
     // Shop
     inline constexpr int kRerollBaseCost     = 10;
