@@ -98,6 +98,7 @@ public:
     {
         hpFilter_.setHpf(sampleRate, 30.0f, 0.707f);
         lpFilter_.setLpf(sampleRate, 4500.0f, 0.707f);
+        prepareClickSmoothers(sampleRate);
     }
 
     void setSampleRate(float sampleRate) noexcept
@@ -112,6 +113,7 @@ public:
         masterBus_.setSampleRate(sampleRate);
         hpFilter_.setHpf(sampleRate, lastHpHz_, lastHpQ_);
         lpFilter_.setLpf(sampleRate, lastLpHz_, lastLpQ_);
+        prepareClickSmoothers(sampleRate);
     }
 
     void reset() noexcept
@@ -153,6 +155,17 @@ public:
         reverb_.onTrigger();
     }
 
+    void prepareClickSmoothers(float sr) noexcept
+    {
+        constexpr float kTauSec = 0.025f;  // 25 ms — masks block-rate steps
+        smDriveAmount_.prepare(sr, kTauSec);
+        smDriveMix_   .prepare(sr, kTauSec);
+        smDelayMix_   .prepare(sr, kTauSec);
+        smReverbMix_  .prepare(sr, kTauSec);
+        smDuckDepth_  .prepare(sr, kTauSec);
+        smFilterColor_.prepare(sr, kTauSec);
+    }
+
     void update(const ChainParams& p) noexcept
     {
         // Filter coefs — only recompute when params actually moved.
@@ -178,7 +191,8 @@ public:
             lpFilter_.setLpf(sampleRate_, effectiveLpHz, p.lpQ);
             lastLpHz_ = effectiveLpHz; lastLpQ_ = p.lpQ;
         }
-        lpFilter_.setDrive(p.filterColor);
+        // lpFilter_.setDrive is called per-sample from process() via
+        // smFilterColor_ instead of block-rate here — see process() top.
 
         // Tempo-sync mode: when delayTimeMode != 0 the effective delay
         // length is computed from host BPM × note-value, overriding the
@@ -220,6 +234,29 @@ public:
         ducker_.setShape(p.duckShape);
         ducker_.setGrowl(p.duckGrowl);
 
+        // Click-prone scalars: snap to target on the very first update
+        // so plugin startup + per-beat-identity tests don't see a ramp
+        // from defaults to first real values. Subsequent updates ramp.
+        if (firstUpdate_)
+        {
+            smDriveAmount_.snap(p.driveAmount);
+            smDriveMix_   .snap(p.driveMix);
+            smDelayMix_   .snap(p.delayMix);
+            smReverbMix_  .snap(p.reverbMix);
+            smDuckDepth_  .snap(p.duckDepth);
+            smFilterColor_.snap(p.filterColor);
+            firstUpdate_ = false;
+        }
+        else
+        {
+            smDriveAmount_.setTarget(p.driveAmount);
+            smDriveMix_   .setTarget(p.driveMix);
+            smDelayMix_   .setTarget(p.delayMix);
+            smReverbMix_  .setTarget(p.reverbMix);
+            smDuckDepth_  .setTarget(p.duckDepth);
+            smFilterColor_.setTarget(p.filterColor);
+        }
+
         params_ = p;
     }
 
@@ -240,6 +277,19 @@ public:
     // Process one sample. dry = current voice-pool sum.
     float process(float dry) noexcept
     {
+        // Step per-sample smoothers on the click-prone scalars. params_
+        // was overwritten block-rate by update(); we re-step the six
+        // smoothed fields here so the FX stages read sample-rate-ramped
+        // values rather than block boundaries. Filter color routes
+        // through the LP biquad's setDrive (replaces the block-rate
+        // setDrive call previously in update()).
+        params_.driveAmount = smDriveAmount_.next();
+        params_.driveMix    = smDriveMix_   .next();
+        params_.delayMix    = smDelayMix_   .next();
+        params_.reverbMix   = smReverbMix_  .next();
+        params_.duckDepth   = smDuckDepth_  .next();
+        lpFilter_.setDrive(smFilterColor_.next());
+
         // TEETH: advance pitch-tracking envelope every sample so update()
         // picks up the current value at block rate for LP modulation.
         if (teethEnv_ > 0.0001f)
@@ -342,6 +392,22 @@ private:
     static_assert(std::atomic<FxOrder>::is_always_lock_free,
                   "FxOrder atomic must be lock-free on this platform - "
                   "if not, switch to a triple-buffer pattern");
+
+    // Per-sample smoothers on the click-prone scalars. The FX stages
+    // (processDrive / processDelay / processReverb / ducker / LP drive)
+    // read these every sample; without smoothing, every block boundary
+    // is a step discontinuity in gain / nonlinear amount / wet-mix that
+    // the ear hears as a single pop on knob-drag start. 25 ms tau is
+    // long enough to mask the step, short enough to feel like a live
+    // knob. First update() after construction snaps so plugin startup
+    // and the per-beat-identity tests don't see a ramp.
+    SmoothScalar smDriveAmount_;
+    SmoothScalar smDriveMix_;
+    SmoothScalar smDelayMix_;
+    SmoothScalar smReverbMix_;
+    SmoothScalar smDuckDepth_;
+    SmoothScalar smFilterColor_;
+    bool firstUpdate_ = true;
 };
 
 } // namespace bombo
