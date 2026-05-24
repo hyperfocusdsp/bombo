@@ -134,7 +134,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::driveAmount, 1},
         "Drive", Range(0.0f, 1.0f, 0.001f), 0.30f, normFormat));
     p.push_back(std::make_unique<Choice>(juce::ParameterID{pid::driveMode, 1},
-        "Drive Mode", juce::StringArray{"Off", "Tanh", "Diode", "Cubic"},
+        "Drive Mode", juce::StringArray{"Off", "Tanh", "Diode", "Cubic", "Fuzz", "Fold", "Phase", "Rect", "Crush"},
         VC_DIODE));
     // BIAS: DC offset into waveshaper pre-clip → asymmetric harmonics (tube character).
     // -1 = heavy negative bias, 0 = symmetric, +1 = heavy positive bias.
@@ -148,7 +148,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::fxDriveAmount, 1},
         "FX Drive", Range(0.0f, 1.0f, 0.001f), 0.0f, normFormat));
     p.push_back(std::make_unique<Choice>(juce::ParameterID{pid::fxDriveMode, 1},
-        "FX Drive Mode", juce::StringArray{"Off", "Tanh", "Diode", "Cubic"},
+        "FX Drive Mode", juce::StringArray{"Off", "Tanh", "Diode", "Cubic", "Fuzz", "Fold", "Phase", "Rect", "Crush"},
         VC_TANH));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::fxDriveMix, 1},
         "FX Drive Mix", Range(0.0f, 1.0f, 0.001f), 1.0f, normFormat));
