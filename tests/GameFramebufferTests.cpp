@@ -1,6 +1,7 @@
 // tests/GameFramebufferTests.cpp
 #include "GUI/BBS/Game/Framebuffer.h"
 #include "GUI/BBS/Game/Palette.h"
+#include "GUI/BBS/Game/SpriteData.h"
 #include <juce_core/juce_core.h>
 
 namespace
@@ -80,8 +81,44 @@ public:
     }
 };
 
-static FbPsetReadbackTest a;
-static FbSpriteBlitTest   b;
-static FbClipTest         c;
-static FbTextTest         d;
+class SpriteDataNonEmptyTest : public juce::UnitTest
+{
+public:
+    SpriteDataNonEmptyTest() : juce::UnitTest("SpriteData: bundled tiles are non-empty") {}
+    void runTest() override
+    {
+        using namespace bombo::game;
+        beginTest("player and mudball have at least 20 lit pixels each");
+        int playerHits = 0;
+        for (int y = 0; y < 10; ++y)
+            for (int x = 0; x < 10; ++x)
+                if (sprites::kPlayer[y][x] != 0) ++playerHits;
+        expectGreaterThan(playerHits, 20);
+
+        int mudHits = 0;
+        for (int y = 0; y < 10; ++y)
+            for (int x = 0; x < 10; ++x)
+                if (sprites::kMudball[y][x] != 0) ++mudHits;
+        expectGreaterThan(mudHits, 20);
+
+        beginTest("$dB token and cabinet are non-empty");
+        int dbHits = 0;
+        for (int y = 0; y < 6; ++y)
+            for (int x = 0; x < 6; ++x)
+                if (sprites::kDbSmall[y][x] != 0) ++dbHits;
+        expectGreaterThan(dbHits, 10);
+
+        int cabHits = 0;
+        for (int y = 0; y < 16; ++y)
+            for (int x = 0; x < 12; ++x)
+                if (sprites::kCabinet[y][x] != 0) ++cabHits;
+        expectGreaterThan(cabHits, 30);
+    }
+};
+
+static FbPsetReadbackTest    a;
+static FbSpriteBlitTest      b;
+static FbClipTest            c;
+static FbTextTest            d;
+static SpriteDataNonEmptyTest spriteSanity;
 } // namespace
