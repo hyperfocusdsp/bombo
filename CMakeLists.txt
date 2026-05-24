@@ -131,6 +131,7 @@ target_sources(Bombo
         Source/GUI/BBS/Game/Discovery.cpp
         Source/GUI/BBS/Game/Audio.cpp
         Source/GUI/BBS/Game/Game.cpp
+        Source/GUI/BBS/Game/Effects.cpp
         Source/GUI/Nose/NoseComponent.h
         Source/GUI/Nose/NoseComponent.cpp
         Source/GUI/BombShape.h
@@ -239,6 +240,7 @@ if(BOMBO_BUILD_TESTS)
         tests/GameWavesTests.cpp
         tests/GameShopTests.cpp
         tests/GameDropsTests.cpp
+        tests/GameEffectsTests.cpp
         tests/GameHighScoresTests.cpp
         tests/GameRumblrTests.cpp
         tests/GameStateTests.cpp
@@ -254,6 +256,7 @@ if(BOMBO_BUILD_TESTS)
         Source/GUI/BBS/Game/Discovery.cpp
         Source/GUI/BBS/Game/Audio.cpp
         Source/GUI/BBS/Game/Game.cpp
+        Source/GUI/BBS/Game/Effects.cpp
         Source/GUI/BBS/ProgressionManager.cpp
         Source/GUI/BBS/BoomFeed.cpp
         Source/GUI/Theme/ThemeProvider.cpp
