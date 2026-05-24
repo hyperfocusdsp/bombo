@@ -430,6 +430,16 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
     c->label->setColour(juce::Label::textColourId, labelColour);
     c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts_, paramId, *c->slider);
+    // Wire double-click / Ctrl-click reset to the param's declared default
+    // (BomboKnob ctor leaves the flag false so an un-wired slider stays
+    // inert). Matches Bitwig/Ableton convention; user request 2026-05-24.
+    if (auto* rp = apvts_.getParameter(paramId))
+    {
+        const auto& range = static_cast<juce::RangedAudioParameter*>(rp)
+                                ->getNormalisableRange();
+        const float plainDefault = range.convertFrom0to1(rp->getDefaultValue());
+        c->slider->setDoubleClickReturnValue(true, plainDefault);
+    }
     addAndMakeVisible(*c->slider);
     addAndMakeVisible(*c->label);
     Control* raw = c.get();
@@ -476,6 +486,16 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
     c->label->setColour(juce::Label::textColourId, labelColour);
     c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts_, paramId, *c->slider);
+    // Wire double-click / Ctrl-click reset to the param's declared default
+    // (BomboKnob ctor leaves the flag false so an un-wired slider stays
+    // inert). Matches Bitwig/Ableton convention; user request 2026-05-24.
+    if (auto* rp = apvts_.getParameter(paramId))
+    {
+        const auto& range = static_cast<juce::RangedAudioParameter*>(rp)
+                                ->getNormalisableRange();
+        const float plainDefault = range.convertFrom0to1(rp->getDefaultValue());
+        c->slider->setDoubleClickReturnValue(true, plainDefault);
+    }
     addAndMakeVisible(*c->slider);
     addAndMakeVisible(*c->label);
     Control* raw = c.get();

@@ -132,6 +132,15 @@ private:
         const float plain = p->convertFrom0to1(p->getValue());
         const juce::ScopedValueSetter<bool> guard(suppressWrites_, true);
         slider_.setValue(plain, juce::sendNotificationSync);
+        // Also retarget the double-click / Ctrl-click reset value to the
+        // newly-routed param's default — so a reset gesture lands on the
+        // default of whatever DEC is currently controlling.
+        if (auto* rp = static_cast<juce::RangedAudioParameter*>(p))
+        {
+            const float plainDefault =
+                rp->getNormalisableRange().convertFrom0to1(rp->getDefaultValue());
+            slider_.setDoubleClickReturnValue(true, plainDefault);
+        }
     }
 
     juce::AudioProcessorValueTreeState& apvts_;
