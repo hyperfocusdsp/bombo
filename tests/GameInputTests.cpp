@@ -90,12 +90,21 @@ public:
             expect(g.state() == GameState::QuitConfirm);
         }
 
-        beginTest("H -> Help, F charges, arrows nudge");
+        beginTest("H -> Help, F charges; arrows are consumed but do NOT nudge (movement is polled)");
         {
             Game g; g.startNewRun(false);
+            // Movement in Playing/Boss is the polled setMoveInput source, NOT a
+            // handleKey per-press nudge (avoids double-counting once BBSComponent
+            // polls isKeyCurrentlyDown each tick). handleKey still consumes the
+            // arrow so it doesn't leak, but the player position must not change.
             const float x0 = g.player().x;
-            expect(send(g, KP::rightKey));
-            expect(g.player().x > x0);
+            expect(send(g, KP::rightKey));       // consumed
+            expect(g.player().x == x0);          // ...but no nudge
+            // The actual movement path: setMoveInput + tick integrates velocity.
+            Game::InputState in; in.right = true;
+            g.setMoveInput(in);
+            g.tick();
+            expect(g.player().x > x0);           // polled input moves the player
             expect(send(g, 'F'));
             expect(g.player().charging);
             expect(send(g, 'H'));

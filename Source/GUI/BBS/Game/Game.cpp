@@ -927,20 +927,20 @@ namespace bombo::game
     // ASCII (BBS forwards key.getKeyCode(), which for letters is the uppercase
     // ASCII value). Returns true if the key was consumed.
     //
-    // HELD-MOVEMENT NOTE: JUCE keyPressed is edge-triggered; BBSComponent only
-    // forwards keyPressed (no key-up, no per-frame polling today). So here we
-    // (a) keep the setMoveInput(InputState) seam — the *intended* continuous
-    // path — and (b) ALSO treat an arrow keyPressed as a one-shot nudge so the
-    // player still moves under the current edge-only wiring. For smooth held
-    // movement the BBSComponent timerCallback should poll
-    // juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::leftKey) (and up/down/
-    // right) each tick and call gameV2_.setMoveInput({up,down,left,right}); that
-    // BBS-side wiring is left to the integration/acceptance task and does not
-    // block this one. (DOCUMENTED.)
+    // HELD-MOVEMENT NOTE: JUCE keyPressed is edge-triggered. Smooth held
+    // movement in Playing/Boss is now driven by BBSComponent::timerCallback,
+    // which polls juce::KeyPress::isKeyCurrentlyDown each tick and calls
+    // setMoveInput({up,down,left,right}); tick() integrates input_ into player
+    // velocity. So the arrow branches in the Playing/Boss case below are no-ops
+    // for movement (they only consume the key) — the polled path is the single
+    // movement source, avoiding double-counting. Arrow keys in the menu states
+    // (Title/Pause/Shop/Initials) remain edge-driven here for selection. (DONE.)
     //
-    // ESC NOTE: BBSComponent intercepts escapeKey before handleKey is reached
-    // (it calls exitGame()), so the ESC branches below mainly serve the unit
-    // tests / future direct callers. (DOCUMENTED.)
+    // ESC NOTE: BBSComponent no longer intercepts escapeKey under BOMBO_GAME_V2;
+    // it forwards ESC to handleKey so the game owns ESC semantics. In Playing/
+    // Boss/Shop ESC opens QuitConfirm; in QuitConfirm ESC/Y/Enter confirmQuit()
+    // sets wantsExit_, which BBSComponent::timerCallback polls -> exitGame().
+    // (DONE.)
     // ────────────────────────────────────────────────────────────────────────
     bool Game::handleKey(int key, juce::ModifierKeys /*mods*/)
     {
@@ -980,11 +980,14 @@ namespace bombo::game
             case GameState::Playing:
             case GameState::Boss:
             {
-                // Discrete nudge fallback (see HELD-MOVEMENT NOTE).
-                if (isLeft)  { player_.x -= 6.0f; clampPlayerToField(); return true; }
-                if (isRight) { player_.x += 6.0f; clampPlayerToField(); return true; }
-                if (isUp)    { player_.y -= 6.0f; clampPlayerToField(); return true; }
-                if (isDown)  { player_.y += 6.0f; clampPlayerToField(); return true; }
+                // Movement in Playing/Boss is the POLLED source: BBSComponent's
+                // timerCallback polls isKeyCurrentlyDown each tick and calls
+                // setMoveInput(); tick() integrates input_ into velocity. So the
+                // arrow keys here must NOT also nudge the player or we'd double-
+                // count (polled velocity + per-press nudge). We still consume
+                // them (return true) so they don't leak to other handlers.
+                // (Arrows in menus/shop/initials remain edge-driven below.)
+                if (isLeft || isRight || isUp || isDown) return true;
                 if (ch == 'F' || key == KP::spaceKey) { setCharging(true); return true; }
                 if (ch == 'A') { player_.autofireOn = ! player_.autofireOn; return true; }
                 if (ch == 'P') { togglePause(); return true; }

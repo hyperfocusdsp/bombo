@@ -140,6 +140,27 @@ void BBSComponent::timerCallback()
             if (reportedBpm > 0.0f)
                 gameV2_.setHostBpm(reportedBpm);
         }
+
+        // Held-key movement polling. handleKey is edge-triggered (key-press
+        // only), which gives discrete nudges, not smooth held movement. So in
+        // the live-play states we poll the arrow keys each tick and feed them
+        // to setMoveInput(); tick() integrates input_ into player velocity.
+        // This is the ONLY movement source in Playing/Boss — handleKey's
+        // arrow branches in those states are no-ops to avoid double-counting.
+        // Arrows still drive menu nav (Title/Pause/Shop/Initials) via handleKey.
+        // Requires keyboard focus, which BBSComponent holds while shown
+        // (grabKeyboardFocus() in show()/launchGame path + EDITOR_WANTS_KEYBOARD_FOCUS).
+        const auto gs = gameV2_.state();
+        if (gs == bombo::game::GameState::Playing || gs == bombo::game::GameState::Boss)
+        {
+            bombo::game::Game::InputState in;
+            in.up    = juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::upKey);
+            in.down  = juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::downKey);
+            in.left  = juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::leftKey);
+            in.right = juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::rightKey);
+            gameV2_.setMoveInput(in);
+        }
+
         gameV2_.tick();
         if (gameV2_.wantsExit()) exitGame();
 #else
@@ -192,13 +213,20 @@ void BBSComponent::timerCallback()
 
 bool BBSComponent::keyPressed(const juce::KeyPress& key)
 {
-    // Game screen intercepts all input. ESC exits game (not the whole BBS).
+    // Game screen intercepts all input.
     if (screens_.current() == BBSScreen::Game)
     {
-        if (key == juce::KeyPress::escapeKey) { exitGame(); return true; }
 #if BOMBO_GAME_V2
+        // ESC is NOT intercepted here under v2: forward it to the game so the
+        // game decides what ESC means in the current state (in Playing/Boss it
+        // opens QuitConfirm; in QuitConfirm a second ESC/Y confirms quit). The
+        // game raises wantsExit_ on confirmQuit(), and timerCallback() polls
+        // that and calls exitGame() to tear the game down. Calling exitGame()
+        // directly here would skip QuitConfirm and hard-exit the run.
         return gameV2_.handleKey(key.getKeyCode(), key.getModifiers());
 #else
+        // v1 behaviour: ESC exits the game (not the whole BBS).
+        if (key == juce::KeyPress::escapeKey) { exitGame(); return true; }
         return game_.keyPressed(key);
 #endif
     }
@@ -879,6 +907,13 @@ void BBSComponent::launchGame()
     screens_.transitionTo(BBSScreen::Game);
     commandBuffer_.clear();
     konamiPos_ = 0;
+
+    // Held-key movement polling (timerCallback) relies on
+    // juce::KeyPress::isKeyCurrentlyDown, which only reports keys while this
+    // component holds keyboard focus. show() grabs it, but launchGame can also
+    // be reached via a mouse click (cabinet glyph) which may not have focused
+    // us — grab it explicitly so arrows register no matter the launch path.
+    grabKeyboardFocus();
 #else
     game_.onKick = triggerCb_;
     game_.startGame();
