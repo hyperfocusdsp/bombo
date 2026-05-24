@@ -64,7 +64,7 @@ namespace bombo::game
         void startNewRun(bool dailySeed);
         void togglePause();
         void requestQuit();      // opens QuitConfirm modal from any state
-        void confirmQuit();      // returns to Title, sets wantsExit_ to false
+        void confirmQuit();      // returns to Title, sets wantsExit_ = true (BBS polls it to tear down)
         void cancelQuit();       // returns to prior state
 
         // One simulation tick (1/60s by spec) — stub for now
