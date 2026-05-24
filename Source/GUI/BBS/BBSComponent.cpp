@@ -662,6 +662,13 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
 
 void BBSComponent::launchGame()
 {
+    // Re-entrancy guard: never re-stash the preset while a game is already live,
+    // or we'd clobber prePresetIdx_ with the in-game Pew index and lose the
+    // user's real preset. (The keyboard path already can't re-enter, but Task 14
+    // and any future HeaderBar launch button add new callers.)
+    if (screens_.current() == BBSScreen::Game)
+        return;
+
 #if BOMBO_GAME_V2
     // Stash current preset so we can restore it on exit.
     prePresetIdx_ = (presetBank_ != nullptr) ? presetBank_->currentIndex() : -1;
@@ -722,10 +729,12 @@ void BBSComponent::exitGame()
 
     screens_.transitionTo(BBSScreen::BoomFeed);
     commandBuffer_.clear();
+    konamiPos_ = 0;
 #else
     game_.stopGame();
     screens_.transitionTo(BBSScreen::BoomFeed);
     commandBuffer_.clear();
+    konamiPos_ = 0;
 #endif
 }
 
