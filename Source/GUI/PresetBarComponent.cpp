@@ -259,6 +259,17 @@ void PresetBarComponent::showMenu()
         });
 }
 
+void PresetBarComponent::FocusGrabber::timerCallback()
+{
+    if (target_.hasKeyboardFocus(true) || attempts_ >= 40)
+    {
+        stopTimer();
+        return;
+    }
+    target_.grabKeyboardFocus();
+    ++attempts_;
+}
+
 void PresetBarComponent::beginEdit(EditMode mode)
 {
     edit_ = mode;
@@ -271,19 +282,13 @@ void PresetBarComponent::beginEdit(EditMode mode)
     repaint();  // hide the cached nameText_ behind the editor
     // Focus-grab must survive (a) PopupMenu's own focus-return async,
     // (b) BomboEditor::visibilityChanged grabbing focus on the editor, and
-    // (c) any other late focus shuffling. Two stacked callAsyncs weren't
-    // enough on geek (Hyprland) — user 2026-05-24 still had to click the
-    // field. A 60 ms Timer::callAfterDelay drains the entire event queue
-    // first, then grabs. Retried at 150 ms in case the first lost — cheap
-    // belt-and-suspenders, and idempotent if focus is already there.
-    auto grab = [safe = juce::Component::SafePointer<juce::TextEditor>(&nameEditor_)]
-    {
-        if (safe == nullptr) return;
-        if (! safe->hasKeyboardFocus(true))
-            safe->grabKeyboardFocus();
-    };
-    juce::Timer::callAfterDelay(60,  grab);
-    juce::Timer::callAfterDelay(150, grab);
+    // (c) any other late focus shuffling. Fixed callAfterDelay windows
+    // (60 / 150 ms) were unreliable on Hyprland/Wayland — the OS-level
+    // focus restore after popup dismissal can land outside the window the
+    // timers fire in, so both grabs no-op and the user has to click.
+    // FocusGrabber polls every 25 ms (≤ 1 s total) and stops the moment
+    // the editor actually has focus; idempotent and self-cancelling.
+    focusGrabber_.start();
 }
 
 void PresetBarComponent::commitEdit()

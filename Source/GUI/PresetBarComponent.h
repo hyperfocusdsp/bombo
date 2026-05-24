@@ -74,6 +74,23 @@ private:
 
     EditMode edit_ = EditMode::None;
 
+    // Retry pump: PopupMenu dismissal + BomboEditor::visibilityChanged +
+    // host-side focus shuffles can each steal focus back from nameEditor_
+    // at unpredictable delays (worse on Hyprland/Wayland). Instead of
+    // gambling on one fixed callAfterDelay window, keep re-grabbing
+    // until the editor has focus or we hit the attempt cap.
+    class FocusGrabber : public juce::Timer
+    {
+    public:
+        explicit FocusGrabber(juce::TextEditor& te) : target_(te) {}
+        void start() { attempts_ = 0; startTimer(25); }
+        void timerCallback() override;
+    private:
+        juce::TextEditor& target_;
+        int               attempts_ = 0;
+    };
+    FocusGrabber focusGrabber_ { nameEditor_ };
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBarComponent)
 };
 
