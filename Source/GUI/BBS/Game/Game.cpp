@@ -476,6 +476,45 @@ namespace bombo::game
         return hit;
     }
 
+    bool Game::resolveEnemyBodyContact() noexcept
+    {
+        // Body-contact threat (spec §6.1). Player hitbox ~6px, enemy ~5px
+        // half-extent → treat an overlap as contact when both axes are within
+        // 8px (Chebyshev/AABB), mirroring the enemy-shot test's tolerance for a
+        // fair, slightly-forgiving feel. Returns true on a life-costing hit.
+        constexpr float kContactExtent = 8.0f;
+
+        // SilenceVoid drains the chain on contact (NON-lethal). This runs every
+        // tick the player overlaps a void — the intended "energy suck" that keeps
+        // the chain suppressed while you linger near it (spec §6.1). It never
+        // touches lives and never short-circuits the lethal pass below.
+        for (auto& e : enemies_.enemies())
+        {
+            if (! e.active || e.kind != EnemyKind::SilenceVoid) continue;
+            if (std::abs(e.x - player_.x) < kContactExtent &&
+                std::abs(e.y - player_.y) < kContactExtent)
+                chain_.drain();
+        }
+
+        // Lethal contact (all OTHER kinds). Gate the WHOLE block on i-frames so
+        // we lose at most one life per tick no matter how many enemies overlap,
+        // exactly like the enemy-shot path. The 150-tick invincibility set by
+        // takeHit() then guarantees no multi-tick drain. We do NOT deactivate the
+        // enemy: ordinary mobs (and DiveBomber kamikazes) pass through and the
+        // player eats the hit. Keeping DiveBomber non-detonating is the simple
+        // v1.0.x choice — it flies off-screen and culls normally. (DOCUMENTED.)
+        if (player_.isInvincible()) return false;
+
+        for (const auto& e : enemies_.enemies())
+        {
+            if (! e.active || e.kind == EnemyKind::SilenceVoid) continue;
+            if (std::abs(e.x - player_.x) < kContactExtent &&
+                std::abs(e.y - player_.y) < kContactExtent)
+                return true;   // one damaging contact is enough this tick
+        }
+        return false;
+    }
+
     void Game::grantRandomShopItem()
     {
         const auto& cat = catalogV10();
@@ -540,6 +579,23 @@ namespace bombo::game
 
         // Enemy shots vs player.
         if (! player_.isInvincible() && enemyShotsHitPlayer())
+        {
+            player_.takeHit();
+            --lives_;
+            if (lives_ <= 0)
+            {
+                lives_ = 0;
+                onGameOver(/*victory=*/false);
+                return;   // run is over; skip pickup collection this tick
+            }
+        }
+
+        // Enemy bodies vs player (spec §6.1). resolveEnemyBodyContact() also
+        // applies the SilenceVoid chain-drain internally (non-lethal). The
+        // returned bool is true only for a life-costing contact, and the helper
+        // already gates on i-frames, so a player made invincible by the shot pass
+        // above will correctly take no further contact damage this tick.
+        if (resolveEnemyBodyContact())
         {
             player_.takeHit();
             --lives_;

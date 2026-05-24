@@ -14,15 +14,19 @@ namespace bombo::game
         {
             switch (waveIdx)
             {
-                case 1: return { { EnemyKind::Mudball }, 4 };
-                case 2: return { { EnemyKind::Mudball, EnemyKind::Clipper }, 5 };
-                case 3: return { { EnemyKind::Mudball, EnemyKind::Clipper, EnemyKind::DiveBomber }, 5 };
-                case 4: return { { EnemyKind::Clipper, EnemyKind::Aliaser, EnemyKind::DiveBomber }, 6 };
-                case 5: return { { EnemyKind::Mudball, EnemyKind::Clipper, EnemyKind::SilenceVoid,
-                                   EnemyKind::Limiter, EnemyKind::Aliaser }, 6 };
-                case 6: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber }, 7 };
-                case 7: return { { EnemyKind::Limiter, EnemyKind::Clipper, EnemyKind::Aliaser }, 7 };
-                default: return { { EnemyKind::Mudball }, 4 };
+                // Densities re-tuned 2026-05-25 after enemy body-contact damage
+                // landed (spec §6.1). Contact attrition is now the dominant threat,
+                // so formation counts came DOWN substantially to keep the §13.3
+                // calibration curve (forgiving W1-W3, W5-W6 skill gate, boss reachable).
+                case 1: return { { EnemyKind::Mudball }, 1 };
+                case 2: return { { EnemyKind::Mudball, EnemyKind::Clipper }, 1 };
+                case 3: return { { EnemyKind::Mudball, EnemyKind::Clipper, EnemyKind::DiveBomber }, 2 };
+                case 4: return { { EnemyKind::Clipper, EnemyKind::Aliaser, EnemyKind::DiveBomber }, 3 };
+                case 5: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Clipper,
+                                   EnemyKind::Limiter }, 6 };
+                case 6: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber }, 5 };
+                case 7: return { { EnemyKind::Limiter, EnemyKind::Clipper, EnemyKind::Aliaser }, 4 };
+                default: return { { EnemyKind::Mudball }, 1 };
             }
         }
 

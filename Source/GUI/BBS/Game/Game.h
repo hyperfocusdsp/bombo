@@ -41,6 +41,10 @@ namespace bombo::game
         int  count() const noexcept { return count_; }
         int  peak()  const noexcept { return peak_; }
         void resetForWave() noexcept { peak_ = 0; count_ = 0; idle_ = 0.0f; }
+        // Suppress the live chain count without touching the run-peak. Used by
+        // SilenceVoid body contact (spec §6.1) — the void "drains" your energy
+        // while you're near it, but the peak you earned still counts for scoring.
+        void drain() noexcept { count_ = 0; idle_ = 0.0f; }
     private:
         int   count_ = 0;
         int   peak_  = 0;
@@ -219,6 +223,10 @@ namespace bombo::game
         void spawnPlayerShot();
         void resolveCombat();
         bool enemyShotsHitPlayer() noexcept;
+        // Enemy-body contact pass (spec §6.1). Returns true if a damaging (life-
+        // costing) contact occurred this tick. SilenceVoid contact drains the
+        // chain (handled inside) but is NOT lethal, so it does not set the result.
+        bool resolveEnemyBodyContact() noexcept;
         void collectPickupsTouchingPlayer();
         void maybeSpawnDrop(EnemyKind kind, float x, float y);
         void grantRandomShopItem();

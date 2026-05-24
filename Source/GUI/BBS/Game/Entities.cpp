@@ -228,7 +228,11 @@ namespace bombo::game
             case EnemyKind::Aliaser:     return 1;
             case EnemyKind::AliaserMini: return 1;
             case EnemyKind::DiveBomber:  return 1;
-            case EnemyKind::Rumblr:      return 60;
+            // Re-swept 2026-05-25 (60 -> 13): once enemy body-contact damage landed,
+            // players reach the boss weaker + thinner, so the old HP 60 was unkillable.
+            // HP 13 puts boss completion at ~15% of all runs (spec §13.3 band). See
+            // tests/GameBalanceSim.cpp calibration notes for the full sweep.
+            case EnemyKind::Rumblr:      return 13;
         }
         return 1;
     }

@@ -216,6 +216,91 @@ public:
             expectGreaterThan(shots, 0);
         }
 
+        beginTest("enemy body contact costs one life when not invincible");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            const auto& pl = g.player();
+            expect(! pl.isInvincible());
+            const int livesBefore = g.lives();
+            // A Mudball sitting right on the player → body contact this tick.
+            // Keep an out-of-range enemy alive so the wave doesn't clear.
+            g.testEnemies().spawn(EnemyKind::Mudball, pl.x, pl.y, 0.0f, 0.0f);
+            g.testEnemies().spawn(EnemyKind::Limiter, (float) (kFbW - 8), 8.0f, 0.0f, 0.0f);
+            g.tick();
+            expectEquals(g.lives(), livesBefore - 1);
+            expect(g.player().isInvincible());
+        }
+
+        beginTest("multiple overlapping enemies cost only ONE life per tick");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            const auto& pl = g.player();
+            expect(! pl.isInvincible());
+            const int livesBefore = g.lives();
+            // Three damaging enemies all overlapping the player in the SAME tick.
+            g.testEnemies().spawn(EnemyKind::Mudball, pl.x,        pl.y,        0.0f, 0.0f);
+            g.testEnemies().spawn(EnemyKind::Clipper, pl.x + 1.0f, pl.y,        0.0f, 0.0f);
+            g.testEnemies().spawn(EnemyKind::Limiter, pl.x,        pl.y + 1.0f, 0.0f, 0.0f);
+            // Out-of-range filler so the wave can't clear mid-assertion.
+            g.testEnemies().spawn(EnemyKind::Mudball, (float) (kFbW - 8), 8.0f, 0.0f, 0.0f);
+            g.tick();
+            // Per-tick single-life drain: lose exactly one, not three.
+            expectEquals(g.lives(), livesBefore - 1);
+            expect(g.player().isInvincible());
+        }
+
+        beginTest("SilenceVoid contact drains chain but does NOT cost a life");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            const auto& pl = g.player();
+            const int livesBefore = g.lives();
+            // Keep a persistent out-of-range enemy alive for the WHOLE test so the
+            // wave never clears (a clear would reset the chain mid-build).
+            g.testEnemies().spawn(EnemyKind::Limiter, (float) (kFbW - 8), 8.0f, 0.0f, 0.0f);
+            // Build up a chain deterministically: each tick, drop a 1-HP Mudball
+            // exactly on a fresh player bullet so the player-bullet→enemy pass in
+            // resolveCombat() registers a kill (chain++). Place them off the player
+            // so they don't trigger the new body-contact pass.
+            for (int i = 0; i < 4; ++i)
+            {
+                auto* e = g.testEnemies().spawn(EnemyKind::Mudball, pl.x + 30.0f, pl.y, 0.0f, 0.0f);
+                e->hp = 1;
+                g.testPlayerBullets().spawn(pl.x + 30.0f, pl.y, 0.0f, 0.0f, /*damage=*/1);
+                g.tick();
+            }
+            expectGreaterThan(g.chain().count(), 0);
+            const int livesMid = g.lives();
+            // Now park a SilenceVoid on the player. It is invincible to bullets and
+            // must NOT cost a life — it drains the chain to 0.
+            g.testEnemies().spawn(EnemyKind::SilenceVoid, pl.x, pl.y, 0.0f, 0.0f);
+            g.tick();
+            expectEquals(g.chain().count(), 0);     // drained
+            expectEquals(g.lives(), livesMid);      // life unchanged by the void
+            expect(g.lives() <= livesBefore);       // (no life gained)
+        }
+
+        beginTest("contact during invincibility does no damage");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            // Make the player invincible first (mirror the takeHit i-frame state).
+            g.testPlayer().takeHit();
+            expect(g.player().isInvincible());
+            const int livesBefore = g.lives();
+            const auto& pl = g.player();
+            g.testEnemies().spawn(EnemyKind::Mudball, pl.x, pl.y, 0.0f, 0.0f);
+            g.testEnemies().spawn(EnemyKind::Limiter, (float) (kFbW - 8), 8.0f, 0.0f, 0.0f);
+            g.tick();
+            expectEquals(g.lives(), livesBefore);   // i-frames absorbed the contact
+        }
+
         beginTest("tick() is a no-op outside PLAYING state");
         {
             Game g;   // starts in Title
