@@ -79,4 +79,41 @@ public:
     }
 };
 static BulletPoolSpawnAndCullTest bulletPoolTest;
+
+class ChargedShotChargeRateTest : public juce::UnitTest
+{
+public:
+    ChargedShotChargeRateTest() : juce::UnitTest("Player: charge reaches 1.0 after 1.2s of hold") {}
+    void runTest() override
+    {
+        beginTest("chargeProgress reaches >=1.0 after kChargedShotSec of holding");
+        Player p;
+        p.beginCharge();
+        const int ticks = static_cast<int>(kChargedShotSec * kTickHz);
+        for (int i = 0; i < ticks - 1; ++i) p.tick();
+        expectLessThan(p.chargeProgress, 1.0f);
+        p.tick();
+        expectGreaterOrEqual(p.chargeProgress, 1.0f);
+    }
+};
+
+class ChargedShotConsumesMeterTest : public juce::UnitTest
+{
+public:
+    ChargedShotConsumesMeterTest() : juce::UnitTest("Player: releasing full charge consumes meter") {}
+    void runTest() override
+    {
+        beginTest("releaseCharge fires when fully charged and consumes the meter");
+        Player p;
+        p.chargeMeter = 1.0f;
+        p.beginCharge();
+        for (int i = 0; i < 80; ++i) p.tick();   // surpass kChargedShotSec (1.2s * 60 = 72 ticks)
+        bool fired = p.releaseCharge();
+        expect(fired);
+        expectLessThan(p.chargeMeter, 1.0f);
+    }
+};
+
+static ChargedShotChargeRateTest    chargeRateTest;
+static ChargedShotConsumesMeterTest chargeConsumeTest;
 }

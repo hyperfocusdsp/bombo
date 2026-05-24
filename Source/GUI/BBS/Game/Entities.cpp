@@ -31,9 +31,26 @@ namespace bombo::game
         // Invincibility countdown
         if (invincTimer > 0) --invincTimer;
 
+        // Charged-shot hold progress
+        if (charging)
+            chargeProgress = std::min(1.0f, chargeProgress + kTickDt / kChargedShotSec);
+
         // Charge meter refill (linear over kTransientRefillSec)
         if (chargeMeter < 1.0f)
             chargeMeter = std::min(1.0f, chargeMeter + kTickDt / kTransientRefillSec);
+    }
+
+    bool Player::releaseCharge() noexcept
+    {
+        const bool fired = (charging && chargeProgress >= 1.0f && chargeMeter >= 1.0f);
+        if (fired)
+        {
+            chargeMeter -= 1.0f;
+            if (chargeMeter < 0.0f) chargeMeter = 0.0f;
+        }
+        charging = false;
+        chargeProgress = 0.0f;
+        return fired;
     }
 
     void Player::takeHit() noexcept

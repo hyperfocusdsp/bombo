@@ -22,6 +22,8 @@ namespace bombo::game
         void clearShootFlag() noexcept { shootFlag_ = false; }
         void takeHit() noexcept;
         bool isInvincible() const noexcept { return invincTimer > 0; }
+        void beginCharge() noexcept { if (chargeMeter > 0.0f) charging = true; }
+        bool releaseCharge() noexcept;   // returns true if a charged shot fires
 
     private:
         bool shootFlag_ = false;
