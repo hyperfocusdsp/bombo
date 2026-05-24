@@ -80,6 +80,86 @@ public:
             expect(g.player().isInvincible());
         }
 
+        beginTest("single Mudball kill scores exactly base*mult (chain=1, mult=1.0)");
+        {
+            // scoreBaseFor(Mudball) == 10 (Game.cpp); chain becomes 1 on the kill,
+            // chainMultiplierFor(1) == 1.0 -> exact score must be 10.
+            expectWithinAbsoluteError(chainMultiplierFor(1), 1.0f, 1.0e-6f);
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            const auto& pl = g.player();
+            // Place a Mudball (1 HP for autofire purposes is irrelevant here — we kill
+            // it directly via a player bullet) right on top of a player bullet.
+            g.testEnemies().spawn(EnemyKind::Mudball, pl.x + 30.0f, pl.y, 0.0f, 0.0f);
+            const int scoreBefore = g.score();
+            expectEquals(scoreBefore, 0);
+            // Tick until the Mudball dies from autofire; capture the score at the kill.
+            // Mudball default HP is 3; autofire damage is 1/shot, so it dies after a few
+            // bullet hits. We assert the exact score the first time it becomes non-zero.
+            int scoreAtKill = scoreBefore;
+            for (int i = 0; i < 6 * kTickHz && scoreAtKill == scoreBefore; ++i)
+            {
+                g.tick();
+                scoreAtKill = g.score();
+            }
+            expectEquals(g.chain().count(), 1);
+            expectEquals(scoreAtKill, 10);   // 10 (Mudball base) * 1.0 (chain mult at count=1)
+        }
+
+        beginTest("multiple overlapping enemy shots cost only ONE life per tick");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            const auto& pl = g.player();
+            expect(! pl.isInvincible());
+            const int livesBefore = g.lives();
+            // Three enemy shots all overlapping the player in the SAME tick.
+            g.testEnemyShots().spawn(pl.x, pl.y, 0.0f, 0.0f);
+            g.testEnemyShots().spawn(pl.x + 1.0f, pl.y, 0.0f, 0.0f);
+            g.testEnemyShots().spawn(pl.x, pl.y + 1.0f, 0.0f, 0.0f);
+            g.tick();
+            // Per-tick single-life drain: lose exactly one life, not three.
+            expectEquals(g.lives(), livesBefore - 1);
+            expect(g.player().isInvincible());
+        }
+
+        beginTest("Aliaser kill reports exactly one parent KillInfo, minis excluded");
+        {
+            EnemyPool ep;
+            BulletPool bp;
+            auto* e = ep.spawn(EnemyKind::Aliaser, 50.0f, 40.0f, 0.0f, 0.0f);
+            expect(e != nullptr);
+            // Aliaser has 1 HP; a single damage-1 bullet kills it and spawns 2 minis.
+            bp.spawn(50.0f, 40.0f, 0.0f, 0.0f, /*damage=*/1);
+            std::vector<EnemyPool::KillInfo> kills;
+            const int n = ep.applyBulletDamage(bp, &kills);
+            expectEquals(n, 1);
+            // Exactly ONE KillInfo, and it is the Aliaser parent — minis not reported.
+            expectEquals((int) kills.size(), 1);
+            expect(kills[0].kind == EnemyKind::Aliaser);
+            // The two minis must now be active in the pool (split happened) ...
+            expectEquals(countActiveEnemies(ep, EnemyKind::AliaserMini), 2);
+            // ... but they must NOT appear in the kill report.
+            for (const auto& k : kills)
+                expect(k.kind != EnemyKind::AliaserMini);
+        }
+
+        beginTest("a single pickup is collected only once across multiple ticks");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            const auto& pl = g.player();
+            const int dbBefore = g.currencyDB();
+            // One DbBig pickup sitting on the player.
+            g.testPickups().spawn(Pickup::Kind::DbBig, pl.x + 1.0f, pl.y + 1.0f);
+            for (int i = 0; i < 10; ++i) g.tick();
+            // DbBig == +20, collected exactly once despite many ticks (not 20*ticks).
+            expectEquals(g.currencyDB(), dbBefore + 20);
+        }
+
         beginTest("collecting a dB Big pickup raises currency by 20");
         {
             Game g;

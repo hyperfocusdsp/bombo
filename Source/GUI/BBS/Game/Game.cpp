@@ -136,7 +136,9 @@ namespace bombo::game
         if (fireRate > 0)
         {
             // Each stack lifts effective fire rate by ~12%; convert to a per-tick chance.
-            const float extraChance = 0.12f * static_cast<float>(fireRate);
+            // Clamp to 0.9 so a future bump to FireRate's maxStacks (currently 3) can't
+            // drive the probability >= 1.0 (which would make every tick fire an extra shot).
+            const float extraChance = std::min(0.9f, 0.12f * static_cast<float>(fireRate));
             std::uniform_real_distribution<float> d(0.0f, 1.0f);
             if (d(runRng_) < extraChance)
                 spawnPlayerShot();
