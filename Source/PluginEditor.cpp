@@ -166,6 +166,13 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     processorRef.presetBank().onPresetApplied =
         [this](const bombo::PresetBank::Preset& p)
     {
+        // Flush any reverb tail / delay buffer carried over from the
+        // previous preset BEFORE we route FX order changes through —
+        // gives the first trigger after a preset apply clean DSP state
+        // ("clinical first-hit" user request 2026-05-24). Lock-free
+        // atomic; consumed at the top of the next processBlock.
+        processorRef.requestPresetTailReset();
+
         if (! p.fxOrder.has_value()) return;
         processorRef.setFxOrder(*p.fxOrder);
         faceplate.applyFxOrder(*p.fxOrder);
@@ -638,6 +645,33 @@ void BomboEditor::visibilityChanged()
 bool BomboEditor::keyPressed(const juce::KeyPress& key)
 {
     const auto mods = key.getModifiers();
+
+    // ── Alt+Q close ─────────────────────────────────────────────────
+    // keyPressed only fires when the editor (or a descendant) has
+    // keyboard focus — so the user's "if plugin is in focus" condition
+    // is implicit. Standalone: closeButtonPressed() on the DocumentWindow
+    // triggers JUCE's normal quit path. VST3 in a host: there's no
+    // standard "ask the host to close my window" API, so we route through
+    // the native peer's user-close handler — Bitwig recognises this on
+    // Linux/X11 and dismisses the plugin chrome. Outside the editor's
+    // focus the keypress never reaches here, so it bubbles up to Bitwig
+    // which shows its usual "Quit Bitwig Studio?" prompt.
+    if (mods.isAltDown() && ! mods.isCtrlDown() && ! mods.isShiftDown()
+        && (key.getKeyCode() == 'Q' || key.getTextCharacter() == 'q'))
+    {
+        if (auto* tlc = getTopLevelComponent())
+        {
+            if (auto* dw = dynamic_cast<juce::DocumentWindow*>(tlc))
+            {
+                dw->closeButtonPressed();
+            }
+            else if (auto* peer = tlc->getPeer())
+            {
+                peer->handleUserClosingWindow();
+            }
+        }
+        return true;
+    }
 
     // When BBS is visible, route all keys through its handler regardless of
     // focus. JUCE only delivers keyPressed to the focused component, so if

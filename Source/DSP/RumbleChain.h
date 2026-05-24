@@ -340,7 +340,7 @@ private:
     // Current chain order. Lock-free for RT-safe atomic swap from GUI.
     std::atomic<FxOrder> fxOrder_{ kDefaultFxOrder };
     static_assert(std::atomic<FxOrder>::is_always_lock_free,
-                  "FxOrder atomic must be lock-free on this platform — "
+                  "FxOrder atomic must be lock-free on this platform - "
                   "if not, switch to a triple-buffer pattern");
 };
 

@@ -265,6 +265,28 @@ void PresetBank::applyDefaults(juce::AudioProcessorValueTreeState& apvts)
             rp->endChangeGesture();
         }
     }
+
+    // No factory/user preset is "current" after init — the bar should
+    // reflect that with its "N presets" empty state rather than keep
+    // showing the previously-loaded name.
+    current_ = -1;
+
+    // Synthesize a minimal sentinel preset and fire onPresetApplied so
+    // the editor's hook runs (currently: requestPresetTailReset()).
+    // Without this the just-loaded preset's reverb tail / delay buffer
+    // bleeds into the first trigger after init, exactly the same bug as
+    // missing the tail reset on normal preset switches.
+    if (onPresetApplied)
+    {
+        Preset sentinel;
+        sentinel.source      = Source::Factory;
+        sentinel.name        = "init";
+        sentinel.displayName = "Init";
+        // params + fxOrder intentionally empty: applyDefaults already
+        // wrote every param above, and editor's onPresetApplied skips the
+        // FX-order rewrite when fxOrder is nullopt (legacy presets path).
+        onPresetApplied(sentinel);
+    }
 }
 
 int PresetBank::saveAs(const juce::String& displayName,

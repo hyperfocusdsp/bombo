@@ -249,5 +249,18 @@ if(BOMBO_BUILD_TESTS)
         add_test(NAME bombo_ascii_lint
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/check-no-utf8-strings.py)
+        # Also run the lint at BUILD TIME, not just under ctest. A user-
+        # facing string with a UTF-8 byte produces silent mojibake at
+        # render time (juce::String(const char*) rejects bytes > 0x7F)
+        # — catching it at build time is much cheaper than discovering
+        # it via an image-attached bug report after the fact. The custom
+        # target is wired as a dependency of Bombo so any Bombo build
+        # (VST3, Standalone, Tests) fails fast if a literal regresses.
+        add_custom_target(bombo_ascii_lint_build
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tools/check-no-utf8-strings.py
+            COMMENT "Checking string literals for non-ASCII bytes"
+            VERBATIM)
+        add_dependencies(Bombo bombo_ascii_lint_build)
     endif()
 endif()

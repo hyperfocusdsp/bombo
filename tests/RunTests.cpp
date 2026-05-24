@@ -1272,7 +1272,7 @@ public:
                 + " of beat " + juce::String(worstBeat) + ")");
             // Sample-accurate identity expected.
             expect(maxDiff < 1e-4f,
-                   "chain output VARIES between identical-input beats — "
+                   "chain output VARIES between identical-input beats - "
                    "state leak somewhere (max diff " + juce::String(maxDiff, 8) + ")");
         }
 
@@ -1310,7 +1310,7 @@ public:
 class FxOrderTests : public juce::UnitTest
 {
 public:
-    FxOrderTests() : juce::UnitTest("FxOrder — chain reorder") {}
+    FxOrderTests() : juce::UnitTest("FxOrder - chain reorder") {}
 
     void runTest() override
     {
@@ -1406,7 +1406,7 @@ public:
             for (size_t i = 0; i < a.size(); ++i)
                 diff += std::abs((double) a[i] - (double) b[i]);
             expect(diff > 1e-3,
-                   "two non-trivial orderings produced identical output — "
+                   "two non-trivial orderings produced identical output - "
                    "fxOrder is probably not being honoured. diff=" + juce::String(diff, 6));
         }
 

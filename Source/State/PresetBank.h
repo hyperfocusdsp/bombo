@@ -79,7 +79,14 @@ public:
     void prev(juce::AudioProcessorValueTreeState& apvts);
 
     // Resets every (non-excluded) APVTS param to its declared default.
-    static void applyDefaults(juce::AudioProcessorValueTreeState& apvts);
+    // Also clears `current_` so the preset bar stops showing the last
+    // loaded preset name, and fires onPresetApplied with a sentinel
+    // "INIT" preset so listeners (editor) can schedule a tail reset just
+    // like any normal preset apply — otherwise the just-loaded preset's
+    // reverb tail bleeds through the first trigger after init.
+    // Was previously static; made an instance method to access current_
+    // and onPresetApplied.
+    void applyDefaults(juce::AudioProcessorValueTreeState& apvts);
 
     // Snapshot the current APVTS state as a new user preset under displayName.
     // Sanitizes displayName to a filename (lowercase, alnum + `_`, length

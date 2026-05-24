@@ -53,18 +53,36 @@ public:
         const bool on = hostLocked;
 
         // Background + border — mirrors BomboLookAndFeel pill style.
-        g.setColour(on ? col::accentAmber().withAlpha(0.40f)
-                       : col::graphite().withAlpha(0.88f));
-        g.fillRoundedRectangle(r, kR);
-        // Amber border always (dim when unlocked) — same as LoopButton / toggle pills.
-        g.setColour(on ? col::accentAmber()
-                       : col::accentAmber().withAlpha(0.50f));
-        g.drawRoundedRectangle(r.reduced(0.5f), kR, 1.0f);
+        // On neon themes keep the bg dark in BOTH states (host-locked vs
+        // standalone) so the saturated accentAmber text stays readable.
+        // Otherwise a host-locked BPM would draw amber-on-amber.
+        const bool neon = col::isNeon();
+        if (neon)
+        {
+            g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f));
+            g.fillRoundedRectangle(r, kR);
+            g.setColour(on ? col::accentAmber()
+                           : col::accentAmber().withAlpha(0.55f));
+            g.drawRoundedRectangle(r.reduced(0.5f), kR, on ? 1.5f : 1.0f);
+        }
+        else
+        {
+            g.setColour(on ? col::accentAmber().withAlpha(0.40f)
+                           : col::graphite().withAlpha(0.88f));
+            g.fillRoundedRectangle(r, kR);
+            // Amber border always (dim when unlocked) — same as LoopButton / toggle pills.
+            g.setColour(on ? col::accentAmber()
+                           : col::accentAmber().withAlpha(0.50f));
+            g.drawRoundedRectangle(r.reduced(0.5f), kR, 1.0f);
+        }
 
         // "149 BPM" centred — same monospaced font as the other fin pills.
         const int displayed = static_cast<int>(std::round(
             hostLocked ? hostBpmDisplayed_ : static_cast<float>(slider_.getValue())));
-        g.setColour(hostLocked ? col::accentAmber() : col::bone());
+        // Neon: accent text in both states. Classic: accent only when
+        // host-locked (otherwise bone, since the dark pill needs a light
+        // fg and bone is the cream-white).
+        g.setColour((hostLocked || neon) ? col::accentAmber() : col::bone());
         g.setFont(fonts::value(16.0f));
         g.drawText(juce::String(displayed) + " BPM", r,
                    juce::Justification::centred, false);

@@ -11,41 +11,22 @@ PresetBarComponent::PresetBarComponent(PresetBank& bank,
     : bank_(bank), apvts_(apvts)
 {
     setFocusContainerType(juce::Component::FocusContainerType::focusContainer);
-    auto setupButton = [this](juce::TextButton& b)
-    {
-        addAndMakeVisible(b);
-        b.setColour(juce::TextButton::buttonColourId,
-                    col::graphiteHi().withAlpha(0.85f));
-        b.setColour(juce::TextButton::textColourOffId, col::bone());
-        b.setColour(juce::TextButton::textColourOnId,  col::bone());
-        b.setColour(juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
-    };
-    setupButton(prev_);
-    setupButton(next_);
-    setupButton(menu_);
+
+    addAndMakeVisible(prev_);
+    addAndMakeVisible(next_);
+    addAndMakeVisible(menu_);
 
     prev_.onClick = [this] { bank_.prev(apvts_); refresh(); };
     next_.onClick = [this] { bank_.next(apvts_); refresh(); };
     menu_.onClick = [this] { showMenu(); };
 
-    addAndMakeVisible(name_);
-    name_.setJustificationType(juce::Justification::centred);
-    name_.setColour(juce::Label::textColourId,        col::accentAmber());
-    name_.setColour(juce::Label::backgroundColourId,  juce::Colours::transparentBlack);
-    name_.setFont(bombo::fonts::value(11.5f).boldened());
-    name_.setInterceptsMouseClicks(false, false);  // bar handles its own clicks
-
     addChildComponent(nameEditor_);
     nameEditor_.setJustification(juce::Justification::centred);
-    nameEditor_.setColour(juce::TextEditor::backgroundColourId,
-                          col::graphiteHi().withAlpha(0.95f));
-    nameEditor_.setColour(juce::TextEditor::textColourId,    col::accentAmber());
-    nameEditor_.setColour(juce::TextEditor::outlineColourId, col::accentAmber().withAlpha(0.6f));
-    nameEditor_.setColour(juce::TextEditor::focusedOutlineColourId, col::accentAmber());
     nameEditor_.onReturnKey = [this] { commitEdit(); };
     nameEditor_.onEscapeKey = [this] { cancelEdit(); };
     nameEditor_.onFocusLost = [this] { commitEdit(); };
 
+    applyPaletteToChildren();
     refresh();
 }
 
@@ -53,43 +34,117 @@ PresetBarComponent::~PresetBarComponent() = default;
 
 void PresetBarComponent::refresh()
 {
-    const int n = bank_.size();
+    const int n   = bank_.size();
     const int idx = bank_.currentIndex();
-    juce::String text;
     if (idx >= 0 && n > 0)
     {
         // currentDisplayName() returns std::string with UTF-8 bytes —
         // wrap with CharPointer_UTF8 so any accented chars in preset
         // names round-trip cleanly (same pattern as the popup menu).
-        text = juce::String(idx + 1) + " / " + juce::String(n)
-             + "   "
-             + juce::String(juce::CharPointer_UTF8(bank_.currentDisplayName().c_str()));
+        nameText_  = juce::String(juce::CharPointer_UTF8(
+                         bank_.currentDisplayName().c_str()));
+        countText_ = juce::String(idx + 1) + " / " + juce::String(n);
     }
     else
     {
-        text = juce::String("-- ") + juce::String(n) + " presets";
+        // No preset is current — show the bank size on the top row, the
+        // bottom row stays blank rather than showing a meaningless "0/N".
+        nameText_  = juce::String(n) + " presets";
+        countText_ = {};
     }
-    name_.setText(text, juce::dontSendNotification);
+    repaint();
+}
+
+void PresetBarComponent::changeListenerCallback(juce::ChangeBroadcaster*)
+{
+    // Default ThemedComponent::changeListenerCallback only repaints — but
+    // child buttons + the TextEditor cache their palette colours at attach
+    // time, so a bare repaint() would leave them rendered in the previous
+    // theme's accent. Re-apply, then repaint.
+    applyPaletteToChildren();
+    repaint();
+}
+
+void PresetBarComponent::applyPaletteToChildren()
+{
+    auto styleButton = [](juce::TextButton& b)
+    {
+        b.setColour(juce::TextButton::buttonColourId,
+                    col::graphiteHi().withAlpha(0.85f));
+        b.setColour(juce::TextButton::textColourOffId, col::accentAmber());
+        b.setColour(juce::TextButton::textColourOnId,  col::accentAmber());
+        b.setColour(juce::ComboBox::outlineColourId,   juce::Colours::transparentBlack);
+    };
+    styleButton(prev_);
+    styleButton(next_);
+    styleButton(menu_);
+
+    nameEditor_.setColour(juce::TextEditor::backgroundColourId,
+                          col::graphite().withAlpha(0.95f));
+    nameEditor_.setColour(juce::TextEditor::textColourId,           col::accentAmber());
+    nameEditor_.setColour(juce::TextEditor::outlineColourId,        col::accentAmber().withAlpha(0.60f));
+    nameEditor_.setColour(juce::TextEditor::focusedOutlineColourId, col::accentAmber());
+    nameEditor_.setColour(juce::TextEditor::highlightColourId,      col::accentAmber().withAlpha(0.35f));
+    nameEditor_.applyFontToAllText(bombo::fonts::value(16.0f));
 }
 
 void PresetBarComponent::paint(juce::Graphics& g)
 {
-    // Same amber-tint pill style as the fin controls — translucent so the
-    // body background shows through rather than a flat opaque slab.
+    // Pill background. Neon-aware (matches the LIM/TAIL/LOOP treatment):
+    // on neon themes the accent IS the bright neon and an amber-tinted
+    // fill becomes a coloured-on-coloured wash with no contrast against
+    // the text. Dark fill + bright accent text is the consistent rule.
     const auto r = getLocalBounds().toFloat().reduced(1.5f);
-    g.setColour(col::accentAmber().withAlpha(0.22f));
-    g.fillRoundedRectangle(r, 4.0f);
-    g.setColour(col::accentAmber().withAlpha(0.60f));
-    g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+    if (col::isNeon())
+    {
+        g.setColour(col::graphite().withAlpha(0.92f));
+        g.fillRoundedRectangle(r, 4.0f);
+        g.setColour(col::accentAmber().withAlpha(0.75f));
+        g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+    }
+    else
+    {
+        g.setColour(col::accentAmber().withAlpha(0.22f));
+        g.fillRoundedRectangle(r, 4.0f);
+        g.setColour(col::accentAmber().withAlpha(0.60f));
+        g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+    }
+
+    // Two-row text: top = preset name, bottom = "X / N". Same font + colour
+    // as the BNC/LIM/TAIL pill text (fonts::value(16.0f), accentAmber) so
+    // the bar reads as part of the same control family.
+    //
+    // When the rename TextEditor is visible it overlays the top half —
+    // skip drawing the top row text to avoid double-render under the
+    // editor's slightly-translucent background.
+    const auto area = getLocalBounds().reduced(3, 2);
+    constexpr int kChevronW = 18;
+    constexpr int kGap      = 3;
+    auto textArea = area;
+    textArea.removeFromLeft (kChevronW + kGap);
+    textArea.removeFromRight(kChevronW + kGap);
+
+    const int halfH    = textArea.getHeight() / 2;
+    const auto topRow  = textArea.removeFromTop(halfH);
+    const auto botRow  = textArea;  // remainder
+
+    g.setFont(bombo::fonts::value(16.0f));
+    g.setColour(col::accentAmber());
+
+    if (! nameEditor_.isVisible())
+        g.drawText(nameText_, topRow, juce::Justification::centred, false);
+
+    if (countText_.isNotEmpty())
+        g.drawText(countText_, botRow, juce::Justification::centred, false);
 }
 
 void PresetBarComponent::mouseDown(const juce::MouseEvent& e)
 {
     if (edit_ != EditMode::None) return;
-    // Click on the centre name (anything not a button) opens the menu.
+    // Click anywhere off the chevrons opens the menu. menu_ is hidden so
+    // its bounds are empty — skip it.
     if (! prev_.getBounds().contains(e.x, e.y)
-        && ! next_.getBounds().contains(e.x, e.y)
-        && ! menu_.getBounds().contains(e.x, e.y))
+        && ! next_.getBounds().contains(e.x, e.y))
     {
         showMenu();
     }
@@ -100,11 +155,11 @@ void PresetBarComponent::resized()
     auto area = getLocalBounds().reduced(3, 2);
     if (area.isEmpty()) return;
 
-    // Layout: < on the far LEFT edge of the cartouche, > on the far
-    // RIGHT edge, name display fills the middle. The ≡ menu button is
-    // hidden — its menu opens by clicking anywhere on the name strip
-    // (mouseDown already routes through showMenu). Keeping the strip
-    // visually clean inside the narrow cartouche footprint.
+    // Layout: chevrons on the cartouche edges, text rows occupy the
+    // remaining middle band. The hamburger menu button is hidden — its
+    // menu opens by clicking the centre name area (mouseDown routes
+    // through showMenu). Keeps the strip visually clean inside the
+    // narrow cartouche footprint.
     constexpr int kChevronW = 18;
     constexpr int kGap      = 3;
 
@@ -116,8 +171,11 @@ void PresetBarComponent::resized()
 
     menu_.setVisible(false);
 
-    name_.setBounds(area);
-    nameEditor_.setBounds(area);
+    // Rename / save-as editor overlays the TOP row only — the X/N counter
+    // stays visible below so the user can still see which slot they're
+    // renaming into.
+    const int halfH = area.getHeight() / 2;
+    nameEditor_.setBounds(area.removeFromTop(halfH));
 }
 
 // ── Menu + inline edit ───────────────────────────────────────────────
@@ -187,7 +245,7 @@ void PresetBarComponent::showMenu()
                     }
                     break;
                 case 5:
-                    PresetBank::applyDefaults(apvts_);
+                    bank_.applyDefaults(apvts_);  // instance method now (clears current_ + fires onPresetApplied)
                     refresh();
                     break;
                 default:
@@ -204,13 +262,13 @@ void PresetBarComponent::showMenu()
 void PresetBarComponent::beginEdit(EditMode mode)
 {
     edit_ = mode;
-    name_.setVisible(false);
     nameEditor_.setVisible(true);
     nameEditor_.setText(mode == EditMode::Rename
                         ? juce::String(bank_.currentDisplayName())
                         : juce::String(),
                         juce::dontSendNotification);
     nameEditor_.selectAll();
+    repaint();  // hide the cached nameText_ behind the editor
     // Focus-grab must survive (a) PopupMenu's own focus-return async,
     // (b) BomboEditor::visibilityChanged grabbing focus on the editor, and
     // (c) any other late focus shuffling. Two stacked callAsyncs weren't
@@ -235,7 +293,6 @@ void PresetBarComponent::commitEdit()
     edit_ = EditMode::None;
     const auto entered = nameEditor_.getText().trim();
     nameEditor_.setVisible(false);
-    name_.setVisible(true);
 
     if (entered.isEmpty()) { refresh(); return; }
 
@@ -253,7 +310,6 @@ void PresetBarComponent::cancelEdit()
     if (edit_ == EditMode::None) return;
     edit_ = EditMode::None;
     nameEditor_.setVisible(false);
-    name_.setVisible(true);
     refresh();
 }
 

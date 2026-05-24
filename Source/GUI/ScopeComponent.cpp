@@ -90,8 +90,12 @@ void ScopeComponent::paint(juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
 
-    // Recessed ink panel — matches the dark scope well in the pre-port UI.
-    g.setColour(col::ink());
+    // Recessed dark panel. On classic themes `ink` is the dark drawing
+    // colour and reads as a proper recess. On neon themes (matrix/cyber/
+    // plasma) `ink` is repurposed as a light secondary foreground, so we
+    // pick a darkened graphite instead — keeps the scope readable across
+    // the whole theme set.
+    g.setColour(col::isNeon() ? col::graphite().darker(0.5f) : col::ink());
     g.fillRoundedRectangle(bounds, 3.0f);
     g.setColour(col::graphiteHi());
     g.drawRoundedRectangle(bounds.reduced(0.5f), 3.0f, 1.0f);

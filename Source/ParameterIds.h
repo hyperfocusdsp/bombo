@@ -102,6 +102,23 @@ namespace pid
     // V.AMT clipper and the rumble-bus B.AMT stage.
     inline constexpr const char* voiceAMute      = "voice_a_mute";
     inline constexpr const char* voiceBMute      = "voice_b_mute";
+    // Voice B synth-layer master gate. ON (default) = mid sine + click +
+    // noise contribute to Voice B's body bus alongside any loaded sample.
+    // OFF = sample-only mode; the synth layer is bypassed so the SAMPLE
+    // slot is the sole sound source for Voice B. Added 2026-05-24 after
+    // user reported a residual "snare attack" transient from the mid
+    // sine that no individual knob (CLICK, BODY, COLOR, DEC) could fully
+    // silence. Lives in voice-mute neighbourhood semantically.
+    inline constexpr const char* voiceBSynthOn   = "voice_b_synth_on";
+    // DEC routing — picks which voice(s) the VOICE B section's DEC knob
+    // writes to. "A" = Voice A's ampDecay only (the sub-layer envelope).
+    // "B" = Voice B's midDecay (mid sine + sample env). "AB" = both, with
+    // the same plain-ms value. Default "B" preserves the current per-
+    // voice DEC scoping. Added 2026-05-24 because Voice A had no UI knob
+    // for ampDecay other than the global DECAY macro — users wanted a
+    // direct way to dial Voice A's amp tail without losing Voice B
+    // control. Choice param so hosts can show "A"/"B"/"AB" in automation.
+    inline constexpr const char* decRouting      = "dec_routing";
     inline constexpr const char* driveMute       = "drive_mute";
     inline constexpr const char* delayMute       = "delay_mute";
     inline constexpr const char* reverbMute      = "reverb_mute";

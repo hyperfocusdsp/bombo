@@ -107,16 +107,38 @@ public:
         const bool hover = shouldDrawButtonAsHighlighted;
         const float hoverFill   = hover ? 0.10f : 0.0f;
         const float hoverBorder = hover ? 0.20f : 0.0f;
-        g.setColour(on ? col::accentAmber().withAlpha(0.40f + hoverFill)
-                       : col::graphite().withAlpha(0.88f));
-        g.fillRoundedRectangle(r, kPillCorner);
-        // Toggle buttons always have an amber border (dim when OFF, full when ON)
-        // so they're visually distinct from action TextButtons (bone border).
-        // Hover brightens the border so users feel the affordance before clicking.
-        g.setColour(on ? col::accentAmber()
-                       : col::accentAmber().withAlpha(0.50f + hoverBorder));
-        g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
-        g.setColour(on ? col::ink() : col::bone());
+
+        if (col::isNeon())
+        {
+            // Neon themes (matrix/cyber/plasma): keep the bg dark in BOTH
+            // states so the saturated accentAmber-as-text stays readable.
+            // ON state signals itself via a thicker, full-opacity border
+            // and full-opacity text instead of flipping to a bright fill.
+            g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f + hoverFill * 0.5f));
+            g.fillRoundedRectangle(r, kPillCorner);
+            g.setColour(on ? col::accentAmber()
+                           : col::accentAmber().withAlpha(0.55f + hoverBorder));
+            g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, on ? 1.5f : 1.0f);
+            g.setColour(col::accentAmber().withAlpha(on ? 1.0f : 0.75f));
+        }
+        else
+        {
+            // Classic themes (bandw/vault/nightrun): industrial yellow pill
+            // when ON, dark pill when OFF. The yellow accentAmber against
+            // near-black ink reads cleanly here because the accent isn't
+            // also the bone foreground colour.
+            g.setColour(on ? col::accentAmber().withAlpha(0.40f + hoverFill)
+                           : col::graphite().withAlpha(0.88f));
+            g.fillRoundedRectangle(r, kPillCorner);
+            // Toggle buttons always have an amber border (dim when OFF,
+            // full when ON) so they're visually distinct from action
+            // TextButtons (bone border). Hover brightens the border so
+            // users feel the affordance before clicking.
+            g.setColour(on ? col::accentAmber()
+                           : col::accentAmber().withAlpha(0.50f + hoverBorder));
+            g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
+            g.setColour(on ? col::ink() : col::bone());
+        }
         g.setFont(fonts::value(16.0f));
         g.drawText(btn.getButtonText(), r, juce::Justification::centred, false);
     }

@@ -100,8 +100,14 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         "Mid Pitch Start", skewRange(100.0f, 800.0f, 0.4f), 300.0f, hzFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::midPitchEnd, 1},
         "Mid Pitch End", skewRange(40.0f, 300.0f, 0.4f), 80.0f, hzFormat));
+    // Range bumped 10-500 → 10-5000 (2026-05-24) so DEC can reach the
+    // length of arbitrary loaded samples (kicks/808s sometimes 1-4s). The
+    // skew bias is preserved, so the bottom of the range (typical kick
+    // values 20-200 ms) still gets most of the knob travel. Existing
+    // presets store plain values (e.g. "80") and round-trip unchanged
+    // — only the knob's UI-position-to-value mapping shifts.
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::midDecay, 1},
-        "Mid Decay", skewRange(10.0f, 500.0f, 0.4f), 80.0f, msFormat));
+        "Mid Decay", skewRange(10.0f, 5000.0f, 0.4f), 80.0f, msFormat));
     p.push_back(std::make_unique<Float>(juce::ParameterID{pid::midLevel, 1},
         "Mid Level", Range(0.0f, 1.0f, 0.001f), 0.70f, normFormat));
 
@@ -248,6 +254,19 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::ParameterID{pid::voiceAMute, 1}, "Voice A Mute", false));
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::voiceBMute, 1}, "Voice B Mute", false));
+    // Voice B synth-layer toggle. ON = mid sine + click + noise contribute
+    // alongside any loaded sample. OFF = sample-only (no synth body). True
+    // default so existing factory presets and saved user presets — which
+    // assume the synth layer is active — keep sounding identical.
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::voiceBSynthOn, 1}, "Voice B Synth", true));
+
+    // DEC routing — Choice so hosts list "A"/"B"/"AB" in automation
+    // pickers instead of a 0/1/2 int. Default "B" (index 1) preserves
+    // the current behaviour where DEC only affects Voice B's midDecay.
+    p.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{pid::decRouting, 1}, "DEC Routing",
+        juce::StringArray{"A", "B", "AB"}, /*defaultIndex*/ 1));
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::driveMute,  1}, "Drive Mute",  false));
     p.push_back(std::make_unique<juce::AudioParameterBool>(

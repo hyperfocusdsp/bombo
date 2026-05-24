@@ -5,6 +5,7 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include "IRBank.h"
+#include "SmoothScalar.h"
 
 #include <array>
 #include <chrono>
@@ -176,22 +177,29 @@ public:
 
     // 0..1 → exponential decay tau between 50 ms and 4 s. Resets to 1.0
     // on every onTrigger().
+    //
+    // 2026-05-24: route through SmoothScalar so tweaks mid-tail glide
+    // toward the new decay rate over ~25 ms instead of snapping. Without
+    // smoothing the user would hear the tail's decay rate jump on the
+    // very next sample, which read as a glitch.
     void setDecay (float n01) noexcept
     {
         n01 = juce::jlimit (0.0f, 1.0f, n01);
         const float tauSec = 0.05f + n01 * 3.95f;
         // Per-sample coef so env *= coef → exp(-t/tau).
-        decayCoef_ = std::exp (-1.0f / (tauSec * sampleRate_));
+        decayCoef_.setTarget(std::exp (-1.0f / (tauSec * sampleRate_)));
     }
 
     // 0..1 → post-conv 1-pole LP cutoff between 12 kHz (open) and 200 Hz
     // (dark). Higher knob value = darker tail (matches FdnReverb semantics).
+    // Also SmoothScalar-routed; otherwise a Damp knob sweep produced
+    // step-changes in tail tone instead of a continuous filter sweep.
     void setDamp (float n01) noexcept
     {
         n01 = juce::jlimit (0.0f, 1.0f, n01);
         const float fc = 12000.0f * std::pow (0.0167f, n01);  // 12k → 200 Hz, exponential
         const float x  = std::exp (-6.28318530717958f * fc / sampleRate_);
-        wetLpfCoef_ = 1.0f - x;
+        wetLpfCoef_.setTarget(1.0f - x);
     }
 
     void setPredelayMs (float ms) noexcept
@@ -246,8 +254,10 @@ public:
         ++blockRp_;
         if (blockRp_ >= kBlockSize) blockRp_ = kBlockSize - 1; // clamp (next block will reset)
 
-        // 5) Post-LP (Damp).
-        wetLpfZ_ += wetLpfCoef_ * (wet - wetLpfZ_);
+        // 5) Post-LP (Damp). Coefficient pulled through SmoothScalar so
+        //    a Damp knob sweep glides the cutoff rather than block-step.
+        const float wetLpfCoefNow = wetLpfCoef_.next();
+        wetLpfZ_ += wetLpfCoefNow * (wet - wetLpfZ_);
         if (std::fpclassify (wetLpfZ_) == FP_SUBNORMAL) wetLpfZ_ = 0.0f;
         wet = wetLpfZ_;
 
@@ -255,12 +265,15 @@ public:
         //    passed through at unity — the only "decay" is whatever the
         //    IR itself provides, which gives natural per-hit ringing and
         //    LTI layering across hits.
+        //    decayCoef also smoothed — knob tweaks mid-tail glide the
+        //    decay rate over ~25 ms instead of jumping.
+        const float decayCoefNow = decayCoef_.next();
         if (tailKillOn_)
         {
             if (decayEnv_ > 1e-7f)
             {
                 wet *= decayEnv_;
-                decayEnv_ *= decayCoef_;
+                decayEnv_ *= decayCoefNow;
             }
             else
             {
@@ -374,8 +387,17 @@ private:
         // Default state mirrors FdnReverb's "size=0.5" feel.
         sizeWindowSamples_ = (int) (1.0f * sampleRate);
         sizeFadeSamples_   = sizeWindowSamples_ / 5;
+
+        // 25 ms one-pole ramp on the user-tweaked scalars. Snap=true on
+        // load so first sample isn't a glide from zero (which would make
+        // damp-at-max boot up "open then close" audibly).
+        constexpr float kFxSmoothTauSec = 0.025f;
+        wetLpfCoef_.prepare(sampleRate, kFxSmoothTauSec);
+        decayCoef_ .prepare(sampleRate, kFxSmoothTauSec);
         setDecay (0.7f);
         setDamp  (0.45f);
+        decayCoef_ .snap(decayCoef_ .target);
+        wetLpfCoef_.snap(wetLpfCoef_.target);
         wetLpfZ_ = 0.0f;
 
         reset();
@@ -397,13 +419,16 @@ private:
     int blockWp_ { 0 };
     int blockRp_ { 0 };
 
-    // Post-LP (Damp).
-    float wetLpfCoef_ { 0.1f };
-    float wetLpfZ_    { 0.0f };
+    // Post-LP (Damp). SmoothScalar so a Damp knob sweep glides the
+    // cutoff rather than stepping the coefficient block-by-block.
+    SmoothScalar wetLpfCoef_;
+    float        wetLpfZ_    { 0.0f };
 
-    // Per-trigger decay env.
-    float decayCoef_  { 0.999f };
-    float decayEnv_   { 0.0f };
+    // Per-trigger decay env. decayCoef_ is the per-sample multiplier
+    // applied to decayEnv_; smoothed so mid-tail Decay knob tweaks
+    // glide the decay rate instead of jumping it.
+    SmoothScalar decayCoef_;
+    float        decayEnv_   { 0.0f };
 
     // Per-trigger size window.
     int sizeWindowSamples_ { 48000 };

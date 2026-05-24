@@ -305,6 +305,20 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tailAtt_;
     std::unique_ptr<LoopButton>         loopBtn_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> loopAtt_;
+    // Voice B synth-layer gate — small ramp-down-icon pill sits inside
+    // the VOICE B section title bar (right-aligned). ON = synth active
+    // (legacy behaviour, default); OFF = sample-only Voice B.
+    std::unique_ptr<class SynthToggle>  voiceBSynthPill_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> voiceBSynthAtt_;
+    // Routed DEC knob — DEC slider in Voice B section is NOT bound to a
+    // single param via SliderAttachment. Instead, a binding routes its
+    // writes to ampDecay / midDecay / both per the pid::decRouting
+    // Choice param. decRoutingPill_ is the 1-char A/B/+ cycle button
+    // adjacent to the knob. Pointer to the DEC Control kept so resized()
+    // can pin the pill next to its slider bounds.
+    std::unique_ptr<class RoutedDecayBinding> decRouting_;
+    std::unique_ptr<class DecRoutingPill>     decRoutingPill_;
+    Control* decControl_ = nullptr;
     std::unique_ptr<BpmDisplay>         bpmDisplay_;
     std::unique_ptr<BalanceFader>       balanceFader_;
     std::unique_ptr<DiceButton>         diceButton_;

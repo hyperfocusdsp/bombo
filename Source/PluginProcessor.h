@@ -80,6 +80,14 @@ public:
     void loadVoiceBSample(const juce::File& file);   // single-file load (clears folder list)
     void setVoiceBSampleFolder(const juce::File& filePicked);
     void loadVoiceBSampleByIndex(int idx);
+
+    // Snap midDecay to the currently-loaded Voice B sample's length so
+    // the new sample plays to its end by default. Called from each of
+    // the three sample-load paths (single file, folder browse, by-index)
+    // AFTER voiceBSample_ has been assigned. Safe to call when no sample
+    // is loaded — it's a no-op. Param-write happens via APVTS so host
+    // automation + presets + UI all stay in sync.
+    void snapDecayToSampleLength() noexcept;
     void clearVoiceBSample();
     juce::String voiceBSamplePath() const;
 
@@ -134,6 +142,17 @@ public:
     // Lock-free atomic underneath; safe to call from any thread.
     bombo::FxOrder getFxOrder() const noexcept { return chain_.getFxOrder(); }
     void setFxOrder(bombo::FxOrder o) noexcept { chain_.setFxOrder(o); }
+
+    // Request that the FX chain flush its reverb tail + delay buffer at
+    // the start of the next processBlock. Called from the editor's
+    // onPresetApplied hook so a freshly-loaded preset doesn't inherit the
+    // previous preset's lingering reverb / delay state on its first
+    // trigger ("clinical first-hit" behaviour, user request 2026-05-24).
+    // Lock-free: sets an atomic flag the audio thread polls.
+    void requestPresetTailReset() noexcept
+    {
+        presetTailResetPending_.store(true, std::memory_order_release);
+    }
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -202,6 +221,7 @@ private:
     juce::AudioParameterFloat*  pBpm = nullptr;
     juce::AudioParameterBool*   pVoiceAMute = nullptr;
     juce::AudioParameterBool*   pVoiceBMute = nullptr;
+    juce::AudioParameterBool*   pVoiceBSynthOn = nullptr;
     juce::AudioParameterBool*   pDriveMute  = nullptr;
     juce::AudioParameterBool*   pDelayMute  = nullptr;
     juce::AudioParameterBool*   pReverbMute = nullptr;
@@ -218,6 +238,11 @@ private:
     bombo::RumbleChain chain_{ 48000.0f };
     bombo::StereoFinalizer stereoFin_;
     bombo::ChainParams chainParams_{}; // Phase 1b: defaults only; APVTS wiring lands in Phase 2.
+
+    // Set by requestPresetTailReset() from the message thread; consumed at
+    // the top of processBlock so chain_.killTail() runs exactly once on the
+    // audio thread per preset apply.
+    std::atomic<bool> presetTailResetPending_{ false };
 
     std::atomic<int> keyboardTriggers_{0};
     std::atomic<int> oneShotTriggers_{0};   // T-style: fires + arms tail kill

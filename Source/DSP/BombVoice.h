@@ -52,6 +52,11 @@ struct VoiceTrigger
     bool  voiceAMute      = false;
     bool  voiceBMute      = false;
     bool  driveMute       = false;
+    // Voice B synth-layer master gate. true (default) preserves the
+    // historic behaviour (mid sine + click + noise + sample sum into the
+    // body bus). false bypasses the synth → bodyMix becomes sampleOut
+    // only, giving a true "sample player" mode for Voice B.
+    bool  voiceBSynthOn   = true;
     // Sample-slot layer (VOICE B). shared_ptr<const> is copied by the audio
     // thread at trigger time — the refcount bump is allocator-free on
     // libstdc++ x86_64. Null = no sample loaded; voice just skips the mix.
@@ -90,6 +95,7 @@ struct VoiceTrigger
             && driveBias       == o.driveBias
             && voiceAMute      == o.voiceAMute
             && voiceBMute      == o.voiceBMute
+            && voiceBSynthOn   == o.voiceBSynthOn
             && driveMute       == o.driveMute
             && voiceBalance    == o.voiceBalance
             && sampleBuf.get() == o.sampleBuf.get();
@@ -184,7 +190,22 @@ public:
 
         const float m0 = t.midPitchStartHz;
         const float m1 = t.midPitchEndHz < 1.0f ? 1.0f : t.midPitchEndHz;
-        midPitchEnv_.trigger(m0, m1, t.midDecayMs / 1000.0f, t.pitchCurve);
+        // 2026-05-24 fix: cap mid pitch-env duration at 150 ms regardless
+        // of midDecayMs. Was: pitch sweep duration = midDecayMs, which
+        // meant longer DEC values stretched the sweep too — the mid sine
+        // spent more time at the high end before settling, so users heard
+        // the perceived "peak frequency" rise as DEC went up. Capping the
+        // sweep restores the natural kick contour (short pitch transient,
+        // then stable low rumble for as long as DEC dictates).
+        //
+        // Voice A has a dedicated `pitchDecay` param for this purpose —
+        // Voice B was never given the same separation. If we ever want
+        // user-controlled sweep length on Voice B too, add a midPitchDecay
+        // param mirroring Voice A; until then 150 ms is the musical cap.
+        constexpr float kMidPitchSweepMaxSec = 0.150f;
+        const float midPitchEnvSec = juce::jmin(t.midDecayMs / 1000.0f,
+                                                kMidPitchSweepMaxSec);
+        midPitchEnv_.trigger(m0, m1, midPitchEnvSec, t.pitchCurve);
 
         // Pass 0 driftAmount — envelope quantisation is a no-op at 0.
         ampEnv_.triggerFull(t.ampDecayMs, t.ampAttackMs, 0.0f);
@@ -240,29 +261,48 @@ public:
             sub = y;
         }
 
-        // MID layer (always sine — avoid aliasing at body frequencies)
+        // MID layer (always sine — avoid aliasing at body frequencies).
+        // We still tick midPitchEnv / midAmpEnv / midOsc / noise / click
+        // EVERY sample even when voiceBSynthOn is false, so internal state
+        // (phase, envelope position, noise RNG) stays time-coherent —
+        // toggling the gate mid-loop must not change the next-trigger
+        // determinism guarantee. The gate is applied as a multiplication
+        // on the synth contribution only; sample playback below is
+        // untouched and still drives bodyMix when the gate is off.
         const float midFreq = midPitchEnv_.tick();
         const float midOscOut = midOsc_.tickWave(midFreq, WAVE_SINE);
         const float midAmp = midAmpEnv_.tick();
-        const float mid = midOscOut * midAmp * trig_.midLevel;
+        const float synthGate = trig_.voiceBSynthOn ? 1.0f : 0.0f;
+        const float mid = midOscOut * midAmp * trig_.midLevel * synthGate;
 
         // Transient + body texture (noise rides the MID envelope so it
-        // doesn't hang on for the full sub decay).
-        const float clickOut = click_.tick() * trig_.clickAmount;
+        // doesn't hang on for the full sub decay). Same synthGate applies
+        // so click + noise also fall silent when voiceBSynthOn is false.
+        const float clickOut = click_.tick() * trig_.clickAmount * synthGate;
         const float noiseOut = noise_.tick(trig_.noiseColor)
                              * trig_.noiseAmount
-                             * midAmp;
+                             * midAmp
+                             * synthGate;
 
         // SAMPLE layer — shared_ptr held in the per-voice trig_ snapshot.
-        // Plays once from start to end; fade-out + amplitude shape are baked
-        // in at load time so we just read the buffer here.
+        // Plays once from start to end. Sample's baked-in fade-out + amp
+        // shape are preserved; we now ALSO apply the mid amp envelope on
+        // top so VOICE B's ATK and DEC knobs actually shape the sample.
+        //
+        // Before 2026-05-24 the sample bypassed midAmp entirely, so ATK
+        // did nothing to a sample-only Voice B and DEC couldn't tighten
+        // it — user couldn't sculpt the sample's attack/release at all.
+        // Multiplying by midAmp gives users full ATK/DEC control while
+        // leaving the underlying sample data untouched. Note: midAmpEnv
+        // dies after midDecayMs, so very long samples may be clipped by
+        // a short DEC; this is intentional — DEC is the gate length.
         float sampleOut = 0.0f;
         if (trig_.sampleBuf)
         {
             const auto& b = *trig_.sampleBuf;
             if (samplePos_ < b.getNumSamples())
             {
-                sampleOut = b.getSample(0, samplePos_);
+                sampleOut = b.getSample(0, samplePos_) * midAmp;
                 ++samplePos_;
             }
         }

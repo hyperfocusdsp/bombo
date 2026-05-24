@@ -74,6 +74,7 @@ void BomboProcessor::cacheParameterPointers()
     pBpm             = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(bpm));
     pVoiceAMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceAMute));
     pVoiceBMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceBMute));
+    pVoiceBSynthOn   = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceBSynthOn));
     pDriveMute       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(driveMute));
     pDelayMute       = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(delayMute));
     pReverbMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(reverbMute));
@@ -155,6 +156,7 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     t.driveBias       = pDriveBias->get();
     t.voiceAMute      = pVoiceAMute->get();
     t.voiceBMute      = pVoiceBMute->get();
+    t.voiceBSynthOn   = pVoiceBSynthOn->get();
     t.driveMute       = pDriveMute->get();
     t.voiceBalance    = pVoiceBalance->get();
     // Copy the current sample shared_ptr under spin-lock. shared_ptr copy is
@@ -252,6 +254,15 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     juce::ScopedNoDenormals noDenormals;
     const int numSamples = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
+
+    // Drain preset-apply tail-reset request (set on the message thread
+    // by requestPresetTailReset). Runs exactly once per apply: chain_
+    // .killTail() schedules the click-free fade so any inherited reverb/
+    // delay state from the previous preset is gone before the next
+    // trigger lands. Cheap when no apply is pending (single relaxed
+    // atomic load + the strong exchange).
+    if (presetTailResetPending_.exchange(false, std::memory_order_acquire))
+        chain_.killTail();
 
     // Synth — clear output first; we'll write voices into it.
     for (int ch = 0; ch < numChannels; ++ch)
@@ -624,15 +635,40 @@ void BomboProcessor::loadVoiceBSample(const juce::File& file)
 {
     auto buf = bombo::SampleSlot::loadFromFile(
         file, static_cast<double>(currentSampleRate_));
-    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
-    voiceBSample_       = std::move(buf);
-    voiceBSamplePath_   = (voiceBSample_ ? file.getFullPathName() : juce::String());
-    // Single-file load clears any folder browse state AND factory mode.
-    voiceBFolderPath_.clear();
-    voiceBFolderSamples_.clear();
-    voiceBFolderIndex_  = -1;
-    voiceBIsFactory_    = false;
-    voiceBFactoryNames_.clear();
+    {
+        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+        voiceBSample_       = std::move(buf);
+        voiceBSamplePath_   = (voiceBSample_ ? file.getFullPathName() : juce::String());
+        // Single-file load clears any folder browse state AND factory mode.
+        voiceBFolderPath_.clear();
+        voiceBFolderSamples_.clear();
+        voiceBFolderIndex_  = -1;
+        voiceBIsFactory_    = false;
+        voiceBFactoryNames_.clear();
+    }
+    snapDecayToSampleLength();
+}
+
+void BomboProcessor::snapDecayToSampleLength() noexcept
+{
+    std::shared_ptr<const juce::AudioBuffer<float>> snap;
+    {
+        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+        snap = voiceBSample_;
+    }
+    if (! snap || snap->getNumSamples() <= 0 || currentSampleRate_ <= 0.0f) return;
+    const float lenMs = (float) snap->getNumSamples() * 1000.0f / currentSampleRate_;
+    if (auto* p = apvts.getParameter(bombo::pid::midDecay))
+    {
+        // Clamp to the midDecay param max (5000 ms post-2026-05-24 bump)
+        // so very long samples just play to the param ceiling rather than
+        // attempting an out-of-range normalise.
+        const float clamped = juce::jmin(lenMs, 5000.0f);
+        const float norm    = p->convertTo0to1(clamped);
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, norm));
+        p->endChangeGesture();
+    }
 }
 
 void BomboProcessor::setVoiceBSampleFolder(const juce::File& filePicked)
@@ -665,16 +701,19 @@ void BomboProcessor::setVoiceBSampleFolder(const juce::File& filePicked)
     auto buf = bombo::SampleSlot::loadFromFile(
         found.getReference(idx), static_cast<double>(currentSampleRate_));
 
-    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
-    voiceBFolderPath_ = folder.getFullPathName();
-    voiceBFolderSamples_.assign(found.begin(), found.end());
-    voiceBFolderIndex_ = idx;
-    voiceBSample_      = std::move(buf);
-    voiceBSamplePath_  = (voiceBSample_
-                          ? found.getReference(idx).getFullPathName()
-                          : juce::String());
-    voiceBIsFactory_   = false;
-    voiceBFactoryNames_.clear();
+    {
+        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+        voiceBFolderPath_ = folder.getFullPathName();
+        voiceBFolderSamples_.assign(found.begin(), found.end());
+        voiceBFolderIndex_ = idx;
+        voiceBSample_      = std::move(buf);
+        voiceBSamplePath_  = (voiceBSample_
+                              ? found.getReference(idx).getFullPathName()
+                              : juce::String());
+        voiceBIsFactory_   = false;
+        voiceBFactoryNames_.clear();
+    }
+    snapDecayToSampleLength();
 }
 
 void BomboProcessor::loadVoiceBSampleByIndex(int idx)
@@ -720,10 +759,13 @@ void BomboProcessor::loadVoiceBSampleByIndex(int idx)
         newPath = buf ? userFile.getFullPathName() : juce::String();
     }
 
-    juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
-    voiceBFolderIndex_ = idx;
-    voiceBSample_      = std::move(buf);
-    voiceBSamplePath_  = newPath;
+    {
+        juce::SpinLock::ScopedLockType lock(voiceBSampleLock_);
+        voiceBFolderIndex_ = idx;
+        voiceBSample_      = std::move(buf);
+        voiceBSamplePath_  = newPath;
+    }
+    snapDecayToSampleLength();
 }
 
 void BomboProcessor::loadFactorySamples()

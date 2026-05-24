@@ -10,7 +10,9 @@
 #include "LoopButton.h"
 #include "Fonts.h"
 #include "HeaderRenderer.h"
+#include "RoutedDecayKnob.h"
 #include "SampleSlotWidget.h"
+#include "SynthToggle.h"
 #include "WaveBuffer.h"
 #include "../ParameterIds.h"
 
@@ -84,13 +86,34 @@ void FaceplatePanel::changeListenerCallback(juce::ChangeBroadcaster* bc)
         else if (s.mutePid == pid::filterMute)     s.accent = col::filterC();
         else if (s.mutePid == pid::duckMute)       s.accent = col::duck();
 
-        const juce::Colour newLabel = isVoice ? col::bone() : col::ink();
+        // Voice sections always paint a dark accent fill → bone (light)
+        // label. Non-voice sections paint a lighter accent on classic
+        // themes → dark ink label reads. On neon themes every section
+        // collapses to the same near-black fill (no per-section colour
+        // differentiation), so even "non-voice" labels need bone to be
+        // visible. col::isNeon() captures that.
+        const juce::Colour newLabel = (col::isNeon() || isVoice)
+                                          ? col::bone()
+                                          : col::ink();
         s.labelOnBg = newLabel;
         for (auto& c : s.controls)
         {
             if (c && c->label)
                 c->label->setColour(juce::Label::textColourId, newLabel);
         }
+    }
+
+    // Macro labels live in the nose — always dark grey regardless of
+    // theme (the nose is high-chroma on every palette; cream-on-red and
+    // neon-on-neon both lose contrast). Re-applying on theme change is
+    // a no-op visually since graphite stays the same colour, but keeps
+    // the contract that label colours are owned here so a future palette
+    // tweak that retunes `graphite` per theme propagates correctly.
+    const juce::Colour macroLbl = col::graphite();
+    for (auto& m : macro_)
+    {
+        if (m && m->label)
+            m->label->setColour(juce::Label::textColourId, macroLbl);
     }
 }
 
@@ -150,12 +173,24 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         s.accent = col::voice(); s.labelOnBg = col::bone();
         addKnob      (s, pid::ampAttack,   "ATK",    s.labelOnBg);
         // VOICE B's audible content (mid osc + click + noise + sample) all
-        // ride midAmpEnv_, driven by pid::midDecay. The DEC knob was wired to
-        // pid::ampDecay (which drives VOICE A's sub-layer envelope) — turning
-        // it had no audible effect on VOICE B in isolation. User report
-        // 2026-05-24. ampDecay still controls the sub layer; it's just no
-        // longer exposed under VOICE B where it doesn't belong.
-        addKnob      (s, pid::midDecay,    "DEC",    s.labelOnBg);
+        // ride midAmpEnv_, driven by pid::midDecay. The DEC knob now uses
+        // a RoutedDecayBinding instead of a SliderAttachment so a sibling
+        // A/B/+ pill can switch its target between ampDecay (Voice A),
+        // midDecay (Voice B), or both at once — added 2026-05-24 so
+        // users have direct UI access to Voice A's amp tail without
+        // losing per-voice DEC scoping. The Control is otherwise built
+        // exactly like a regular knob (slider + label widgets); we just
+        // drop the SliderAttachment immediately and remember the Control
+        // pointer so resized() can pin the routing pill next to it.
+        decControl_ = addKnob(s, pid::midDecay, "DEC", s.labelOnBg);
+        if (decControl_ != nullptr)
+        {
+            decControl_->sAtt.reset();
+            if (decControl_->slider != nullptr)
+                decRouting_ = std::make_unique<RoutedDecayBinding>(apvts_, *decControl_->slider);
+        }
+        decRoutingPill_ = std::make_unique<DecRoutingPill>(apvts_);
+        addAndMakeVisible(*decRoutingPill_);
         addKnob      (s, pid::clickAmount, "CLICK",  s.labelOnBg);
         addKnob      (s, pid::noiseAmount, "BODY",   s.labelOnBg);
         addKnob      (s, pid::noiseColor,  "COLOR",  s.labelOnBg);
@@ -238,17 +273,28 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         visualOrder_[i] = static_cast<int>(i);
 
     // ── Macro row ───────────────────────────────────────────────────
-    // Macros live in the red nose region — labels must sit on a saturated
-    // red background, so use col::bone() (cream-white) not boneDim for
-    // legibility. OUT gets the same treatment plus a fonts::label bump
-    // applied in layoutMacrosInNose() so it reads as the hero.
-    macro_[0] = makePlaceholderKnob("PITCH",  col::bone());
-    macro_[1] = makePlaceholderKnob("DECAY",  col::bone());
-    macro_[2] = makePlaceholderKnob("PUNCH",  col::bone());
-    macro_[3] = makePlaceholderKnob("WEIGHT", col::bone());
-    macro_[4] = makePlaceholderKnob("MOOD",   col::bone());
-    macro_[5] = makePlaceholderKnob("SPACE",  col::bone());
-    macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::accentAmber(), col::bone());
+    // Macros live in the saturated nose region (red on classic, bright
+    // neon on matrix/cyber/plasma). Either way the nose is HIGH chroma,
+    // and cream-coloured `bone` labels turned out hard to read on both
+    // (low contrast on red, text-on-glow on neon — user feedback
+    // 2026-05-24 image #2 showed barely-visible labels on VAULT). Going
+    // dark grey unconditionally gives consistent high-contrast labels
+    // regardless of theme.
+    //
+    // OUT also drops its accentAmber cap for the standard dark knobCap:
+    // on neon themes accentAmber IS the bright neon, which produced a
+    // glowing master-out knob that overpowered the macro row. With a
+    // dark cap the drawRotarySlider picks `bone` (the neon) as the
+    // indicator, so the OUT knob keeps its accent association via the
+    // pointer/value text instead of the cap.
+    const juce::Colour macroLbl = col::graphite();
+    macro_[0] = makePlaceholderKnob("PITCH",  macroLbl);
+    macro_[1] = makePlaceholderKnob("DECAY",  macroLbl);
+    macro_[2] = makePlaceholderKnob("PUNCH",  macroLbl);
+    macro_[3] = makePlaceholderKnob("WEIGHT", macroLbl);
+    macro_[4] = makePlaceholderKnob("MOOD",   macroLbl);
+    macro_[5] = makePlaceholderKnob("SPACE",  macroLbl);
+    macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::knobCap(), macroLbl);
     for (auto& m : macro_)
     {
         if (m == nullptr) continue;
@@ -285,6 +331,19 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         apvts_, pid::loopOn, *loopBtn_);
     addAndMakeVisible(*loopBtn_);
 
+    // ── Voice B synth-layer toggle (ramp-down icon pill) ──────────
+    // Lives inside the VOICE B section title bar (resized() positions it
+    // right-aligned over the title text). Toggling OFF bypasses the mid
+    // sine + click + noise generators so Voice B becomes sample-only.
+    voiceBSynthPill_ = std::make_unique<SynthToggle>();
+    voiceBSynthPill_->setWantsKeyboardFocus(false);
+    voiceBSynthPill_->setMouseClickGrabsKeyboardFocus(false);
+    voiceBSynthPill_->setTooltip("Voice B synth layer - ON: mid sine + "
+                                 "click + noise active. OFF: sample-only.");
+    voiceBSynthAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        apvts_, pid::voiceBSynthOn, *voiceBSynthPill_);
+    addAndMakeVisible(*voiceBSynthPill_);
+
     // ── BPM display (replaces the old MNT pill slot) ───────────────
     bpmDisplay_ = std::make_unique<BpmDisplay>(
         apvts_, pid::bpm, std::move(hostBpmFn));
@@ -306,7 +365,7 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     bounceAiffCb_ = std::move(bounceAiffCb);
 
     bncPill_ = std::make_unique<juce::TextButton>("BNC");
-    bncPill_->setTooltip("Bounce to WAV or AIFF — click to choose format");
+    bncPill_->setTooltip("Bounce to WAV or AIFF - click to choose format");
     bncPill_->setWantsKeyboardFocus(false);
     bncPill_->setMouseClickGrabsKeyboardFocus(false);
     bncPill_->onClick = [this]
@@ -673,8 +732,17 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
                     ? s.accent.brighter(0.25f)
                     : bodyColour.darker(0.45f));
         g.fillRect(accentStrip);
-        g.setColour(isDragLifted ? s.accent.darker(0.30f)
-                                 : (muted ? col::graphite() : col::ink()));
+        // Title-bar fill. On classic themes `ink` is a near-black recess
+        // colour and the bright `bone` text sits cleanly on top. On neon
+        // themes `ink` is repurposed as a LIGHT secondary foreground
+        // (#D0D8CC / #C8D8E0 / #E0C8D8), so painting it as a title-bar
+        // bg with bright-neon `bone` text gives a low-contrast wash that
+        // user flagged as unreadable on plasma 2026-05-24. Swap to
+        // `graphite` on neon so it's the same "dark fill + neon text"
+        // language already in use for the pills, preset bar, scope.
+        const juce::Colour titleBg = (muted || col::isNeon()) ? col::graphite()
+                                                              : col::ink();
+        g.setColour(isDragLifted ? s.accent.darker(0.30f) : titleBg);
         g.fillRect(titleBar);
         g.setColour(isDragLifted ? col::bone()
                                  : (muted ? col::boneDim() : col::bone()));
@@ -953,6 +1021,51 @@ void FaceplatePanel::resized()
         const int balY = sections_[0].rectBounds.getY() - kBalFaderH - 2;
         const juce::Rectangle<int> balDefault(balX, balY, balR - balX, kBalFaderH);
         balanceFader_->setBounds(layout_.boundsOr("balanceFader", balDefault));
+    }
+
+    // Voice B synth-toggle pill — sits in the same horizontal strip as
+    // the A/B balance fader, pinned to the right edge of the VOICE B
+    // section (sections_[1]). User wanted it visually adjacent to the
+    // A/B mix control rather than buried in the section title bar
+    // (2026-05-24 image-4 feedback). Look up by mutePid so a future
+    // visualOrder_ rearrangement wouldn't break the placement.
+    if (voiceBSynthPill_ && ! sections_.empty())
+    {
+        constexpr int kSynthPillW = 26;
+        // Match the fader strip height — visually subordinate but in line.
+        const int pillH = kBalFaderH;
+        bool placed = false;
+        for (const auto& s : sections_)
+        {
+            if (s.mutePid != pid::voiceBMute) continue;
+            const int x = s.rectBounds.getRight() - kSynthPillW;
+            const int y = s.rectBounds.getY() - pillH - 2;
+            voiceBSynthPill_->setBounds(
+                layout_.boundsOr("voiceBSynthPill",
+                                 juce::Rectangle<int>(x, y, kSynthPillW, pillH)));
+            voiceBSynthPill_->setVisible(true);
+            voiceBSynthPill_->toFront(false);
+            placed = true;
+            break;
+        }
+        if (! placed) voiceBSynthPill_->setVisible(false);
+    }
+
+    // DEC routing pill — small 1-char A/B/+ cycle button. Pinned to the
+    // top-right corner of the DEC knob's slider so it reads as a
+    // "modifier" attached to that knob, not as a section-level control.
+    // Sized small (12x12) — purely a status/cycle affordance, not a
+    // primary input.
+    if (decRoutingPill_ && decControl_ && decControl_->slider)
+    {
+        constexpr int kRoutePillSize = 12;
+        const auto sb = decControl_->slider->getBounds();
+        const int x = sb.getRight() - kRoutePillSize / 2;
+        const int y = sb.getY() - kRoutePillSize / 2;
+        decRoutingPill_->setBounds(
+            layout_.boundsOr("decRoutingPill",
+                             juce::Rectangle<int>(x, y, kRoutePillSize, kRoutePillSize)));
+        decRoutingPill_->toFront(false);
     }
 
     layoutHeader(headerBounds_);

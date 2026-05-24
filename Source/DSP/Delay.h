@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "SmoothScalar.h"
+
 namespace bombo
 {
 
@@ -45,7 +47,9 @@ public:
         : buffer_(static_cast<size_t>(kMaxSamples), 0.0f)
     {
         setSampleRate(sampleRate);
-        delaySamples_ = 0.25f * sampleRate;   // 250 ms default
+        delaySamples_.snap(0.25f * sampleRate);   // 250 ms default
+        feedback_   .snap(0.45f);
+        fbDampCoef_ .snap(0.25f);
     }
 
     void setSampleRate(float sr) noexcept
@@ -53,6 +57,16 @@ public:
         sampleRate_ = sr;
         // SVF cutoff fixed at 300 Hz, Q = 0.707 — morph picks the output.
         setSvfCoefs(300.0f, 0.707f);
+
+        // 25 ms one-pole ramp on the user-tweaked scalars. Without this,
+        // knob tweaks mid-tail produced a tap-scrub blip (delaySamples_
+        // jump), a wet-level step (feedback_), or a tone-step on the
+        // feedback-loop LP (fbDampCoef_). The smoother glides the
+        // consumed value so process() never sees a discontinuity.
+        constexpr float kFxSmoothTauSec = 0.025f;
+        delaySamples_.prepare(sr, kFxSmoothTauSec);
+        feedback_    .prepare(sr, kFxSmoothTauSec);
+        fbDampCoef_  .prepare(sr, kFxSmoothTauSec);
     }
 
     // Stores the tap as a float so tempo-sync delays don't quantize to
@@ -62,18 +76,22 @@ public:
     // creeping" over long loops. The process() read tap already
     // interpolates linearly between idx0/idx1 so sub-sample taps cost
     // nothing extra at runtime.
+    // Routed through SmoothScalar (since 2026-05-24) so the read tap
+    // glides between values rather than jumping — a fast TIME-knob sweep
+    // mid-tail now sounds like a continuous tape-warble pitch slide
+    // instead of discrete sample-position blips.
     void setTimeMs(float ms) noexcept
     {
         const float n      = (ms < 1.0f ? 1.0f : ms) * 0.001f * sampleRate_;
         const float maxF   = static_cast<float>(kMaxSamples - 1);
-        delaySamples_ = n < 1.0f ? 1.0f : (n > maxF ? maxF : n);
+        delaySamples_.setTarget(n < 1.0f ? 1.0f : (n > maxF ? maxF : n));
     }
 
     void setFeedback(float fb) noexcept
     {
         if (fb < 0.0f) fb = 0.0f;
         if (fb > 0.95f) fb = 0.95f;
-        feedback_ = fb;
+        feedback_.setTarget(fb);
     }
 
     // SMEAR: tape-warble LFO on the read tap. 0 = static, 1 = ~90 cents wobble.
@@ -89,7 +107,7 @@ public:
     {
         if (damp < 0.0f) damp = 0.0f;
         if (damp > 1.0f) damp = 1.0f;
-        fbDampCoef_ = damp * 0.5f;
+        fbDampCoef_.setTarget(damp * 0.5f);
     }
 
     void setFilterMorph(float pos) noexcept
@@ -155,10 +173,18 @@ public:
         if (lfoPhase_ >= tau_c) lfoPhase_ -= tau_c;
         const float driftOffset = std::sin(lfoPhase_) * driftDepthSamples_;
 
+        // Smoothed scalars — step once per sample. delaySamples in
+        // particular: smoothing the read-tap target combined with the
+        // existing linear-interp tap (idx0/idx1+frac) gives a smooth
+        // tape-warble feel under TIME-knob sweeps mid-tail.
+        const float delaySamplesNow = delaySamples_.next();
+        const float fbDampCoefNow   = fbDampCoef_.next();
+        const float feedbackNow     = feedback_.next();
+
         const int bufLen = static_cast<int>(buffer_.size());
         const float bufLenF = static_cast<float>(bufLen);
         float readPosF = static_cast<float>(writePos_)
-                       - delaySamples_
+                       - delaySamplesNow
                        + driftOffset
                        + bufLenF;
         // rem_euclid for floats — keep in [0, bufLen).
@@ -169,7 +195,7 @@ public:
         const float wet = buffer_[idx0] * (1.0f - frac) + buffer_[idx1] * frac;
 
         // Feedback-loop LP damping.
-        fbDampZ_ = wet * (1.0f - fbDampCoef_) + fbDampZ_ * fbDampCoef_;
+        fbDampZ_ = wet * (1.0f - fbDampCoefNow) + fbDampZ_ * fbDampCoefNow;
         if (std::fpclassify(fbDampZ_) == FP_SUBNORMAL) fbDampZ_ = 0.0f;
         // Bug fix 2026-05-17: during the kill-fade window, write ZERO to
         // the buffer — not input + fb. Otherwise any audio arriving during
@@ -178,7 +204,7 @@ public:
         // then plays back at the delay-cycle period AFTER the fade ends.
         // With max feedback (≈1.0), that capture rings out indefinitely
         // — user reported this as a faint, never-dying delay tail.
-        const float fb = fbDampZ_ * feedback_;
+        const float fb = fbDampZ_ * feedbackNow;
         buffer_[writePos_] = (killFadeRemaining_ > 0) ? 0.0f : input + fb;
         writePos_ = (writePos_ + 1) % bufLen;
 
@@ -282,10 +308,14 @@ private:
     std::vector<float> buffer_;
     int writePos_ = 0;
     float sampleRate_ = 48000.0f;
-    float delaySamples_ = 12000.0f;
-    float feedback_ = 0.45f;
-    float fbDampZ_ = 0.0f;
-    float fbDampCoef_ = 0.25f;
+    // delaySamples_ / feedback_ / fbDampCoef_ wrapped in SmoothScalar
+    // 2026-05-24 so APVTS-driven knob updates glide rather than snap.
+    // Default values are applied via .snap() in the ctor; setSampleRate()
+    // configures the 25 ms ramp.
+    SmoothScalar delaySamples_;
+    SmoothScalar feedback_;
+    float        fbDampZ_ = 0.0f;
+    SmoothScalar fbDampCoef_;
     float lfoPhase_ = 0.0f;
     float driftDepthSamples_ = 0.0f;
     float driftRateHz_ = 0.7f;

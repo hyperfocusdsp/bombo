@@ -40,4 +40,13 @@ inline juce::Colour bandYellow()  { return bombo::ThemeProvider::current().bandY
 
 inline float chassisOverlayOpacity() { return bombo::ThemeProvider::current().chassisOverlayOpacity; }
 
+// True on themes where `ink` is a LIGHT secondary foreground instead of
+// a dark recess colour (MATRIX/CYBER/PLASMA). These themes need
+// dark-bg + accent-text styling for toggle pills, the OUT macro cap,
+// the scope panel, and nose macro labels — otherwise the saturated neon
+// `accentAmber`/`bone` end up text-on-text or text-on-glow and become
+// unreadable. The ink-brightness check is the cleanest discriminator:
+// neon palettes invert ink's semantic from "dark ink" to "light off-bone".
+inline bool isNeon() noexcept { return ink().getPerceivedBrightness() > 0.5f; }
+
 } // namespace bombo::col

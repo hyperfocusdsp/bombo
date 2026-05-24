@@ -17,17 +17,35 @@ public:
     {
         const auto r = getLocalBounds().toFloat();
         const bool on = getToggleState();
+        const bool neon = col::isNeon();
 
-        // Dark pill bg + amber border (identical to drawToggleButton in BomboLookAndFeel).
-        g.setColour(on ? col::accentAmber().withAlpha(0.40f)
-                       : col::graphite().withAlpha(0.88f));
-        g.fillRoundedRectangle(r, 4.0f);
-        g.setColour(on ? col::accentAmber()
-                       : col::accentAmber().withAlpha(0.50f));
-        g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+        // Pill bg + amber border (mirrors drawToggleButton in BomboLookAndFeel).
+        // Neon themes keep the bg dark in BOTH states; ON signals via a
+        // thicker, full-opacity border + full-opacity icon. Classic themes
+        // flip to a bright amber fill when ON (industrial-yellow look).
+        if (neon)
+        {
+            g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f));
+            g.fillRoundedRectangle(r, 4.0f);
+            g.setColour(on ? col::accentAmber()
+                           : col::accentAmber().withAlpha(0.55f));
+            g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, on ? 1.5f : 1.0f);
+        }
+        else
+        {
+            g.setColour(on ? col::accentAmber().withAlpha(0.40f)
+                           : col::graphite().withAlpha(0.88f));
+            g.fillRoundedRectangle(r, 4.0f);
+            g.setColour(on ? col::accentAmber()
+                           : col::accentAmber().withAlpha(0.50f));
+            g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+        }
 
         // Loop-arrow icon: ~300° arc + arrowhead at start, pointing clockwise.
-        g.setColour(on ? col::ink() : col::bone());
+        // Neon: accent icon in both states (matches the pill text rule).
+        // Classic: ink when ON (sits on bright amber), bone when OFF (sits on dark).
+        g.setColour(neon ? col::accentAmber().withAlpha(on ? 1.0f : 0.75f)
+                         : (on ? col::ink() : col::bone()));
         const float cx  = r.getCentreX();
         const float cy  = r.getCentreY();
         const float rad = juce::jmin(r.getWidth(), r.getHeight()) * 0.28f;
