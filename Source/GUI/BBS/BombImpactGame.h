@@ -85,6 +85,10 @@ private:
     bool vaultAccessEarned_ = false;
     static constexpr int kOverdriveDuration = 250; // ticks
 
+    // Invincibility after being hit — ship blinks, collisions skipped
+    int invincTick_ = 0;
+    static constexpr int kInvincDuration = 150; // 3s at 50Hz
+
     // Visuals
     int  attractBlink_   = 0;
     int  bgScrollOffset_ = 0;

@@ -41,6 +41,7 @@ void BombImpactGame::startGame()
     bullets_.clear();
     lifeUps_.clear();
     shipX_               = kShipDefaultX;
+    invincTick_          = 0;
     lifeUpSpawnCooldown_ = 300 + rng_.nextInt(300);
 }
 
@@ -144,6 +145,8 @@ void BombImpactGame::tick()
                 if (p.x < -12.0f) p.alive = false;
             }
 
+            if (invincTick_ > 0) --invincTick_;
+
             updateEntities();
             checkCollisions();
             checkEasterEggs();
@@ -228,20 +231,26 @@ void BombImpactGame::checkCollisions()
         }
     }
 
-    // Ship vs enemies
-    for (auto& e : enemies_)
+    // Ship vs enemies — skipped while invincible
+    if (invincTick_ == 0)
     {
-        if (!e.alive || e.type == Enemy::SilenceVoid) continue;
-        const float dx = std::abs(e.x - shipX_), dy = std::abs(e.y - shipY_);
-        const float hw = e.type == Enemy::Limiter ? 18.0f : 13.0f;
-        const float hh = e.type == Enemy::Limiter ? fieldH_ * 0.35f : 10.0f;
-        if (dx < hw && dy < hh)
+        for (auto& e : enemies_)
         {
-            e.alive = false;
-            chain_  = 0;
-            diedThisWave_ = true;
-            ++deathCount_;
-            if (--lives_ <= 0) { lives_ = 0; transitionTo(State::GameOver); return; }
+            if (!e.alive || e.type == Enemy::SilenceVoid) continue;
+            const float dx = std::abs(e.x - shipX_), dy = std::abs(e.y - shipY_);
+            const float hw = e.type == Enemy::Limiter ? 18.0f : 13.0f;
+            const float hh = e.type == Enemy::Limiter ? fieldH_ * 0.35f : 10.0f;
+            if (dx < hw && dy < hh)
+            {
+                e.alive        = false;
+                chain_         = 0;
+                diedThisWave_  = true;
+                invincTick_    = kInvincDuration;
+                ++deathCount_;
+                addToast("HIT!", 60);
+                if (--lives_ <= 0) { lives_ = 0; transitionTo(State::GameOver); return; }
+                return; // one hit per frame
+            }
         }
     }
 
@@ -326,6 +335,7 @@ void BombImpactGame::transitionTo(State s)
             spawnTick_           = 0;
             autoFireTick_        = 0;
             lifeUpSpawnCooldown_ = 300 + rng_.nextInt(300);
+            invincTick_          = 0;
             shipX_ = kShipDefaultX;
             shipY_ = fieldH_ * 0.5f;
             theRoomWave_  = (rng_.nextInt(80) == 0);
@@ -553,7 +563,8 @@ void BombImpactGame::paintHUD(juce::Graphics& g, juce::Rectangle<int> area)
     }
 
     juce::String livesStr;
-    for (int i = 0; i < 3; ++i) livesStr += (i < lives_) ? "[*]" : "[ ]";
+    const int maxLives = juce::jmax(3, lives_);
+    for (int i = 0; i < maxLives; ++i) livesStr += (i < lives_) ? "[*]" : "[ ]";
     if (nimerMode_) livesStr = "<9> " + livesStr;
     g.setColour(juce::Colour(0xFFFF6666u));
     g.drawText(livesStr,
@@ -574,10 +585,14 @@ void BombImpactGame::paintField(juce::Graphics& g, juce::Rectangle<int> f)
 
     g.setFont(juce::Font(juce::FontOptions(termFont(), 13.0f, juce::Font::plain)));
 
-    // Ship
-    g.setColour(overdriveActive_ ? juce::Colour(0xFFFFDD00u) : juce::Colour(0xFF88FF44u));
-    g.drawText(">=>", ox + (int)shipX_ - 6, oy + (int)shipY_ - 7, 36, 14,
-               juce::Justification::centredLeft);
+    // Ship — blinks every 4 ticks during invincibility (invisible on odd intervals)
+    const bool shipVisible = (invincTick_ == 0) || ((invincTick_ / 4) % 2 == 0);
+    if (shipVisible)
+    {
+        g.setColour(overdriveActive_ ? juce::Colour(0xFFFFDD00u) : juce::Colour(0xFF88FF44u));
+        g.drawText(">=>", ox + (int)shipX_ - 6, oy + (int)shipY_ - 7, 36, 14,
+                   juce::Justification::centredLeft);
+    }
 
     // Life-up pickups
     g.setFont(juce::Font(juce::FontOptions(termFont(), 13.0f, juce::Font::bold)));
