@@ -3,6 +3,7 @@
 #include "GUI/BBS/Game/Entities.h"
 #include "GUI/BBS/Game/Constants.h"
 #include <juce_core/juce_core.h>
+#include <cmath>
 
 namespace
 {
@@ -66,6 +67,29 @@ public:
     PickupPoolMagnetTest() : juce::UnitTest("PickupPool: spawn, drift, ttl despawn") {}
     void runTest() override
     {
+        beginTest("dB Magnet pulls a currency pickup toward the player");
+        {
+            PickupPool mp;
+            auto* c = mp.spawn(Pickup::Kind::DbSmall, 80.0f, 50.0f);
+            expect(c != nullptr);
+            const float y0 = c->y;
+            for (int i = 0; i < 10; ++i)
+                mp.tick(80.0f, 10.0f, /*magnetActive=*/true);
+            // Player is directly above (y=10 < pickup y=50), so pull must move pickup upward.
+            expectLessThan(c->y, y0);
+        }
+
+        beginTest("magnet pull is finite when player is exactly on the pickup");
+        {
+            PickupPool mp2;
+            auto* d = mp2.spawn(Pickup::Kind::DbBig, 40.0f, 40.0f);
+            expect(d != nullptr);
+            // div-by-zero guard: len <= 0.001f skips the pull — must not crash or NaN.
+            for (int i = 0; i < 5; ++i)
+                mp2.tick(40.0f, 40.0f, /*magnetActive=*/true);
+            expect(std::isfinite(d->x) && std::isfinite(d->y));
+        }
+
         beginTest("spawned pickup is active; despawns after ttl elapses");
         PickupPool pool;
         auto* p = pool.spawn(Pickup::Kind::DbSmall, 80.0f, 50.0f);
