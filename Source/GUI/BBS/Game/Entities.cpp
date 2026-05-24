@@ -19,7 +19,7 @@ namespace
         e.phase += kTickDt;
         if (e.phase < 1.0f)      e.vx = -100.0f;
         else if (e.phase < 2.0f) e.vx = 0.0f;
-        else                     e.phase = 0.0f;
+        else                   { e.phase = 0.0f; e.vx = -100.0f; }   // restart burst immediately
         e.x += e.vx * kTickDt;
     }
 
@@ -38,6 +38,37 @@ namespace
         e.y += e.vy * kTickDt;
         if (e.y < 20.0f)         e.vy =  std::abs(e.vy);
         if (e.y > kFbH - 20.0f)  e.vy = -std::abs(e.vy);
+    }
+    void tickAliaser(Enemy& e) noexcept
+    {
+        e.x += -90.0f * kTickDt;
+    }
+
+    void tickAliaserMini(Enemy& e) noexcept
+    {
+        e.x += e.vx * kTickDt;
+        e.y += e.vy * kTickDt;
+    }
+
+    void tickDiveBomber(Enemy& e, const Player* player) noexcept
+    {
+        e.phase += kTickDt;
+        if (e.phase < 1.0f)
+        {
+            // Lead-in: drift left at a steady pace, no homing yet.
+            e.x += -30.0f * kTickDt;
+        }
+        else
+        {
+            if (player != nullptr)
+            {
+                const float dy = player->y - e.y;
+                // Clamp vy to ±80 px/s using std::max/min (<algorithm> already included).
+                e.vy = std::max(-80.0f, std::min(80.0f, dy * 3.0f));
+            }
+            e.x += -110.0f * kTickDt;
+            e.y += e.vy * kTickDt;
+        }
     }
 } // anonymous namespace
 
@@ -158,18 +189,21 @@ namespace bombo::game
         return nullptr;
     }
 
-    void EnemyPool::tick() noexcept
+    void EnemyPool::tick(const Player* player) noexcept
     {
         for (auto& s : slots_)
         {
             if (! s.active) continue;
             switch (s.kind)
             {
-                case EnemyKind::Mudball:     tickMudball(s);     break;
-                case EnemyKind::Clipper:     tickClipper(s);     break;
-                case EnemyKind::SilenceVoid: tickSilenceVoid(s); break;
-                case EnemyKind::Limiter:     tickLimiter(s);     break;
-                default:                     tickMudball(s);     break;  // Aliaser/DiveBomber/Rumblr: Tasks 12/19
+                case EnemyKind::Mudball:     tickMudball(s);            break;
+                case EnemyKind::Clipper:     tickClipper(s);            break;
+                case EnemyKind::SilenceVoid: tickSilenceVoid(s);        break;
+                case EnemyKind::Limiter:     tickLimiter(s);            break;
+                case EnemyKind::Aliaser:     tickAliaser(s);            break;
+                case EnemyKind::AliaserMini: tickAliaserMini(s);        break;
+                case EnemyKind::DiveBomber:  tickDiveBomber(s, player); break;
+                default:                     tickMudball(s);            break;  // Rumblr: Task 19
             }
             // Cull on all four edges (Y-cull added per Task 10 review — vertical movers).
             if (s.x < -16.0f || s.x > kFbW + 16.0f ||
@@ -200,7 +234,29 @@ namespace bombo::game
                     e.hp -= b.damage;
                     if (b.pierceLeft > 0) --b.pierceLeft;
                     else                  b.active = false;
-                    if (e.hp <= 0) { e.active = false; ++kills; }
+                    if (e.hp <= 0)
+                    {
+                        if (e.kind == EnemyKind::Aliaser)
+                        {
+                            // Capture spawn coords before deactivating. spawn() iterates
+                            // slots_ to find an inactive slot — fixed std::array, no
+                            // reallocation, so the reference 'e' stays valid. The inner
+                            // enemy loop breaks immediately after this hit, so the two
+                            // freshly-spawned minis will NOT be re-processed by this
+                            // bullet. A second active bullet in the OUTER loop could hit
+                            // a mini the same tick — that's intentional game behaviour.
+                            const float sx = e.x, sy = e.y, svx = e.vx;
+                            e.active = false;
+                            ++kills;
+                            spawn(EnemyKind::AliaserMini, sx, sy - 6.0f, svx * 0.7f, -40.0f);
+                            spawn(EnemyKind::AliaserMini, sx, sy + 6.0f, svx * 0.7f,  40.0f);
+                        }
+                        else
+                        {
+                            e.active = false;
+                            ++kills;
+                        }
+                    }
                     // Pierce: bullet stays active but hits at most one enemy per tick;
                     // the next enemy is reached within 1-2 ticks at typical bullet speed.
                     break;

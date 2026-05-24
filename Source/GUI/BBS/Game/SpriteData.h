@@ -210,6 +210,49 @@ namespace bombo::game::sprites
         {0,3,3,0,3,3,0,3,3,0},
     };
 
+    // Aliaser 10x10 — jagged/glitchy look with scattered pixels; asymmetric, indices 3/5
+    inline constexpr uint8_t kAliaser[10][10] = {
+        {0,0,5,0,3,0,5,0,0,0},
+        {0,3,3,5,3,3,3,3,0,0},
+        {5,3,3,3,5,3,3,3,5,0},
+        {0,5,3,3,3,3,5,3,3,0},
+        {0,3,5,3,3,3,3,3,3,5},
+        {5,3,3,3,5,3,3,3,3,0},
+        {0,3,3,5,3,3,3,5,3,0},
+        {0,5,3,3,3,5,3,3,3,0},
+        {0,0,3,3,3,3,3,3,0,5},
+        {0,0,0,5,0,3,0,5,0,0},
+    };
+
+    // AliaserMini 10x10 — smaller glitch fragment, indices 3/5
+    inline constexpr uint8_t kAliaserMini[10][10] = {
+        {0,0,0,0,0,0,0,0,0,0},
+        {0,0,0,5,0,3,0,0,0,0},
+        {0,0,3,3,5,3,3,0,0,0},
+        {0,5,3,3,3,3,3,5,0,0},
+        {0,3,5,3,3,3,5,3,0,0},
+        {0,3,3,5,3,3,3,3,0,0},
+        {0,0,3,3,3,5,3,0,0,0},
+        {0,0,0,5,0,3,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0},
+    };
+
+    // DiveBomber 10x10 — arrow/dart pointing LEFT (direction of travel)
+    // Index 4=hot body, 5=hilite tip, 3=accent fins
+    inline constexpr uint8_t kDiveBomber[10][10] = {
+        {0,0,0,0,0,0,0,0,3,0},
+        {0,0,0,0,0,0,0,3,3,0},
+        {0,0,0,0,0,0,3,3,4,0},
+        {5,4,4,4,4,4,4,4,4,3},
+        {5,5,4,4,4,4,4,4,4,3},
+        {5,5,4,4,4,4,4,4,4,3},
+        {5,4,4,4,4,4,4,4,4,3},
+        {0,0,0,0,0,0,3,3,4,0},
+        {0,0,0,0,0,0,0,3,3,0},
+        {0,0,0,0,0,0,0,0,3,0},
+    };
+
     // Cabinet glyph 16 rows x 12 cols (BBS header icon, unlit/lit via palette index choice)
     inline constexpr uint8_t kCabinet[16][12] = {
         {0,0,1,1,1,1,1,1,1,1,0,0},

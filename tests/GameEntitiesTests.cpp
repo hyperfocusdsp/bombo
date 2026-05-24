@@ -216,4 +216,59 @@ public:
 static ClipperBurstsForwardTest    clipperTest;
 static SilenceVoidImmuneTest       silenceVoidTest;
 static LimiterVerticalDriftTest    limiterTest;
+
+class AliaserSplitsOnFirstHitTest : public juce::UnitTest
+{
+public:
+    AliaserSplitsOnFirstHitTest() : juce::UnitTest("Aliaser: splits into 2 minis on first hit") {}
+    void runTest() override
+    {
+        beginTest("killing an Aliaser spawns two AliaserMini and removes the original");
+        EnemyPool ep;
+        BulletPool bp;
+        Enemy* a = ep.spawn(EnemyKind::Aliaser, 80, 50, -90, 0);
+        expect(a != nullptr);
+        expectEquals(a->hp, 1);   // Aliaser is 1 HP
+
+        bp.spawn(78, 50, 180, 0, /*damage=*/1);
+        bp.tick();
+        int kills = ep.applyBulletDamage(bp);
+        expectEquals(kills, 1);   // the Aliaser died
+
+        // Count active enemies: should be exactly 2 (the minis), original gone
+        int active = 0, minis = 0;
+        for (const auto& e : ep.enemies())
+        {
+            if (! e.active) continue;
+            ++active;
+            if (e.kind == EnemyKind::AliaserMini) ++minis;
+        }
+        expectEquals(active, 2);
+        expectEquals(minis, 2);
+    }
+};
+
+class DiveBomberLocksToPlayerYTest : public juce::UnitTest
+{
+public:
+    DiveBomberLocksToPlayerYTest() : juce::UnitTest("DiveBomber: locks onto player Y after lead-in") {}
+    void runTest() override
+    {
+        beginTest("after the 1s lead-in, DiveBomber steers toward the player's Y");
+        EnemyPool ep;
+        Player player;
+        player.x = 30; player.y = 90;                 // player low on screen
+        Enemy* d = ep.spawn(EnemyKind::DiveBomber, 150, 30, 0, 0);  // diver starts high
+        const float startY = d->y;
+        // Tick > 1s (lead-in) plus some homing time, passing the player ref.
+        for (int i = 0; i < 90; ++i) ep.tick(&player);
+        // Diver should have moved its Y toward the player's (downward, since player.y > diver.y)
+        expectGreaterThan(d->y, startY);
+        // And advanced left (kamikaze)
+        expectLessThan(d->x, 150.0f);
+    }
+};
+
+static AliaserSplitsOnFirstHitTest aliaserSplitTest;
+static DiveBomberLocksToPlayerYTest diveBomberTest;
 }

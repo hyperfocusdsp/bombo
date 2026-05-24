@@ -76,7 +76,7 @@ namespace bombo::game
     public:
         static constexpr int kMax = 48;
         Enemy* spawn(EnemyKind kind, float x, float y, float vx, float vy) noexcept;
-        void   tick() noexcept;
+        void   tick(const Player* player = nullptr) noexcept;
         // Returns number of enemies killed this call.
         int    applyBulletDamage(BulletPool& bullets) noexcept;
         const std::array<Enemy, kMax>& enemies() const noexcept { return slots_; }
