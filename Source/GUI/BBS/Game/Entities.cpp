@@ -228,7 +228,7 @@ namespace bombo::game
             case EnemyKind::Aliaser:     return 1;
             case EnemyKind::AliaserMini: return 1;
             case EnemyKind::DiveBomber:  return 1;
-            case EnemyKind::Rumblr:      return 40;
+            case EnemyKind::Rumblr:      return 60;
         }
         return 1;
     }

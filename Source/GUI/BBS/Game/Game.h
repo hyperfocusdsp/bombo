@@ -160,6 +160,45 @@ namespace bombo::game
         void        testForceWaveClear() noexcept;
         uint32_t    testRunSeed() const noexcept { return runSeed_; }
         bool        testDaily()   const noexcept { return daily_; }
+
+        // Sim-only: start a run with a FORCED seed so headless runs are
+        // deterministic + reproducible (the balance sim drives this). Mirrors
+        // startNewRun(false) exactly except the seed comes from the caller
+        // instead of std::random_device. daily flag is left false so the
+        // high-score "daily" bookkeeping path is untouched.
+        void testStartRunWithSeed(uint32_t seed) noexcept
+        {
+            currentWave_ = 1;
+            score_       = 0;
+            lives_       = kPlayerStartLives;
+            currencyDB_  = 0;
+            daily_       = false;
+            victory_     = false;
+            runSeed_     = (seed == 0u) ? 1u : seed;   // determinism contract: never 0
+
+            player_        = Player{};
+            player_.x      = 30.0f;
+            player_.y      = static_cast<float>(kFbH) / 2.0f;
+            playerBullets_ = BulletPool{};
+            enemyShots_    = BulletPool{};
+            enemies_       = EnemyPool{};
+            pickups_       = PickupPool{};
+            chain_         = ChainState{};
+            effects_       = EffectState{};
+            ownedItems_    = {};
+            tickCounter_   = 0;
+            runRng_.seed(runSeed_);
+            wave_          = scheduleWave(runSeed_, currentWave_);
+
+            waveClearTicks_   = 0;
+            shop_.reset();
+            shopSlot_         = 0;
+            shopFreeHealUsed_ = false;
+            initials_         = { 'A', 'A', 'A' };
+            initialsSlot_     = 0;
+
+            transitionTo(GameState::Playing);
+        }
        #endif
 
     private:

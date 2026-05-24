@@ -294,6 +294,43 @@ if(BOMBO_BUILD_TESTS)
     endif()
     add_test(NAME bombo_unit_tests COMMAND Bombo_Tests)
 
+    # ── Headless balance sim (Task 25 / spec §13.3) ───────────────────
+    # Drives the assembled v2 Game with a heuristic AutoPlayer over many
+    # FORCED-seed runs and reports per-wave survival / boss-completion to
+    # build/sim-results.json. Links the MINIMAL game module set Game.cpp
+    # actually needs (no Audio/Discovery/BBS/processor deps — those reach
+    # the game only through null-safe std::function seams). The forced-seed
+    # entry point is gated behind BOMBO_GAME_TEST_HOOKS.
+    juce_add_console_app(Bombo_BalanceSim
+        PRODUCT_NAME "Bombo_BalanceSim")
+    target_sources(Bombo_BalanceSim PRIVATE
+        tests/GameBalanceSim.cpp
+        Source/GUI/BBS/Game/Palette.cpp
+        Source/GUI/BBS/Game/Framebuffer.cpp
+        Source/GUI/BBS/Game/Entities.cpp
+        Source/GUI/BBS/Game/Waves.cpp
+        Source/GUI/BBS/Game/Shop.cpp
+        Source/GUI/BBS/Game/Drops.cpp
+        Source/GUI/BBS/Game/Effects.cpp
+        Source/GUI/BBS/Game/HighScores.cpp
+        Source/GUI/BBS/Game/Game.cpp)
+    target_include_directories(Bombo_BalanceSim PRIVATE Source)
+    target_compile_definitions(Bombo_BalanceSim PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        BOMBO_GAME_TEST_HOOKS=1
+        BOMBO_HEADLESS_SIM=1
+        $<$<BOOL:${BOMBO_GAME_V2}>:BOMBO_GAME_V2=1>)
+    target_link_libraries(Bombo_BalanceSim
+        PRIVATE
+            juce::juce_core
+            juce::juce_events
+            juce::juce_data_structures
+            juce::juce_graphics
+            juce::juce_gui_basics
+        PUBLIC
+            juce::juce_recommended_config_flags)
+
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME bombo_ascii_lint
