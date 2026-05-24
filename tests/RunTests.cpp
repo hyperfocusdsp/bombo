@@ -1277,6 +1277,114 @@ public:
                    "state leak somewhere (max diff " + juce::String(maxDiff, 8) + ")");
         }
 
+        beginTest("AUDIO VALIDATION: reverb-on 8-beat loop, per-beat RMS variance");
+        {
+            // Validates the convolution rework end-to-end against the
+            // 2026-05-24 audio-regression report ("every-other-hit tail
+            // variation"). Renders 8 beats at 140 BPM with TAIL ON, reverb
+            // Hall + mix 0.5 + decay 0.7. Per-beat post-attack RMS should
+            // be within ~5 % across beats; any larger variation IS the bug.
+            //
+            // Also dumps the rendered audio to /tmp/bombo_reverb_loop.wav
+            // when BOMBO_DUMP_WAV=1, so the bug-reporter can A/B by ear.
+            const float sr = 48000.0f;
+            const float bpm = 140.0f;
+            const int beatSamples = static_cast<int>(60.0f / bpm * sr);
+            const int nBeats = 8;
+
+            bombo::RumbleChain chain(sr);
+            bombo::ChainParams p;
+            p.reverbType        = bombo::ir::Hall;
+            p.reverbSize        = 0.55f;
+            p.reverbDecay       = 0.70f;
+            p.reverbDamp        = 0.40f;
+            p.reverbPredelayMs  = 25.0f;
+            p.reverbMix         = 0.50f;
+            p.reverbMute        = false;
+            p.delayMute         = true;
+            p.duckDepth         = 0.0f;
+            p.hpHz              = 30.0f;   p.hpQ = 0.707f;
+            p.lpHz              = 18000.0f; p.lpQ = 0.707f;
+            p.limiterOn         = true;
+            p.tailKillOn        = true;
+            chain.update(p);
+
+            const bool dumpWav = std::getenv("BOMBO_DUMP_WAV") != nullptr;
+            std::vector<float> wav;
+            if (dumpWav) wav.reserve(beatSamples * nBeats);
+
+            // Per-beat post-attack RMS over a 200 ms window starting
+            // 50 ms after the trigger -- past the kick body, into the
+            // reverb tail proper.
+            std::vector<double> tailRms(nBeats, 0.0);
+            const int rmsStart = static_cast<int>(0.050f * sr);
+            const int rmsEnd   = static_cast<int>(0.250f * sr);
+
+            for (int beat = 0; beat < nBeats; ++beat)
+            {
+                chain.killTail();
+                chain.onTrigger(80.0f);
+                double sumSq = 0.0;
+                for (int i = 0; i < beatSamples; ++i)
+                {
+                    float in = 0.0f;
+                    if (i == 0)                       in = 1.0f;
+                    else if (i < static_cast<int>(0.10f * sr))
+                        in = 0.05f * static_cast<float>(((i * 17) % 23) - 11) / 11.0f;
+                    const float y = chain.process(in);
+                    if (dumpWav) wav.push_back(y);
+                    if (i >= rmsStart && i < rmsEnd)
+                        sumSq += static_cast<double>(y) * y;
+                }
+                tailRms[(std::size_t) beat] = std::sqrt(sumSq / (rmsEnd - rmsStart));
+            }
+
+            // Ignore beat 0 -- empty pre-state warm-up. Variance check
+            // covers beats 1..7 only.
+            double mn =  1e30, mx = 0.0;
+            for (int b = 1; b < nBeats; ++b)
+            {
+                mn = std::min(mn, tailRms[(std::size_t) b]);
+                mx = std::max(mx, tailRms[(std::size_t) b]);
+            }
+            const double range = mx > 0.0 ? (mx - mn) / mx : 0.0;
+            juce::Logger::writeToLog(juce::String("per-beat tail RMS (beats 1..7): ")
+                + juce::String(tailRms[1], 6) + ", "
+                + juce::String(tailRms[2], 6) + ", "
+                + juce::String(tailRms[3], 6) + ", "
+                + juce::String(tailRms[4], 6) + ", "
+                + juce::String(tailRms[5], 6) + ", "
+                + juce::String(tailRms[6], 6) + ", "
+                + juce::String(tailRms[7], 6)
+                + " range=" + juce::String(range, 4));
+
+            expect(mx > 0.0, "no reverb-tail RMS observed - test setup wrong");
+            expect(range < 0.05,
+                   "AUDIO REGRESSION: per-beat tail RMS varies > 5 % across "
+                   "beats 1..7 (range=" + juce::String(range, 4) + ")");
+
+            if (dumpWav)
+            {
+                juce::WavAudioFormat fmt;
+                juce::File outFile("/tmp/bombo_reverb_loop.wav");
+                outFile.deleteFile();
+                auto stream = outFile.createOutputStream();
+                if (stream != nullptr)
+                {
+                    std::unique_ptr<juce::AudioFormatWriter> writer(
+                        fmt.createWriterFor(stream.get(), sr, 1, 16, {}, 0));
+                    if (writer != nullptr)
+                    {
+                        stream.release();
+                        juce::AudioBuffer<float> buf(1, (int) wav.size());
+                        std::copy(wav.begin(), wav.end(), buf.getWritePointer(0));
+                        writer->writeFromAudioSampleBuffer(buf, 0, (int) wav.size());
+                        juce::Logger::writeToLog("WAV dump: /tmp/bombo_reverb_loop.wav");
+                    }
+                }
+            }
+        }
+
         beginTest("algo dispatch is deterministic across runs");
         {
             const float sr = 48000.0f;
