@@ -121,6 +121,16 @@ target_sources(Bombo
         Source/GUI/BBS/BoomFeed.cpp
         Source/GUI/BBS/BombImpactGame.h
         Source/GUI/BBS/BombImpactGame.cpp
+        Source/GUI/BBS/Game/Palette.cpp
+        Source/GUI/BBS/Game/Framebuffer.cpp
+        Source/GUI/BBS/Game/Entities.cpp
+        Source/GUI/BBS/Game/Waves.cpp
+        Source/GUI/BBS/Game/Shop.cpp
+        Source/GUI/BBS/Game/Drops.cpp
+        Source/GUI/BBS/Game/HighScores.cpp
+        Source/GUI/BBS/Game/Discovery.cpp
+        Source/GUI/BBS/Game/Audio.cpp
+        Source/GUI/BBS/Game/Game.cpp
         Source/GUI/Nose/NoseComponent.h
         Source/GUI/Nose/NoseComponent.cpp
         Source/GUI/BombShape.h
@@ -215,6 +225,25 @@ if(BOMBO_BUILD_TESTS)
         tests/BombShapeTests.cpp
         tests/OfflineBouncerTests.cpp
         tests/BoomFeedTests.cpp
+        tests/GamePaletteTests.cpp
+        tests/GameFramebufferTests.cpp
+        tests/GameEntitiesTests.cpp
+        tests/GameWavesTests.cpp
+        tests/GameShopTests.cpp
+        tests/GameDropsTests.cpp
+        tests/GameHighScoresTests.cpp
+        tests/GameRumblrTests.cpp
+        tests/GameBalanceSimTests.cpp
+        Source/GUI/BBS/Game/Palette.cpp
+        Source/GUI/BBS/Game/Framebuffer.cpp
+        Source/GUI/BBS/Game/Entities.cpp
+        Source/GUI/BBS/Game/Waves.cpp
+        Source/GUI/BBS/Game/Shop.cpp
+        Source/GUI/BBS/Game/Drops.cpp
+        Source/GUI/BBS/Game/HighScores.cpp
+        Source/GUI/BBS/Game/Discovery.cpp
+        Source/GUI/BBS/Game/Audio.cpp
+        Source/GUI/BBS/Game/Game.cpp
         Source/GUI/BBS/ProgressionManager.cpp
         Source/GUI/BBS/BoomFeed.cpp
         Source/GUI/Theme/ThemeProvider.cpp
