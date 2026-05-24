@@ -199,6 +199,12 @@ namespace bombo::game
         std::array<char, 3> initials_ { 'A', 'A', 'A' };
         int       initialsSlot_ = 0;
 
+        // Menu-selection cursors (Task 7 input layer). Bounds-wrapped on move.
+        // Title: 0=NEW GAME 1=DAILY RUN 2=HIGHSCORES 3=HELP 4=EXIT.
+        // Pause: 0=RESUME 1=RESTART 2=HIGHSCORES 3=HELP 4=QUIT.
+        int       titleSel_ = 0;
+        int       pauseSel_ = 0;
+
         // High-score table (persisted). Path-injectable for tests via testSetHighScoresPath.
         HighScores highScores_ { defaultHighScoresPath() };
 

@@ -1,7 +1,9 @@
 // Source/GUI/BBS/Game/Game.cpp
 #include "Game.h"
+#include "SpriteData.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <random>
 
 namespace
@@ -547,13 +549,466 @@ namespace bombo::game
         collectPickupsTouchingPlayer();
     }
 
-    void Game::renderInto(Framebuffer& fb, const Palette& /*palette*/) const
+    // ────────────────────────────────────────────────────────────────────────
+    // Rendering (Task 7 / §5). Pragmatic mono-text + sprite blits into the
+    // 160x112 palette-index framebuffer. Palette indices: 0=bg 1=dim 2=mid
+    // 3=accent 4=hot 5=hilite. Not pixel-perfect — visual polish pending an
+    // in-DAW smoke test by a human (see report).
+    // ────────────────────────────────────────────────────────────────────────
+    namespace
     {
-        fb.clear(0);
-        fb.drawText("KICK IMPACT", 40, 40, 3);   // placeholder until Task 22
+        // Map an enemy kind to its sprite blit (data ptr + dimensions). Returns
+        // false for kinds with no sprite (none currently — all 8 are covered).
+        struct SpriteRef { const uint8_t* data; int w; int h; };
+
+        SpriteRef spriteForEnemy(EnemyKind k) noexcept
+        {
+            using namespace sprites;
+            switch (k)
+            {
+                case EnemyKind::Mudball:     return { &kMudball[0][0],     10, 10 };
+                case EnemyKind::Clipper:     return { &kClipper[0][0],     10, 10 };
+                case EnemyKind::SilenceVoid: return { &kSilenceVoid[0][0], 10, 10 };
+                case EnemyKind::Limiter:     return { &kLimiter[0][0],     10, 10 };
+                case EnemyKind::Aliaser:     return { &kAliaser[0][0],     10, 10 };
+                case EnemyKind::AliaserMini: return { &kAliaserMini[0][0], 10, 10 };
+                case EnemyKind::DiveBomber:  return { &kDiveBomber[0][0],  10, 10 };
+                case EnemyKind::Rumblr:      return { &kRumblr[0][0],      30, 30 };
+            }
+            return { &kMudball[0][0], 10, 10 };
+        }
+
+        // Format an unsigned, zero-padded fixed-width number into buf.
+        void fmtNum(char* buf, size_t cap, const char* prefix, int value, int width)
+        {
+            // value is clamped non-negative; width digits, zero-padded.
+            if (value < 0) value = 0;
+            std::snprintf(buf, cap, "%s%0*d", prefix, width, value);
+        }
     }
 
-    bool Game::handleKey(int /*key*/, juce::ModifierKeys /*mods*/) { return false; }
+    void Game::renderInto(Framebuffer& fb, const Palette& pal) const
+    {
+        fb.clear(0);
+
+        switch (state_)
+        {
+            case GameState::Playing:
+            case GameState::Boss:
+            {
+                // --- starfield (static dim/hilite dots) ---
+                static constexpr int kStars[][3] = {
+                    {12, 18, 1}, {40, 8, 1}, {70, 30, 1}, {100, 14, 5},
+                    {130, 40, 1}, {22, 70, 1}, {88, 84, 1}, {145, 90, 5},
+                    {55, 100, 1}, {118, 66, 1},
+                };
+                for (auto& s : kStars) fb.pset(s[0], s[1], (uint8_t) s[2]);
+
+                // --- enemies ---
+                for (const auto& e : enemies_.enemies())
+                {
+                    if (! e.active) continue;
+                    const SpriteRef sr = spriteForEnemy(e.kind);
+                    fb.blitSprite(sr.data, sr.w, sr.h,
+                                  (int) e.x - sr.w / 2, (int) e.y - sr.h / 2);
+                }
+
+                // --- pickups ---
+                for (const auto& p : pickups_.pickups())
+                {
+                    if (! p.active) continue;
+                    const int px = (int) p.x, py = (int) p.y;
+                    const DropTier tier = dropTierOf(p.kind);
+                    // Currency uses the dB token sprite; others a small accent block.
+                    if (isCurrency(p.kind))
+                        fb.blitSprite(&sprites::kDbSmall[0][0], 6, 6, px - 3, py - 3);
+                    else
+                        fb.fillRect(px - 2, py - 2, 4, 4,
+                                    (uint8_t) (tier == DropTier::Legendary
+                                                   ? legendaryColorIndex(tickCounter_)
+                                                   : 3));
+                    if (shouldSparkle(tier, tickCounter_))
+                    {
+                        fb.pset(px - 3, py - 3, 5);
+                        fb.pset(px + 3, py + 3, 5);
+                    }
+                }
+
+                // --- player bullets (accent) ---
+                for (const auto& b : playerBullets_.bullets())
+                {
+                    if (! b.active) continue;
+                    if (b.wide) fb.fillRect((int) b.x, (int) b.y - 1, 4, 3, 3);
+                    else        fb.hline((int) b.x, (int) b.x + 2, (int) b.y, 3);
+                }
+
+                // --- enemy shots (hot) ---
+                for (const auto& b : enemyShots_.bullets())
+                {
+                    if (! b.active) continue;
+                    fb.hline((int) b.x - 2, (int) b.x, (int) b.y, 4);
+                }
+
+                // --- player (kick) ---
+                {
+                    const bool blink = player_.isInvincible() && ((tickCounter_ / 4) % 2);
+                    if (! blink)
+                        fb.blitSprite(&sprites::kPlayer[0][0], 10, 10,
+                                      (int) player_.x - 5, (int) player_.y - 5);
+                }
+
+                // --- charge meter (when charging) ---
+                if (player_.charging || player_.chargeProgress > 0.0f)
+                {
+                    const int w = (int) (player_.chargeProgress * 20.0f);
+                    fb.fillRect((int) player_.x - 10, (int) player_.y + 7, 20, 2, 1);
+                    if (w > 0) fb.fillRect((int) player_.x - 10, (int) player_.y + 7, w, 2, 5);
+                }
+
+                // --- HUD (top row) ---
+                char buf[16];
+                fmtNum(buf, sizeof buf, "SC ", score_, 5);
+                fb.drawText(buf, 1, 1, 5);
+
+                fmtNum(buf, sizeof buf, "DB ", currencyDB_, 4);
+                fb.drawText(buf, 64, 1, 3);
+
+                fmtNum(buf, sizeof buf, "W", currentWave_, 1);
+                fb.drawText(buf, 110, 1, 5);
+
+                if (chain_.count() > 1)
+                {
+                    fmtNum(buf, sizeof buf, "X", chain_.count(), 1);
+                    fb.drawText(buf, 128, 1, 4);
+                }
+
+                // --- HUD (bottom row): lives + autofire ---
+                fmtNum(buf, sizeof buf, "LIVES ", lives_, 1);
+                fb.drawText(buf, 1, kFbH - 6, 4);
+                fb.drawText(player_.autofireOn ? "AUTO ON" : "AUTO OFF",
+                            100, kFbH - 6, 3);
+
+                if (state_ == GameState::Boss)
+                    fb.drawText("RUMBLR", kFbW / 2 - 12, 8, 4);
+                break;
+            }
+
+            case GameState::WaveClear:
+            {
+                // Dim field backdrop + centered banner.
+                fb.fillRect(0, 0, kFbW, kFbH, 0);
+                char buf[20];
+                fmtNum(buf, sizeof buf, "WAVE ", currentWave_, 1);
+                fb.drawText(buf, kFbW / 2 - 18, kFbH / 2 - 8, 5);
+                fb.drawText("CLEAR", kFbW / 2 - 10, kFbH / 2, 4);
+                fmtNum(buf, sizeof buf, "SC ", score_, 5);
+                fb.drawText(buf, kFbW / 2 - 16, kFbH / 2 + 10, 3);
+                break;
+            }
+
+            case GameState::Shop:
+            {
+                fb.drawText("SHOP", kFbW / 2 - 8, 4, 5);
+                char buf[16];
+                fmtNum(buf, sizeof buf, "DB ", currencyDB_, 4);
+                fb.drawText(buf, 4, 12, 3);
+
+                if (shop_ != nullptr)
+                {
+                    const auto& offers = shop_->offers();
+                    for (int i = 0; i < (int) offers.size(); ++i)
+                    {
+                        const int y = 26 + i * 16;
+                        const bool sel = (i == shopSlot_);
+                        if (sel) fb.drawText(">", 2, y, 4);
+                        fb.drawText(offers[(size_t) i].shortName, 10, y,
+                                    (uint8_t) (sel ? 5 : 2));
+                        char cb[12];
+                        fmtNum(cb, sizeof cb, "", offers[(size_t) i].cost, 3);
+                        fb.drawText(cb, kFbW - 20, y, 3);
+                    }
+                    char rb[20];
+                    fmtNum(rb, sizeof rb, "R REROLL ", shop_->rerollCost(), 2);
+                    fb.drawText(rb, 4, kFbH - 18, 2);
+                }
+                fb.drawText(shopFreeHealAvailable() ? "H HEAL" : "H USED",
+                            4, kFbH - 11, 2);
+                fb.drawText("SPACE READY", kFbW - 48, kFbH - 11, 4);
+                break;
+            }
+
+            case GameState::Title:
+            {
+                fb.drawText("KICK", kFbW / 2 - 26, 14, 4);
+                fb.drawText("IMPACT", kFbW / 2 + 2, 14, 4);
+                fb.hline(kFbW / 2 - 30, kFbW / 2 + 30, 22, 3);
+
+                static const char* kItems[] = {
+                    "NEW GAME", "DAILY RUN", "HIGHSCORES", "HELP", "EXIT"
+                };
+                for (int i = 0; i < 5; ++i)
+                {
+                    const int y = 36 + i * 10;
+                    const bool sel = (i == titleSel_);
+                    if (sel) fb.drawText(">", 38, y, 4);
+                    fb.drawText(kItems[i], 46, y, (uint8_t) (sel ? 5 : 2));
+                }
+                fb.drawText(daily_ ? "DAILY SEED" : "SEED", 4, kFbH - 6, 1);
+                break;
+            }
+
+            case GameState::Paused:
+            {
+                fb.drawText("PAUSED", kFbW / 2 - 12, 18, 5);
+                static const char* kItems[] = {
+                    "RESUME", "RESTART", "HIGHSCORES", "HELP", "QUIT"
+                };
+                for (int i = 0; i < 5; ++i)
+                {
+                    const int y = 36 + i * 10;
+                    const bool sel = (i == pauseSel_);
+                    if (sel) fb.drawText(">", 38, y, 4);
+                    fb.drawText(kItems[i], 46, y, (uint8_t) (sel ? 5 : 2));
+                }
+                break;
+            }
+
+            case GameState::Help:
+            {
+                fb.drawText("HELP", 4, 2, 5);
+                // Keymap (left column).
+                fb.drawText("ARROWS MOVE",  4, 14, 2);
+                fb.drawText("F FIRE",        4, 22, 2);
+                fb.drawText("A AUTO",        4, 30, 2);
+                fb.drawText("P PAUSE",       4, 38, 2);
+                fb.drawText("H HELP",        4, 46, 2);
+                fb.drawText("ESC QUIT",      4, 54, 2);
+                // Bestiary (right column) — a couple of enemy sprites + labels.
+                fb.blitSprite(&sprites::kMudball[0][0], 10, 10, 96, 14);
+                fb.drawText("MUD", 110, 16, 3);
+                fb.blitSprite(&sprites::kClipper[0][0], 10, 10, 96, 28);
+                fb.drawText("CLIP", 110, 30, 3);
+                fb.blitSprite(&sprites::kAliaser[0][0], 10, 10, 96, 42);
+                fb.drawText("ALIAS", 110, 44, 3);
+                fb.drawText("SHOP AFTER W2 W4 W6", 4, kFbH - 8, 1);
+                break;
+            }
+
+            case GameState::HighScores:
+            {
+                fb.drawText("HIGH SCORES", kFbW / 2 - 22, 2, 5);
+                const auto& rows = highScores_.topTen();
+                for (int i = 0; i < (int) rows.size() && i < 10; ++i)
+                {
+                    const int y = 14 + i * 9;
+                    char rb[8];
+                    fmtNum(rb, sizeof rb, "", i + 1, 2);
+                    fb.drawText(rb, 4, y, 2);
+                    fb.drawText(rows[(size_t) i].initials.toRawUTF8(), 22, y, 5);
+                    char sb[12];
+                    fmtNum(sb, sizeof sb, "", rows[(size_t) i].score, 6);
+                    fb.drawText(sb, 50, y, 3);
+                    char wb[6];
+                    fmtNum(wb, sizeof wb, "W", rows[(size_t) i].wave, 1);
+                    fb.drawText(wb, 120, y, 4);
+                }
+                if (rows.empty())
+                    fb.drawText("NO SCORES YET", kFbW / 2 - 26, kFbH / 2, 2);
+                break;
+            }
+
+            case GameState::QuitConfirm:
+            {
+                fb.fillRect(kFbW / 2 - 36, kFbH / 2 - 12, 72, 24, 1);
+                fb.drawText("QUIT", kFbW / 2 - 22, kFbH / 2 - 6, 5);
+                fb.drawText("Y N", kFbW / 2 - 6, kFbH / 2 + 2, 4);
+                break;
+            }
+
+            case GameState::Initials:
+            {
+                fb.drawText("ENTER NAME", kFbW / 2 - 20, 18, 5);
+                for (int i = 0; i < 3; ++i)
+                {
+                    const int x = kFbW / 2 - 24 + i * 18;
+                    const char letter[2] = { initials_[(size_t) i], '\0' };
+                    const bool sel = (i == initialsSlot_);
+                    // Draw the letter big-ish by stamping it then underlining.
+                    fb.drawText(letter, x, kFbH / 2 - 4, (uint8_t) (sel ? 5 : 2));
+                    if (sel) fb.hline(x, x + 4, kFbH / 2 + 4, 4);
+                }
+                char sb[16];
+                fmtNum(sb, sizeof sb, "SC ", score_, 5);
+                fb.drawText(sb, kFbW / 2 - 16, kFbH - 12, 3);
+                break;
+            }
+
+            case GameState::GameOver:
+            case GameState::Results:
+            {
+                fb.drawText(victory_ ? "VICTORY" : "GAME OVER",
+                            kFbW / 2 - 18, 24, victory_ ? 5 : 4);
+                char sb[16];
+                fmtNum(sb, sizeof sb, "SC ", score_, 5);
+                fb.drawText(sb, kFbW / 2 - 16, kFbH / 2, 3);
+                fb.drawText("PRESS ENTER", kFbW / 2 - 22, kFbH - 16, 2);
+                break;
+            }
+        }
+
+        juce::ignoreUnused(pal);   // palette resolved at blit time by Framebuffer.
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Input routing (Task 7 / §5). State-dispatched. Key codes are JUCE
+    // KeyPress codes: arrows are juce::KeyPress::leftKey etc.; letters arrive as
+    // ASCII (BBS forwards key.getKeyCode(), which for letters is the uppercase
+    // ASCII value). Returns true if the key was consumed.
+    //
+    // HELD-MOVEMENT NOTE: JUCE keyPressed is edge-triggered; BBSComponent only
+    // forwards keyPressed (no key-up, no per-frame polling today). So here we
+    // (a) keep the setMoveInput(InputState) seam — the *intended* continuous
+    // path — and (b) ALSO treat an arrow keyPressed as a one-shot nudge so the
+    // player still moves under the current edge-only wiring. For smooth held
+    // movement the BBSComponent timerCallback should poll
+    // juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::leftKey) (and up/down/
+    // right) each tick and call gameV2_.setMoveInput({up,down,left,right}); that
+    // BBS-side wiring is left to the integration/acceptance task and does not
+    // block this one. (DOCUMENTED.)
+    //
+    // ESC NOTE: BBSComponent intercepts escapeKey before handleKey is reached
+    // (it calls exitGame()), so the ESC branches below mainly serve the unit
+    // tests / future direct callers. (DOCUMENTED.)
+    // ────────────────────────────────────────────────────────────────────────
+    bool Game::handleKey(int key, juce::ModifierKeys /*mods*/)
+    {
+        using KP = juce::KeyPress;
+        const bool isUp    = (key == KP::upKey);
+        const bool isDown  = (key == KP::downKey);
+        const bool isLeft  = (key == KP::leftKey);
+        const bool isRight = (key == KP::rightKey);
+        const bool isEnter = (key == KP::returnKey);
+        const bool isEsc   = (key == KP::escapeKey);
+        // Letters: BBS forwards getKeyCode(); for ASCII letters that is the
+        // uppercase code. Normalise to uppercase for robustness.
+        const int ch = (key >= 'a' && key <= 'z') ? key - 32 : key;
+
+        switch (state_)
+        {
+            case GameState::Title:
+            {
+                if (isUp)   { titleSel_ = (titleSel_ + 4) % 5; return true; }
+                if (isDown) { titleSel_ = (titleSel_ + 1) % 5; return true; }
+                if (isEnter)
+                {
+                    switch (titleSel_)
+                    {
+                        case 0: startNewRun(false);              return true;
+                        case 1: startNewRun(true);               return true;
+                        case 2: transitionTo(GameState::HighScores); return true;
+                        case 3: transitionTo(GameState::Help);   return true;
+                        case 4: wantsExit_ = true;               return true;
+                    }
+                    return true;
+                }
+                if (isEsc) { wantsExit_ = true; return true; }
+                return false;
+            }
+
+            case GameState::Playing:
+            case GameState::Boss:
+            {
+                // Discrete nudge fallback (see HELD-MOVEMENT NOTE).
+                if (isLeft)  { player_.x -= 6.0f; clampPlayerToField(); return true; }
+                if (isRight) { player_.x += 6.0f; clampPlayerToField(); return true; }
+                if (isUp)    { player_.y -= 6.0f; clampPlayerToField(); return true; }
+                if (isDown)  { player_.y += 6.0f; clampPlayerToField(); return true; }
+                if (ch == 'F' || key == KP::spaceKey) { setCharging(true); return true; }
+                if (ch == 'A') { player_.autofireOn = ! player_.autofireOn; return true; }
+                if (ch == 'P') { togglePause(); return true; }
+                if (ch == 'H') { transitionTo(GameState::Help); return true; }
+                if (isEsc)     { requestQuit(); return true; }
+                return false;
+            }
+
+            case GameState::Paused:
+            {
+                if (isUp)   { pauseSel_ = (pauseSel_ + 4) % 5; return true; }
+                if (isDown) { pauseSel_ = (pauseSel_ + 1) % 5; return true; }
+                if (ch == 'P') { togglePause(); return true; }   // resume
+                if (isEnter)
+                {
+                    switch (pauseSel_)
+                    {
+                        case 0: togglePause();                       return true; // resume
+                        case 1: startNewRun(daily_);                 return true; // restart
+                        case 2: transitionTo(GameState::HighScores); return true;
+                        case 3: transitionTo(GameState::Help);       return true;
+                        case 4: requestQuit();                       return true;
+                    }
+                    return true;
+                }
+                if (isEsc) { requestQuit(); return true; }
+                return false;
+            }
+
+            case GameState::QuitConfirm:
+            {
+                if (ch == 'Y' || isEnter || isEsc) { confirmQuit(); return true; }
+                if (ch == 'N')                     { cancelQuit();  return true; }
+                return false;
+            }
+
+            case GameState::Help:
+            {
+                if (ch == 'H' || isEsc) { transitionTo(priorState_); return true; }
+                return false;
+            }
+
+            case GameState::HighScores:
+            {
+                // Any key returns to Title.
+                transitionTo(GameState::Title);
+                return true;
+            }
+
+            case GameState::Shop:
+            {
+                if (isLeft)  { shopMoveSelection(-1); return true; }
+                if (isRight) { shopMoveSelection(+1); return true; }
+                if (isEnter) { shopBuySelected();     return true; }
+                if (ch == 'R') { shopReroll();        return true; }
+                if (ch == 'H') { shopUseFreeHeal();   return true; }
+                if (key == KP::spaceKey) { shopContinue(); return true; }
+                if (isEsc) { requestQuit(); return true; }
+                return false;
+            }
+
+            case GameState::Initials:
+            {
+                if (isLeft)  { initialsCycleLetter(initialsSlot_, -1); return true; }
+                if (isRight) { initialsCycleLetter(initialsSlot_, +1); return true; }
+                if (isUp)    { initialsMoveSlot(-1); return true; }
+                if (isDown)  { initialsMoveSlot(+1); return true; }
+                if (isEnter) { initialsConfirm();    return true; }
+                return false;
+            }
+
+            case GameState::Results:
+            {
+                // Any key (typically Enter) advances back to Title.
+                resultsContinue();
+                return true;
+            }
+
+            case GameState::WaveClear:
+            case GameState::GameOver:
+                // Transient / auto-advancing — swallow input without action.
+                return false;
+        }
+        return false;
+    }
+
     bool Game::handleMouseClick(int /*fbX*/, int /*fbY*/)          { return false; }
 
     float Game::speedMult() const noexcept
