@@ -2,6 +2,8 @@
 #include "Entities.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>   // std::rand — used by tickRumblr phase-2 charge trigger (non-deterministic
+                     // flourish; charge timing jitters per run, which is intentional for v1.0.x)
 
 namespace
 {
@@ -78,6 +80,61 @@ namespace
 
 namespace bombo::game
 {
+    int rumblrPhase(const Enemy& r) noexcept
+    {
+        if (r.hp <= 10) return 3;       // v1.1 territory; tickRumblr clamps to phase-2 behaviour
+        if (r.hp <= 25) return 2;
+        return 1;
+    }
+
+    void tickRumblr(Enemy& r, BulletPool* enemyShots) noexcept
+    {
+        const int phase = rumblrPhase(r);
+        r.phase += kTickDt;
+
+        // Phase 1 AND the "hold" sub-state of phase 2 both fire the 3-projectile
+        // shockwave every 2.5s. Phase 2 additionally does a telegraph->charge->return.
+        auto fireShockwave = [&]()
+        {
+            if (enemyShots == nullptr) return;
+            enemyShots->spawn(r.x - 8.0f, r.y - 10.0f, -30.0f, 0.0f);
+            enemyShots->spawn(r.x - 8.0f, r.y,          -30.0f, 0.0f);
+            enemyShots->spawn(r.x - 8.0f, r.y + 10.0f,  -30.0f, 0.0f);
+        };
+
+        if (phase == 1)
+        {
+            if (r.phase >= 2.5f) { r.phase = 0.0f; fireShockwave(); }
+        }
+        else // phase 2 (and phase-3 HP range clamps to phase-2 behaviour in v1.0.x)
+        {
+            switch (r.subState)
+            {
+                case 0:  // hold + fire; randomly trigger a charge
+                    if (r.phase >= 2.5f)
+                    {
+                        r.phase = 0.0f;
+                        fireShockwave();
+                        if ((std::rand() % 3) == 0) { r.subState = 1; r.phase = 0.0f; }
+                    }
+                    break;
+                case 1:  // telegraph 1s (visual cue that a charge is coming)
+                    if (r.phase >= 1.0f) { r.subState = 2; r.phase = 0.0f; }
+                    break;
+                case 2:  // charge left across the screen at 200 px/s
+                    r.x -= 200.0f * kTickDt;
+                    if (r.x < 20.0f) { r.subState = 3; r.phase = 0.0f; }
+                    break;
+                case 3:  // return to home position (x=140) at 50 px/s
+                    r.x += 50.0f * kTickDt;
+                    if (r.x >= 140.0f) { r.x = 140.0f; r.subState = 0; r.phase = 0.0f; }
+                    break;
+                default: r.subState = 0; break;
+            }
+        }
+    }
+
+
     void Player::tick() noexcept
     {
         x += vx * kTickDt;
@@ -193,25 +250,28 @@ namespace bombo::game
         return nullptr;
     }
 
-    void EnemyPool::tick(const Player* player) noexcept
+    void EnemyPool::tick(const Player* player, BulletPool* enemyShots) noexcept
     {
         for (auto& s : slots_)
         {
             if (! s.active) continue;
             switch (s.kind)
             {
-                case EnemyKind::Mudball:     tickMudball(s);            break;
-                case EnemyKind::Clipper:     tickClipper(s);            break;
-                case EnemyKind::SilenceVoid: tickSilenceVoid(s);        break;
-                case EnemyKind::Limiter:     tickLimiter(s);            break;
-                case EnemyKind::Aliaser:     tickAliaser(s);            break;
-                case EnemyKind::AliaserMini: tickAliaserMini(s);        break;
-                case EnemyKind::DiveBomber:  tickDiveBomber(s, player); break;
-                default:                     tickMudball(s);            break;  // Rumblr: Task 19
+                case EnemyKind::Mudball:     tickMudball(s);                 break;
+                case EnemyKind::Clipper:     tickClipper(s);                 break;
+                case EnemyKind::SilenceVoid: tickSilenceVoid(s);             break;
+                case EnemyKind::Limiter:     tickLimiter(s);                 break;
+                case EnemyKind::Aliaser:     tickAliaser(s);                 break;
+                case EnemyKind::AliaserMini: tickAliaserMini(s);             break;
+                case EnemyKind::DiveBomber:  tickDiveBomber(s, player);      break;
+                case EnemyKind::Rumblr:      tickRumblr(s, enemyShots);      break;
+                default:                     tickMudball(s);                 break;
             }
             // Cull on all four edges (Y-cull added per Task 10 review — vertical movers).
-            if (s.x < -16.0f || s.x > kFbW + 16.0f ||
-                s.y < -16.0f || s.y > kFbH + 16.0f)
+            // NEVER cull the boss — it's confined to the screen and must persist.
+            if (s.kind != EnemyKind::Rumblr &&
+                (s.x < -16.0f || s.x > kFbW + 16.0f ||
+                 s.y < -16.0f || s.y > kFbH + 16.0f))
                 s.active = false;
         }
     }

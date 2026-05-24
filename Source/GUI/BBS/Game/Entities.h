@@ -71,12 +71,18 @@ namespace bombo::game
     // Centralised default HP per enemy kind.
     int defaultHp(EnemyKind k) noexcept;
 
+    // Boss helpers — exposed for unit tests.
+    int  rumblrPhase(const Enemy& r) noexcept;
+    void tickRumblr(Enemy& r, BulletPool* enemyShots) noexcept;
+
     class EnemyPool
     {
     public:
         static constexpr int kMax = 48;
         Enemy* spawn(EnemyKind kind, float x, float y, float vx, float vy) noexcept;
-        void   tick(const Player* player = nullptr) noexcept;
+        // enemyShots: optional pool for RUMBLR shockwave projectiles (and future bosses).
+        // Both params default to nullptr so existing ep.tick() / ep.tick(&player) callers compile.
+        void   tick(const Player* player = nullptr, BulletPool* enemyShots = nullptr) noexcept;
         // Returns number of enemies killed this call.
         int    applyBulletDamage(BulletPool& bullets) noexcept;
         const std::array<Enemy, kMax>& enemies() const noexcept { return slots_; }
