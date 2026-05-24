@@ -8,6 +8,12 @@
 #include "../Theme/ThemedComponent.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <functional>
+#if BOMBO_GAME_V2
+#include "Game/Game.h"
+#include "Game/Framebuffer.h"
+#include "Game/Palette.h"
+#include "../Theme/ThemeProvider.h"
+#endif
 
 namespace bombo
 {
@@ -105,6 +111,12 @@ private:
     // Game
     BombImpactGame game_;
     juce::String   commandBuffer_;  // accumulates typed chars for "GAME" command
+#if BOMBO_GAME_V2
+    bombo::game::Game       gameV2_;
+    bombo::game::Framebuffer gameV2Fb_;     // reused each frame — no alloc cost
+    juce::Image             gameV2Image_;  // kFbW x kFbH ARGB, allocated in launchGame()
+    int                     prePresetIdx_ = -1;  // stashed preset index restored on exit
+#endif
 
     // Konami code detector — runs in parallel, doesn't consume individual keys
     static constexpr int kKonamiLen = 8;

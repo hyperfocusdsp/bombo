@@ -118,8 +118,13 @@ void BBSComponent::timerCallback()
 {
     if (screens_.current() == BBSScreen::Game)
     {
+#if BOMBO_GAME_V2
+        gameV2_.tick();
+        if (gameV2_.wantsExit()) exitGame();
+#else
         game_.tick();
         if (game_.wantsExit()) exitGame();
+#endif
         repaint();
         return;
     }
@@ -148,7 +153,11 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
     if (screens_.current() == BBSScreen::Game)
     {
         if (key == juce::KeyPress::escapeKey) { exitGame(); return true; }
+#if BOMBO_GAME_V2
+        return gameV2_.handleKey(key.getKeyCode(), key.getModifiers());
+#else
         return game_.keyPressed(key);
+#endif
     }
 
     if (key == juce::KeyPress::escapeKey) { hide(); return true; }
@@ -185,7 +194,9 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
             if (++konamiPos_ >= kKonamiLen)
             {
                 konamiPos_ = 0;
+#if !BOMBO_GAME_V2
                 game_.hyperfocusModeActive = true;
+#endif
                 launchGame();
             }
             return true; // consume matched key
@@ -413,7 +424,43 @@ void BBSComponent::paint(juce::Graphics& g)
         {
             const int headerH = 22;
             paintHeader(g, b.removeFromTop(headerH));
+#if BOMBO_GAME_V2
+            {
+                // Render the v2 160x112 framebuffer, then blit it scaled with
+                // nearest-neighbour into the available game area (b), letterboxed
+                // to preserve the exact 160:112 aspect ratio.
+                const auto pal = bombo::game::getGamePalette(
+                    bombo::ThemeProvider::get().activeName());
+                gameV2Fb_.clear(0);
+                gameV2_.renderInto(gameV2Fb_, pal);
+                gameV2Fb_.resolveToARGB(gameV2Image_, pal);
+
+                const float fbAspect  = static_cast<float>(bombo::game::kFbW)
+                                      / static_cast<float>(bombo::game::kFbH);
+                const float dstAspect = static_cast<float>(b.getWidth())
+                                      / static_cast<float>(b.getHeight());
+                int dstW, dstH;
+                if (fbAspect >= dstAspect)
+                {
+                    dstW = b.getWidth();
+                    dstH = juce::roundToInt(static_cast<float>(dstW) / fbAspect);
+                }
+                else
+                {
+                    dstH = b.getHeight();
+                    dstW = juce::roundToInt(static_cast<float>(dstH) * fbAspect);
+                }
+                const int dstX = b.getX() + (b.getWidth()  - dstW) / 2;
+                const int dstY = b.getY() + (b.getHeight() - dstH) / 2;
+
+                g.setImageResamplingQuality(juce::Graphics::lowResamplingQuality);
+                g.drawImage(gameV2Image_,
+                            dstX, dstY, dstW, dstH,
+                            0, 0, bombo::game::kFbW, bombo::game::kFbH);
+            }
+#else
             game_.paint(g, b);
+#endif
             break;
         }
     }
@@ -611,18 +658,71 @@ void BBSComponent::paintMyDownloads(juce::Graphics& g)
 
 void BBSComponent::launchGame()
 {
+#if BOMBO_GAME_V2
+    // Stash current preset so we can restore it on exit.
+    prePresetIdx_ = (presetBank_ != nullptr) ? presetBank_->currentIndex() : -1;
+
+    // Force preset "Pew" as the in-game shot sound, if the bank is wired and
+    // the preset exists. We search by displayName since "Pew" is a user preset
+    // and its position after the factory presets can vary. If not found (e.g.
+    // the user hasn't saved it yet), we leave the current preset active.
+    if (presetBank_ != nullptr && apvts_ != nullptr)
+    {
+        int pewIdx = -1;
+        for (int i = 0; i < presetBank_->size(); ++i)
+        {
+            if (juce::String(presetBank_->at(i).displayName).equalsIgnoreCase("Pew"))
+            {
+                pewIdx = i;
+                break;
+            }
+        }
+        if (pewIdx >= 0)
+            presetBank_->applyByIndex(pewIdx, *apvts_);
+        else
+            juce::Logger::writeToLog("Bombo game: 'Pew' preset not found -- keeping current preset as shot sound");
+    }
+
+    // Allocate the ARGB image once per game launch (cheap, kFbW x kFbH = 17920 bytes).
+    if (! gameV2Image_.isValid()
+        || gameV2Image_.getWidth()  != bombo::game::kFbW
+        || gameV2Image_.getHeight() != bombo::game::kFbH)
+    {
+        gameV2Image_ = juce::Image(juce::Image::ARGB, bombo::game::kFbW, bombo::game::kFbH, false);
+    }
+
+    gameV2_.startNewRun(/*dailySeed=*/false);
+    screens_.transitionTo(BBSScreen::Game);
+    commandBuffer_.clear();
+    konamiPos_ = 0;
+#else
     game_.onKick = triggerCb_;
     game_.startGame();
     screens_.transitionTo(BBSScreen::Game);
     commandBuffer_.clear();
     konamiPos_ = 0;
+#endif
 }
 
 void BBSComponent::exitGame()
 {
+#if BOMBO_GAME_V2
+    gameV2_ = bombo::game::Game{};  // reset to Title state, clears wantsExit
+
+    // Restore the preset the user had before the game launched.
+    if (presetBank_ != nullptr && apvts_ != nullptr && prePresetIdx_ >= 0)
+    {
+        presetBank_->applyByIndex(prePresetIdx_, *apvts_);
+        prePresetIdx_ = -1;
+    }
+
+    screens_.transitionTo(BBSScreen::BoomFeed);
+    commandBuffer_.clear();
+#else
     game_.stopGame();
     screens_.transitionTo(BBSScreen::BoomFeed);
     commandBuffer_.clear();
+#endif
 }
 
 void BBSComponent::buildIntroText()

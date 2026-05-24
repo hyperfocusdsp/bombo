@@ -207,6 +207,14 @@ if(UNIX AND NOT APPLE)
     target_include_directories(Bombo PRIVATE ${X11_INCLUDE_DIR})
 endif()
 
+# ── v2 Game build flag ────────────────────────────────────────────
+# Default OFF: v1 BombImpactGame remains the live path until Task 28.
+# Enable with -DBOMBO_GAME_V2=ON to test the v2 chunky-pixel game.
+option(BOMBO_GAME_V2 "Enable v2 chunky-pixel game (replaces BombImpactGame)" OFF)
+if(BOMBO_GAME_V2)
+    target_compile_definitions(Bombo PRIVATE BOMBO_GAME_V2=1)
+endif()
+
 # ── DSP unit tests ────────────────────────────────────────────────
 # JUCE UnitTestRunner. Builds a console exe that runs every registered
 # UnitTest subclass; ctest treats nonzero exit as failure.
@@ -255,7 +263,8 @@ if(BOMBO_BUILD_TESTS)
     target_include_directories(Bombo_Tests PRIVATE Source tests)
     target_compile_definitions(Bombo_Tests PRIVATE
         JUCE_WEB_BROWSER=0
-        JUCE_USE_CURL=0)
+        JUCE_USE_CURL=0
+        $<$<BOOL:${BOMBO_GAME_V2}>:BOMBO_GAME_V2=1>)
     target_link_libraries(Bombo_Tests
         PRIVATE
             BomboResources
