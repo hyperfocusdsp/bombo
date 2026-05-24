@@ -17,11 +17,12 @@ namespace
 
     void tickClipper(Enemy& e) noexcept
     {
-        // 1s burst (vx = -100), 1s pause (vx = 0), repeating.
+        // 1s burst, 1s pause (vx = 0), repeating. Burst speed eased -100 -> -70 in
+        // the 2026-05-25 engagement pass so dense early waves stay dodgeable.
         e.phase += kTickDt;
-        if (e.phase < 1.0f)      e.vx = -100.0f;
+        if (e.phase < 1.0f)      e.vx = -70.0f;
         else if (e.phase < 2.0f) e.vx = 0.0f;
-        else                   { e.phase = 0.0f; e.vx = -100.0f; }   // restart burst immediately
+        else                   { e.phase = 0.0f; e.vx = -70.0f; }    // restart burst immediately
         e.x += e.vx * kTickDt;
     }
 
@@ -62,17 +63,20 @@ namespace
         if (e.phase < 1.0f)
         {
             // Lead-in: drift left at a steady pace, no homing yet.
-            e.x += -30.0f * kTickDt;
+            e.x += -25.0f * kTickDt;
         }
         else
         {
             if (player != nullptr)
             {
                 const float dy = player->y - e.y;
-                // Clamp vy to ±80 px/s using std::max/min (<algorithm> already included).
-                e.vy = std::max(-80.0f, std::min(80.0f, dy * 3.0f));
+                // Clamp vy to ±60 px/s using std::max/min (<algorithm> already included).
+                // Homing speed eased (110->80 x, 80->60 vy) in the 2026-05-25
+                // engagement pass: the dive is still a real threat but dodgeable in a
+                // populated wave.
+                e.vy = std::max(-60.0f, std::min(60.0f, dy * 2.5f));
             }
-            e.x += -110.0f * kTickDt;
+            e.x += -80.0f * kTickDt;
             e.y += e.vy * kTickDt;
         }
     }
@@ -228,11 +232,16 @@ namespace bombo::game
             case EnemyKind::Aliaser:     return 1;
             case EnemyKind::AliaserMini: return 1;
             case EnemyKind::DiveBomber:  return 1;
-            // Re-swept 2026-05-25 (60 -> 13): once enemy body-contact damage landed,
-            // players reach the boss weaker + thinner, so the old HP 60 was unkillable.
-            // HP 13 puts boss completion at ~15% of all runs (spec §13.3 band). See
-            // tests/GameBalanceSim.cpp calibration notes for the full sweep.
-            case EnemyKind::Rumblr:      return 13;
+            // Re-swept 2026-05-25 (engagement pass). The prior 13 was a bug: since
+            // rumblrPhase() returns phase 1 only when hp > 25, an hpMax of 13 started
+            // the boss in phase 2 and it NEVER entered phase 1 -- the telegraphed
+            // standing-shockwave intro was dead and the fight was flat phase-2. HP is
+            // raised so the boss enters phase 1 (hp > 25 for a meaningful span), then
+            // phase 2 (<= 25), then phase-3-clamped-to-2 (<= 10): a real escalation
+            // arc. Boss completion is gated by the now-denser pre-boss WAVE attrition,
+            // not by gutting boss HP. Re-swept with the sim to keep completion in the
+            // spec §13.3 15-25% band. See tests/GameBalanceSim.cpp calibration notes.
+            case EnemyKind::Rumblr:      return 27;
         }
         return 1;
     }

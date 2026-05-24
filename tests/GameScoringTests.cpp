@@ -61,6 +61,26 @@ public:
     }
 };
 
+class ChainDrainPeakTest : public juce::UnitTest
+{
+public:
+    ChainDrainPeakTest() : juce::UnitTest("Score: drain() zeroes live count but PRESERVES peak") {}
+    void runTest() override
+    {
+        // drain() is the SilenceVoid "energy suck" (spec 6.1): it must reset the
+        // live chain to 0 WITHOUT wiping the run's peak (peak only clears on
+        // resetForWave()). Regression guard for that boundary.
+        beginTest("drain() count -> 0, peak retained");
+        ChainState cs;
+        for (int i = 0; i < 7; ++i) cs.onKill();
+        expectEquals(cs.count(), 7);
+        expectEquals(cs.peak(), 7);
+        cs.drain();
+        expectEquals(cs.count(), 0);   // live chain wiped
+        expectEquals(cs.peak(), 7);    // peak survives the drain
+    }
+};
+
 class PickupPoolMagnetTest : public juce::UnitTest
 {
 public:
@@ -106,5 +126,6 @@ public:
 static ChainMultiplierTest  a;
 static ChainDrainTest       b;
 static ChainPeakTest        c;
+static ChainDrainPeakTest   cd;
 static PickupPoolMagnetTest d;
 }

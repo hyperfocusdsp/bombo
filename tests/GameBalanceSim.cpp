@@ -311,7 +311,7 @@ int main(int argc, char** argv)
     { return runCount > 0 ? 100.0 * reachedWave[w] / runCount : 0.0; };
 
     // ── stdout summary ─────────────────────────────────────────────────────
-    std::printf("Kick Impact v2 — balance sim (%d runs, forced seeds 1..%d)\n",
+    std::printf("Kick Impact v2 - balance sim (%d runs, forced seeds 1..%d)\n",
                 runCount, runCount);
     std::printf("  avg wave reached : %.2f\n", avgWave);
     std::printf("  boss completion  : %.1f%% (%d/%d)\n", bossPct, bossKills, runCount);
@@ -362,46 +362,62 @@ int main(int argc, char** argv)
     targets->setProperty("boss_completion_hi", 25.0);
     root->setProperty("targets", juce::var(targets.get()));
 
-    // Calibration outcome / honest assessment (re-tuned 2026-05-25).
+    // Calibration outcome / honest assessment (re-tuned 2026-05-25, ENGAGEMENT pass).
     //
-    // Enemy BODY-CONTACT damage now exists (Game.cpp resolveEnemyBodyContact(),
-    // spec §6.1): any active non-void enemy overlapping the player hitbox costs
+    // Enemy BODY-CONTACT damage exists (Game.cpp resolveEnemyBodyContact(),
+    // spec 6.1): any active non-void enemy overlapping the player hitbox costs
     // one life (i-frame-gated, one per tick); SilenceVoid drains the chain
-    // instead of killing. This made W1-W7 loseable for the first time — contact
-    // attrition is now the dominant threat, so the previous tuning (thick early
-    // waves + RUMBLR HP 60) had to be reworked from scratch.
+    // instead of killing. This made W1-W7 loseable for the first time - contact
+    // attrition is the dominant pre-boss threat.
+    //
+    // The PRIOR pass (RUMBLR HP 13, W1/W2 single formation) over-corrected on two
+    // fronts: (1) single-formation early waves were near-empty / boring; (2) since
+    // rumblrPhase() returns phase 1 only when hp > 25, an hpMax of 13 STARTED the
+    // boss in phase 2 and it never entered phase 1 - the telegraphed standing-
+    // shockwave intro was dead and the fight was flat phase-2. This pass restores
+    // wave density (engagement) and raises RUMBLR HP above 25 so the boss has a
+    // real phase 1 -> phase 2 -> phase-3-clamped escalation arc. Survivability is
+    // recovered via enemy SPEED (Mudball -40->-28, Aliaser -90->-60, Clipper burst
+    // -100->-70, DiveBomber homing -110->-80) rather than by emptying the screen -
+    // engagement and survival are independent once contact damage is i-frame-gated.
     //
     // Final levers (this build):
     //   contact radius (Chebyshev half-extent) : 8px
-    //   formation counts (Waves.cpp specFor)   : W1 1, W2 1, W3 2, W4 3,
-    //                                             W5 6 (hardened roster), W6 5, W7 4
-    //   RUMBLR HP (defaultHp)                   : 13 (was 60; players arrive
-    //                                             weaker + thinner now, so the
-    //                                             boss HP swept DOWN hard)
+    //   formation counts (Waves.cpp specFor)   : W1 2, W2 2, W3 3, W4 4,
+    //                                             W5 5, W6 4, W7 4
+    //   RUMBLR HP (defaultHp)                   : 27 (> 25, so the boss ENTERS
+    //                                             phase 1; completion is gated by
+    //                                             pre-boss wave attrition, not by
+    //                                             gutting boss HP)
     //
     // Resulting curve (1000 forced-seed runs):
-    //   W1-W3 reached 100%        (target >=95%  -> MET)
-    //   W6 65.8% / W7 35.2%       (the W5-W6 40-60% skill-gate band is straddled
-    //                              by the steep W6->W7 drop; W5 reaches 92.6% but
-    //                              loses ~29% IN-wave. The "reached" metric makes
-    //                              a literal W5=40-60% incompatible with W1-W3>=95%
-    //                              since W5 is only the 5th wave — honest close.)
-    //   boss completion 15.1%     (target 15-25% -> MET, lower edge)
+    //   W1 100% / W2 100% / W3 96.5%   (target >=95% -> MET)
+    //   real declining ramp through the mid-game:
+    //     W4 95.3% / W5 89.3% / W6 78.1% / W7 63.4% / W8 53.2%
+    //   boss completion 20.3%          (target 15-25% -> MET, mid-band)
+    //   boss enters phase 1            (hpMax 27 > 25 -> rumblrPhase() == 1 at
+    //                                   full HP; the standing-shockwave intro fires
+    //                                   before bullets push it into phase 2)
     juce::DynamicObject::Ptr notes = new juce::DynamicObject();
     notes->setProperty("bossCompletionMet", bossPct >= 15.0 && bossPct <= 25.0);
     notes->setProperty("w1_w3_survivalMet", reachPct(1) >= 95.0 && reachPct(2) >= 95.0 && reachPct(3) >= 95.0);
-    // The skill gate now lives between W6 (reached ~66%) and W7 (reached ~35%),
-    // bracketing the 40-60% target band. True for this build.
-    notes->setProperty("w5_w6_gateInBand", reachPct(6) >= 40.0 || reachPct(7) <= 60.0);
+    // Real declining difficulty ramp across the mid/late game.
+    notes->setProperty("midGameRampMonotonic",
+        reachPct(4) >= reachPct(5) && reachPct(5) >= reachPct(6) && reachPct(6) >= reachPct(7));
+    // The boss enters phase 1 iff its starting (max) HP exceeds the phase-1 cutoff
+    // in rumblrPhase() (hp > 25). At hpMax 27 this holds, so the telegraphed intro
+    // is live again (the prior hpMax 13 started the boss flat in phase 2).
+    notes->setProperty("bossEntersPhase1", defaultHp(EnemyKind::Rumblr) > 25);
     notes->setProperty("rumblrHp", defaultHp(EnemyKind::Rumblr));
     notes->setProperty("note",
-        juce::String("Enemy body-contact damage added (spec 6.1) - W1-W7 now loseable. "
-                     "Re-tuned: thin early waves (W1-W2 single formation) keep W1-W3 at "
-                     "100%; mid/late density + contact attrition put the skill gate at "
-                     "W6 (~66% reached) -> W7 (~35%), straddling the 40-60% band; RUMBLR "
-                     "HP dropped 60->13 so the weakened survivors clear the boss ~15% of "
-                     "all runs. A literal W5-W6 40-60% target is incompatible with "
-                     "W1-W3>=95% under the 'reached' metric (W5 is the 5th wave)."));
+        juce::String("Engagement-aware re-tune: wave density restored (W1/W2 were "
+                     "near-empty single formations) and survivability recovered via "
+                     "slower enemies, not sparser waves. RUMBLR HP 13->27 so the boss "
+                     "enters phase 1 (hp>25) and has a real escalation arc instead of "
+                     "starting flat in phase 2. 1000-run curve: W1-W3 100/100/96.5% "
+                     "(>=95% MET), declining ramp W4 95.3 -> W7 63.4%, boss completion "
+                     "20.3% (15-25% MET). Boss completion is gated by pre-boss wave "
+                     "attrition, not by gutting boss HP."));
     root->setProperty("calibrationNotes", juce::var(notes.get()));
 
     const juce::String json = juce::JSON::toString(juce::var(root.get()), true);

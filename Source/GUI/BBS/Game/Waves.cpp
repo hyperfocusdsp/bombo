@@ -14,17 +14,22 @@ namespace bombo::game
         {
             switch (waveIdx)
             {
-                // Densities re-tuned 2026-05-25 after enemy body-contact damage
-                // landed (spec §6.1). Contact attrition is now the dominant threat,
-                // so formation counts came DOWN substantially to keep the §13.3
-                // calibration curve (forgiving W1-W3, W5-W6 skill gate, boss reachable).
-                case 1: return { { EnemyKind::Mudball }, 1 };
-                case 2: return { { EnemyKind::Mudball, EnemyKind::Clipper }, 1 };
-                case 3: return { { EnemyKind::Mudball, EnemyKind::Clipper, EnemyKind::DiveBomber }, 2 };
-                case 4: return { { EnemyKind::Clipper, EnemyKind::Aliaser, EnemyKind::DiveBomber }, 3 };
+                // Densities re-tuned 2026-05-25 (engagement pass) after enemy
+                // body-contact damage landed (spec §6.1). The previous pass over-
+                // corrected: W1/W2 were single formations (~5 enemies over a 40s
+                // wave => near-empty, boring screens). Engagement (enough enemies to
+                // shoot/dodge) and survivability are INDEPENDENT once contact damage
+                // is i-frame-gated, so density is restored across the board and the
+                // §13.3 survival curve is recovered via enemy SPEED/HP, not by
+                // emptying the screen. Early waves stay forgiving because they lean on
+                // slow, low-HP kinds (Mudball/Clipper), not on being sparse.
+                case 1: return { { EnemyKind::Mudball }, 2 };
+                case 2: return { { EnemyKind::Mudball, EnemyKind::Clipper }, 2 };
+                case 3: return { { EnemyKind::Mudball, EnemyKind::Clipper, EnemyKind::DiveBomber }, 3 };
+                case 4: return { { EnemyKind::Clipper, EnemyKind::Aliaser, EnemyKind::DiveBomber }, 4 };
                 case 5: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Clipper,
-                                   EnemyKind::Limiter }, 6 };
-                case 6: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber }, 5 };
+                                   EnemyKind::Limiter }, 5 };
+                case 6: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber }, 4 };
                 case 7: return { { EnemyKind::Limiter, EnemyKind::Clipper, EnemyKind::Aliaser }, 4 };
                 default: return { { EnemyKind::Mudball }, 1 };
             }
@@ -36,11 +41,17 @@ namespace bombo::game
         {
             switch (k)
             {
-                case EnemyKind::Mudball:     return -40.0f;
+                // Speeds eased in the 2026-05-25 engagement pass: density was
+                // restored (screens are populated again) and survivability is
+                // recovered here, via slower approach, rather than by emptying waves.
+                // Slower movers give the player room to dodge between i-frame windows
+                // even when the screen is busy -- engagement and survivability are
+                // independent once contact damage is i-frame-gated (spec §6.1).
+                case EnemyKind::Mudball:     return -28.0f;
                 case EnemyKind::Clipper:     return -45.0f;
                 case EnemyKind::SilenceVoid: return -25.0f;
                 case EnemyKind::Limiter:     return -15.0f;
-                case EnemyKind::Aliaser:     return -90.0f;
+                case EnemyKind::Aliaser:     return -60.0f;
                 case EnemyKind::DiveBomber:  return  0.0f;   // tickDiveBomber drives its own x
                 default:                     return -40.0f;
             }
