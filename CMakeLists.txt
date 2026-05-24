@@ -65,6 +65,7 @@ juce_add_binary_data(BomboResources
         Resources/Presets/14_lofi_click.json
         Resources/Presets/15_9000_sub.json
         Resources/Presets/16_tape_tom.json
+        Resources/Presets/17_pew.json
         Resources/Samples/kick_01.wav
         Resources/Samples/kick_02.wav
         Resources/Samples/kick_03.wav
