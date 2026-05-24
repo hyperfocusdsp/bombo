@@ -1,5 +1,6 @@
 // Source/GUI/BBS/Game/Game.cpp
 #include "Game.h"
+#include <algorithm>
 
 namespace bombo::game
 {
@@ -53,4 +54,14 @@ namespace bombo::game
 
     bool Game::handleKey(int /*key*/, juce::ModifierKeys /*mods*/) { return false; }
     bool Game::handleMouseClick(int /*fbX*/, int /*fbY*/)          { return false; }
+
+    float Game::speedMult() const noexcept
+    {
+        return std::max(kBpmMinMult, std::min(kBpmMaxMult, hostBpm_ / kBpmRef));
+    }
+
+    int computeWaveClearBonus(int timeRem, int peakChain, int lives) noexcept
+    {
+        return timeRem * 10 + peakChain * 5 + lives * 50;
+    }
 }

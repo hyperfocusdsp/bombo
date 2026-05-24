@@ -54,7 +54,11 @@ namespace bombo::game
         bool wantsExit()        const noexcept { return wantsExit_; }
 
         // Tempo coupling (set from BomboProcessor in later tasks)
-        void setHostBpm(float bpm) noexcept { hostBpm_ = bpm; }
+        void  setHostBpm(float bpm) noexcept { hostBpm_ = bpm; }
+
+        // BPM speed multiplier: clamp(hostBpm/120, 0.5, 1.8).
+        // Applied to spawn/movement rates starting Task 26; exposed here for tests.
+        float speedMult() const noexcept;
 
     private:
         void transitionTo(GameState s);
@@ -69,4 +73,7 @@ namespace bombo::game
         float     hostBpm_     = kBpmRef;
         uint32_t  runSeed_     = 0;
     };
+
+    // Wave-clear bonus: timeRemaining*10 + peakChain*5 + livesRemaining*50
+    int computeWaveClearBonus(int timeRemaining, int peakChain, int livesRemaining) noexcept;
 }

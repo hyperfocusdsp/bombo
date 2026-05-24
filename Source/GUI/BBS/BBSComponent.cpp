@@ -2,6 +2,7 @@
 #include "../Colours.h"
 #include "../Fonts.h"
 #include "../../State/PresetBank.h"
+#include "../../PluginProcessor.h"
 #include <juce_core/juce_core.h>
 
 namespace bombo
@@ -119,10 +120,19 @@ void BBSComponent::timerCallback()
     if (screens_.current() == BBSScreen::Game)
     {
 #if BOMBO_GAME_V2
-        // TODO(Task 14): feed real host BPM here via gameV2_.setHostBpm(bpm).
-        // BBSComponent has no BPM source yet (host tempo is processor-side on
-        // the AudioPlayHead); until Task 14 plumbs it, the game runs at its
-        // kBpmRef default (speedMult == 1.0).
+        // Feed host BPM from the processor into the game each tick.
+        // apvts_->processor is juce::AudioProcessor&; cast to BomboProcessor
+        // to reach the atomic hostBpm() accessor populated in processBlock.
+        // Falls back to kBpmRef (120) if apvts_ is null (standalone / early init).
+        if (apvts_ != nullptr)
+        {
+            auto& proc = static_cast<BomboProcessor&>(apvts_->processor);
+            float reportedBpm = proc.hostBpm();
+            // hostBpm() returns 0 when host doesn't provide BPM (standalone);
+            // keep the previous value / default in that case.
+            if (reportedBpm > 0.0f)
+                gameV2_.setHostBpm(reportedBpm);
+        }
         gameV2_.tick();
         if (gameV2_.wantsExit()) exitGame();
 #else

@@ -96,4 +96,37 @@ static GameTitleToPlayingTest            b;
 static GamePauseResumeTest               c;
 static GameQuitConfirmFlowTest           d;
 static GameCancelQuitReturnsToPriorTest  e;
+
+class BpmScalingTest : public juce::UnitTest
+{
+public:
+    BpmScalingTest() : juce::UnitTest("Game: BPM scales speedMult, clamped") {}
+    void runTest() override
+    {
+        beginTest("speedMult = clamp(bpm/120, 0.5, 1.8)");
+        Game g;
+        g.setHostBpm(60.0f);
+        expectWithinAbsoluteError(g.speedMult(), 0.5f, 0.001f);   // 60/120 = 0.5, at lower clamp boundary
+        g.setHostBpm(120.0f);
+        expectWithinAbsoluteError(g.speedMult(), 1.0f, 0.001f);
+        g.setHostBpm(240.0f);
+        expectWithinAbsoluteError(g.speedMult(), 1.8f, 0.001f);   // 2.0 clamped to 1.8
+        g.setHostBpm(30.0f);
+        expectWithinAbsoluteError(g.speedMult(), 0.5f, 0.001f);   // 0.25 clamped to 0.5
+    }
+};
+
+class WaveClearBonusTest : public juce::UnitTest
+{
+public:
+    WaveClearBonusTest() : juce::UnitTest("Game: wave clear bonus formula") {}
+    void runTest() override
+    {
+        beginTest("bonus = timeRemaining*10 + peakChain*5 + livesRemaining*50");
+        const int b = computeWaveClearBonus(/*timeRem=*/12, /*peakChain=*/8, /*lives=*/3);
+        expectEquals(b, 12*10 + 8*5 + 3*50);
+    }
+};
+static BpmScalingTest a_bpm;
+static WaveClearBonusTest b_bonus;
 }
