@@ -63,6 +63,15 @@ public:
         expect(g.state() == GameState::QuitConfirm);
         g.confirmQuit();
         expect(g.state() == GameState::Title);
+
+        beginTest("confirmQuit sets wantsExit so the BBS component tears the game down");
+        Game g2;
+        g2.startNewRun(false);
+        expect(! g2.wantsExit());      // fresh run, no exit signal
+        g2.requestQuit();
+        expect(! g2.wantsExit());      // pending confirm, still no exit signal
+        g2.confirmQuit();
+        expect(g2.wantsExit());        // confirmed -> signal BBS to exit
     }
 };
 

@@ -33,11 +33,12 @@ namespace bombo::game
     void Game::confirmQuit()
     {
         transitionTo(GameState::Title);
-        wantsExit_ = false;
+        wantsExit_ = true;
     }
 
     void Game::cancelQuit()
     {
+        jassert(state_ == GameState::QuitConfirm);
         // Return to whatever we were doing before QuitConfirm
         state_ = priorState_;
     }
