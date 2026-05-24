@@ -2,6 +2,19 @@
 #include "Game.h"
 #include <algorithm>
 #include <cmath>
+#include <random>
+
+namespace
+{
+    // WaveClear "WAVE n CLEAR" flash duration (spec §4.4): 1.5s.
+    constexpr int kWaveClearFlashTicks = static_cast<int>(1.5f * bombo::game::kTickHz);
+
+    // Boss = wave 8 (the run is 8 waves; W8 is RUMBLR per spec §4.1).
+    constexpr int kBossWave = 8;
+
+    // Shops occur after W2, W4, W6 (spec §4.1 cadence).
+    bool shopFollowsWave(int wave) noexcept { return wave == 2 || wave == 4 || wave == 6; }
+}
 
 namespace bombo::game
 {
@@ -13,14 +26,25 @@ namespace bombo::game
         state_      = s;
     }
 
-    void Game::startNewRun(bool /*dailySeed*/)
+    void Game::startNewRun(bool dailySeed)
     {
         currentWave_ = 1;
         score_       = 0;
         lives_       = kPlayerStartLives;
         currencyDB_  = 0;
-        // dailySeed handling deferred to Task 20 (HighScores + daily seed)
-        runSeed_     = 1u;
+        daily_       = dailySeed;
+        victory_     = false;
+
+        if (dailySeed)
+        {
+            runSeed_ = dailySeedToday();
+        }
+        else
+        {
+            std::random_device rd;
+            runSeed_ = rd();
+            if (runSeed_ == 0u) runSeed_ = 1u;   // keep determinism contract: never 0
+        }
 
         // Reset all in-wave simulation state for a fresh run.
         player_        = Player{};
@@ -36,6 +60,14 @@ namespace bombo::game
         tickCounter_   = 0;
         runRng_.seed(runSeed_);
         wave_          = scheduleWave(runSeed_, currentWave_);
+
+        // Reset run-flow state.
+        waveClearTicks_   = 0;
+        shop_.reset();
+        shopSlot_         = 0;
+        shopFreeHealUsed_ = false;
+        initials_         = { 'A', 'A', 'A' };
+        initialsSlot_     = 0;
 
         transitionTo(GameState::Playing);
     }
@@ -80,6 +112,194 @@ namespace bombo::game
         return fired;
     }
 
+    // ────────────────────────────────────────────────────────────────────────
+    // Run-flow cadence: wave-clear -> next wave / shop / boss / game-over.
+    // ────────────────────────────────────────────────────────────────────────
+
+    bool Game::waveIsClear() const noexcept
+    {
+        if (! wave_.done()) return false;   // schedule still has spawns to fire
+        for (const auto& e : enemies_.enemies())
+            if (e.active && e.kind != EnemyKind::Rumblr)
+                return false;               // a live non-boss enemy remains
+        return true;
+    }
+
+    void Game::onWaveCleared()
+    {
+        // timeRemaining proxy: there is no per-wave countdown timer in the sim, so we
+        // honestly pass 0 (the bonus is then peakChain*5 + lives*50). Documented choice.
+        score_ += computeWaveClearBonus(/*timeRemaining=*/0, chain_.peak(), lives_);
+        chain_.resetForWave();
+        waveClearTicks_ = kWaveClearFlashTicks;
+        transitionTo(GameState::WaveClear);
+    }
+
+    void Game::advanceAfterWaveClear()
+    {
+        // currentWave_ is the wave that just cleared. Decide what comes next.
+        if (shopFollowsWave(currentWave_))      // after W2 / W4 / W6 -> shop
+        {
+            enterShop();
+            return;
+        }
+        if (currentWave_ == kBossWave - 1)      // after W7 -> boss (W8)
+        {
+            enterBoss();
+            return;
+        }
+        // Otherwise advance to the next ordinary wave.
+        ++currentWave_;
+        wave_ = scheduleWave(runSeed_, currentWave_);
+        transitionTo(GameState::Playing);
+    }
+
+    void Game::enterShop()
+    {
+        shop_             = std::make_unique<ShopVisit>(runSeed_ ^ static_cast<uint32_t>(currentWave_));
+        shopSlot_         = 0;
+        shopFreeHealUsed_ = false;
+        transitionTo(GameState::Shop);
+    }
+
+    void Game::advanceAfterShop()
+    {
+        shop_.reset();
+        ++currentWave_;
+        wave_ = scheduleWave(runSeed_, currentWave_);
+        transitionTo(GameState::Playing);
+    }
+
+    void Game::enterBoss()
+    {
+        ++currentWave_;   // -> 8
+        // Clear any stray non-boss leftovers, then spawn the RUMBLR.
+        enemies_ = EnemyPool{};
+        enemies_.spawn(EnemyKind::Rumblr, static_cast<float>(kFbW) - 30.0f,
+                       static_cast<float>(kFbH) / 2.0f, 0.0f, 0.0f);
+        transitionTo(GameState::Boss);
+    }
+
+    bool Game::bossIsDead() const noexcept
+    {
+        for (const auto& e : enemies_.enemies())
+            if (e.active && e.kind == EnemyKind::Rumblr)
+                return false;
+        return true;
+    }
+
+    void Game::onGameOver(bool victory)
+    {
+        victory_ = victory;
+        highScores_.load();   // refresh from disk before checking qualification
+        if (highScores_.qualifiesForTopTen(score_))
+        {
+            initials_     = { 'A', 'A', 'A' };
+            initialsSlot_ = 0;
+            transitionTo(GameState::Initials);
+        }
+        else
+        {
+            transitionTo(GameState::Results);
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Shop interaction (called by the input layer in Task 22).
+    // ────────────────────────────────────────────────────────────────────────
+
+    void Game::shopMoveSelection(int delta) noexcept
+    {
+        if (state_ != GameState::Shop) return;
+        const int n = kShopOfferCount;
+        shopSlot_ = ((shopSlot_ + delta) % n + n) % n;
+    }
+
+    bool Game::shopBuySelected()
+    {
+        if (state_ != GameState::Shop || shop_ == nullptr) return false;
+        return shop_->buy(shopSlot_, currencyDB_, ownedItems_);   // buy() deducts dB itself
+    }
+
+    bool Game::shopReroll()
+    {
+        if (state_ != GameState::Shop || shop_ == nullptr) return false;
+        // FOOTGUN: reroll() does NOT deduct, and rerollCost() rises AFTER a successful
+        // reroll. Capture the cost first, then deduct it ourselves on success.
+        const int cost = shop_->rerollCost();
+        if (shop_->reroll(currencyDB_))
+        {
+            currencyDB_ -= cost;
+            shopSlot_    = 0;
+            return true;
+        }
+        return false;
+    }
+
+    bool Game::shopUseFreeHeal()
+    {
+        if (state_ != GameState::Shop || shopFreeHealUsed_) return false;
+        shopFreeHealUsed_ = true;
+        if (lives_ < kPlayerMaxLives) ++lives_;
+        return true;
+    }
+
+    void Game::shopContinue()
+    {
+        if (state_ != GameState::Shop) return;
+        advanceAfterShop();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Initials entry + results (called by the input layer in Task 22).
+    // ────────────────────────────────────────────────────────────────────────
+
+    void Game::initialsCycleLetter(int slot, int delta) noexcept
+    {
+        if (slot < 0 || slot >= 3) return;
+        int v = (initials_[(size_t) slot] - 'A' + delta) % 26;
+        if (v < 0) v += 26;
+        initials_[(size_t) slot] = static_cast<char>('A' + v);
+    }
+
+    void Game::initialsMoveSlot(int delta) noexcept
+    {
+        initialsSlot_ = ((initialsSlot_ + delta) % 3 + 3) % 3;
+    }
+
+    void Game::initialsConfirm()
+    {
+        if (state_ != GameState::Initials) return;
+
+        ScoreEntry e;
+        e.initials = juce::String(juce::CharPointer_ASCII(initials_.data()), (size_t) 3);
+        e.score    = score_;
+        e.wave     = currentWave_;
+        e.date     = juce::Time::getCurrentTime().formatted("%Y-%m-%d");
+        e.daily    = daily_;
+        e.seed     = daily_ ? runSeed_ : 0u;
+
+        highScores_.recordRun(e);
+        highScores_.save();
+        transitionTo(GameState::Results);
+    }
+
+    void Game::resultsContinue()
+    {
+        if (state_ != GameState::Results) return;
+        transitionTo(GameState::Title);
+    }
+
+   #if defined(BOMBO_GAME_TEST_HOOKS)
+    void Game::testForceWaveClear() noexcept
+    {
+        wave_ = WaveSchedule{};            // schedule done
+        for (auto& e : enemies_.enemies()) // clear all non-boss enemies
+            if (e.kind != EnemyKind::Rumblr)
+                e.active = false;
+    }
+   #endif
+
     void Game::clampPlayerToField() noexcept
     {
         // Spec intends L/R as +/-30 from a column; for v1.0.x just keep the player
@@ -110,7 +330,17 @@ namespace bombo::game
 
     void Game::tick()
     {
-        if (state_ != GameState::Playing) return;   // sim only runs in PLAYING state
+        // WaveClear is a brief flash; count it down then advance the cadence.
+        if (state_ == GameState::WaveClear)
+        {
+            if (--waveClearTicks_ <= 0)
+                advanceAfterWaveClear();
+            return;
+        }
+
+        // Sim runs in PLAYING and BOSS only. Shop/Paused/etc. freeze the sim.
+        if (state_ != GameState::Playing && state_ != GameState::Boss)
+            return;
 
         ++tickCounter_;
 
@@ -157,8 +387,26 @@ namespace bombo::game
         effects_.tick(dt);
         chain_.tick(dt);
 
-        // (d) collisions
+        // (d) collisions. resolveCombat() may transition to GameOver on a fatal hit.
         resolveCombat();
+        if (state_ != GameState::Playing && state_ != GameState::Boss)
+            return;   // death already ended the run this tick
+
+        // (e) cadence transitions.
+        if (state_ == GameState::Boss)
+        {
+            if (bossIsDead())
+            {
+                // Boss-clear bonus (spec §9.1): 5000 + lives*200.
+                score_ += 5000 + lives_ * 200;
+                onGameOver(/*victory=*/true);
+            }
+            return;
+        }
+
+        // PLAYING: wave is clear when the schedule is exhausted and no live mobs remain.
+        if (waveIsClear())
+            onWaveCleared();
     }
 
     int Game::scoreBaseFor(EnemyKind kind) const noexcept
@@ -283,7 +531,12 @@ namespace bombo::game
         {
             player_.takeHit();
             --lives_;
-            // Game-over transition is owned by the NEXT task (cadence/game-over flow).
+            if (lives_ <= 0)
+            {
+                lives_ = 0;
+                onGameOver(/*victory=*/false);
+                return;   // run is over; skip pickup collection this tick
+            }
         }
 
         // Pickups vs player.

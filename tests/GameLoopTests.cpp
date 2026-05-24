@@ -57,6 +57,9 @@ public:
             // Place a stationary-ish Mudball directly in front of the player.
             const auto& pl = g.player();
             g.testEnemies().spawn(EnemyKind::Mudball, pl.x + 30.0f, pl.y, 0.0f, 0.0f);
+            // Keep an out-of-range enemy alive so the cadence doesn't flip to WaveClear
+            // (which would reset the chain and add the wave-clear bonus) mid-assertion.
+            g.testEnemies().spawn(EnemyKind::Limiter, (float) (kFbW - 8), 8.0f, 0.0f, 0.0f);
             const int scoreBefore = g.score();
             // Tick enough frames for autofire bullets to traverse 30px and deal 3 HP.
             for (int i = 0; i < 4 * kTickHz; ++i) g.tick();
@@ -92,6 +95,9 @@ public:
             // Place a Mudball (1 HP for autofire purposes is irrelevant here — we kill
             // it directly via a player bullet) right on top of a player bullet.
             g.testEnemies().spawn(EnemyKind::Mudball, pl.x + 30.0f, pl.y, 0.0f, 0.0f);
+            // Keep an out-of-range enemy alive so the wave doesn't clear mid-assertion
+            // (a clear would add the wave-clear bonus and break the exact-score check).
+            g.testEnemies().spawn(EnemyKind::Limiter, (float) (kFbW - 8), 8.0f, 0.0f, 0.0f);
             const int scoreBefore = g.score();
             expectEquals(scoreBefore, 0);
             // Tick until the Mudball dies from autofire; capture the score at the kill.

@@ -8,9 +8,11 @@
 #include "Drops.h"
 #include "Effects.h"
 #include "Shop.h"
+#include "HighScores.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <array>
 #include <functional>
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -95,6 +97,30 @@ namespace bombo::game
         // Null-safe — spawnPlayerShot() invokes it only when set.
         std::function<void()> onShot;
 
+        // --- Shop interaction (input layer / Task 22 calls these) ---
+        // Valid only while state()==Shop. Slot selection is 0..2.
+        int  shopSelectedSlot()       const noexcept { return shopSlot_; }
+        void shopMoveSelection(int delta) noexcept;
+        bool shopBuySelected();                 // buy() deducts dB; returns true on purchase
+        bool shopReroll();                      // deducts the PRE-reroll cost exactly once
+        bool shopUseFreeHeal();                 // +1 life (max kPlayerMaxLives), once per visit
+        bool shopFreeHealAvailable()  const noexcept { return shopFreeHealUsed_ == false; }
+        void shopContinue();                    // leave shop -> next wave Playing
+        const ShopVisit* shop()       const noexcept { return shop_.get(); }
+
+        // --- Game-over / Initials / Results (input layer calls these) ---
+        bool gameOverVictory()        const noexcept { return victory_; }
+        // Initials entry — 3 slots, each 'A'..'Z'.
+        void initialsCycleLetter(int slot, int delta) noexcept;
+        void initialsMoveSlot(int delta) noexcept;
+        void initialsConfirm();                 // records run, saves, -> Results
+        std::array<char, 3> initials() const noexcept { return initials_; }
+        int  initialsSlot()           const noexcept { return initialsSlot_; }
+        void resultsContinue();                 // Results -> Title
+
+        // The top-10 table, for the HighScores screen renderer (Task 22).
+        const HighScores& highScores() const noexcept { return highScores_; }
+
         // --- Test inspectors for the in-wave loop ---
         const Player&     player()        const noexcept { return player_; }
         const BulletPool& playerBullets() const noexcept { return playerBullets_; }
@@ -114,10 +140,30 @@ namespace bombo::game
         PickupPool& testPickups()       noexcept { return pickups_; }
         void        testGrantItem(ShopItemId id, int n) noexcept { ownedItems_[(int) id] = n; }
         void        testClearWaveSchedule() noexcept { wave_ = WaveSchedule{}; }
+        void        testSetLives(int n) noexcept { lives_ = n; }
+        void        testSetScore(int n) noexcept { score_ = n; }
+        void        testSetCurrencyDB(int n) noexcept { currencyDB_ = n; }
+        void        testSetCurrentWave(int n) noexcept { currentWave_ = n; }
+        // Point highScores_ at an explicit file (temp file in tests, or {} for in-memory).
+        void        testSetHighScoresPath(juce::File f) { highScores_ = HighScores(std::move(f)); }
+        // Force the wave-clear path (schedule emptied + all non-boss enemies cleared).
+        void        testForceWaveClear() noexcept;
+        uint32_t    testRunSeed() const noexcept { return runSeed_; }
+        bool        testDaily()   const noexcept { return daily_; }
        #endif
 
     private:
         void transitionTo(GameState s);
+
+        // --- Run-flow helpers (this task) ---
+        bool waveIsClear() const noexcept;          // schedule done + no live non-boss enemies
+        void onWaveCleared();                       // bonus + chain reset + -> WaveClear
+        void advanceAfterWaveClear();               // WaveClear -> next wave / Shop / Boss
+        void advanceAfterShop();                    // Shop continue -> next wave Playing
+        void enterShop();                           // create ShopVisit, freeze sim
+        void enterBoss();                           // ++wave to 8, spawn RUMBLR
+        void onGameOver(bool victory);              // death or boss win -> GameOver / Initials
+        bool bossIsDead() const noexcept;           // no active Rumblr remains
 
         // In-wave loop helpers (Task 7).
         void clampPlayerToField() noexcept;
@@ -136,8 +182,25 @@ namespace bombo::game
         int       lives_       = kPlayerStartLives;
         int       currencyDB_  = 0;
         bool      wantsExit_   = false;
+        bool      daily_       = false;
+        bool      victory_     = false;
         float     hostBpm_     = kBpmRef;
         uint32_t  runSeed_     = 0;
+
+        // WaveClear flash countdown (ticks). 1.5s per spec §4.4.
+        int       waveClearTicks_ = 0;
+
+        // Shop visit state (only valid in Shop state).
+        std::unique_ptr<ShopVisit> shop_;
+        int       shopSlot_         = 0;
+        bool      shopFreeHealUsed_ = false;
+
+        // Initials entry state.
+        std::array<char, 3> initials_ { 'A', 'A', 'A' };
+        int       initialsSlot_ = 0;
+
+        // High-score table (persisted). Path-injectable for tests via testSetHighScoresPath.
+        HighScores highScores_ { defaultHighScoresPath() };
 
         // --- In-wave simulation state (Task 7) ---
         Player        player_;

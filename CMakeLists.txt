@@ -248,6 +248,7 @@ if(BOMBO_BUILD_TESTS)
         tests/GameBalanceSimTests.cpp
         tests/GameScoringTests.cpp
         tests/GameLoopTests.cpp
+        tests/GameFlowTests.cpp
         Source/GUI/BBS/Game/Palette.cpp
         Source/GUI/BBS/Game/Framebuffer.cpp
         Source/GUI/BBS/Game/Entities.cpp
