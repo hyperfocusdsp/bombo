@@ -166,6 +166,28 @@ void BBSComponent::timerCallback()
             in.left  = juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::leftKey);
             in.right = juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::rightKey);
             gameV2_.setMoveInput(in);
+
+            // Charged-shot fire key. Like movement, this must be POLLED: the
+            // charged shot fires on key RELEASE (releaseChargedShot), and
+            // keyPressed is edge-on-press only — there is no key-up event, so
+            // without polling the release never fires and manual fire is dead
+            // (only the internal autofire timer shoots). Hold to charge (~1.2s),
+            // release to fire a wide piercing bullet. T/F/Space all fire.
+            const bool fireDown =
+                   juce::KeyPress::isKeyCurrentlyDown('T')
+                || juce::KeyPress::isKeyCurrentlyDown('F')
+                || juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::spaceKey);
+            if (fireDown)
+                gameV2_.setCharging(true);
+            else if (fireKeyWasDown_)
+            {
+                // Release edge. A full hold fires the big charged shot; a quick
+                // tap (not charged) fires one normal bullet — the manual gun
+                // when AUTO is off. Tap = normal, hold = charged.
+                if (! gameV2_.releaseChargedShot())
+                    gameV2_.fireManualShot();
+            }
+            fireKeyWasDown_ = fireDown;
         }
 
         gameV2_.tick();

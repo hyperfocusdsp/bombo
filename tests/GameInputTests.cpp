@@ -107,10 +107,51 @@ public:
             g.setMoveInput(in);
             g.tick();
             expect(g.player().x > x0);           // polled input moves the player
-            expect(send(g, 'F'));
-            expect(g.player().charging);
+            // Fire (T/F/Space) is now POLLED too: handleKey consumes it but does
+            // NOT charge — BBSComponent polls the key each tick for press AND
+            // release (the charged shot fires on release). Charging happens via
+            // setCharging(), the polled path.
+            expect(send(g, 'F'));                // consumed
+            expect(! g.player().charging);       // ...but no charge from handleKey
+            g.setCharging(true);
+            expect(g.player().charging);         // polled path charges
             expect(send(g, 'H'));
             expect(g.state() == GameState::Help);
+        }
+
+        beginTest("charged shot fires only after a full hold, then on release");
+        {
+            // Regression guard: releaseChargedShot() had NO caller — manual fire
+            // was dead, only autofire shot. BBSComponent now polls the fire key
+            // and calls releaseChargedShot() on release. Here we drive the same
+            // logic directly: a release with no/partial charge must not fire; a
+            // release after a full hold must.
+            Game g; g.startNewRun(false);
+            expect(! g.releaseChargedShot(), "release without charging does not fire");
+
+            g.setCharging(true);
+            // chargeProgress accumulates over kChargedShotSec while charging;
+            // tick past it (1.2 s at 60 Hz ~= 72 ticks) with a margin.
+            for (int i = 0; i < 90; ++i) g.tick();
+            expect(g.player().chargeProgress >= 1.0f, "held long enough to charge");
+            expect(g.releaseChargedShot(), "release after full hold fires");
+        }
+
+        beginTest("tap fire spawns a normal bullet (manual gun, autofire-independent)");
+        {
+            // The release-edge path: a tap that didn't charge fires fireManualShot()
+            // — the manual normal gun usable with AUTO off. No tick() here so the
+            // autofire timer can't add bullets and muddy the count.
+            Game g; g.startNewRun(false);
+            auto active = [](const Game& gg)
+            {
+                int n = 0;
+                for (const auto& b : gg.playerBullets().bullets()) if (b.active) ++n;
+                return n;
+            };
+            expect(active(g) == 0, "no player bullets at run start");
+            g.fireManualShot();
+            expect(active(g) >= 1, "tap fire spawned a normal bullet");
         }
     }
 };

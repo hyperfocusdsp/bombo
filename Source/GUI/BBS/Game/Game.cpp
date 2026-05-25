@@ -119,6 +119,16 @@ namespace bombo::game
         return fired;
     }
 
+    void Game::fireManualShot() noexcept
+    {
+        // Tap-fire: one normal bullet on demand, independent of autofire. This
+        // is the manual gun when AUTO is OFF — a tap of the fire key that didn't
+        // hold long enough for a charged shot lands here. Same projectile the
+        // autofire timer spawns.
+        if (state_ != GameState::Playing && state_ != GameState::Boss) return;
+        spawnPlayerShot();
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     // Run-flow cadence: wave-clear -> next wave / shop / boss / game-over.
     // ────────────────────────────────────────────────────────────────────────
@@ -892,10 +902,10 @@ namespace bombo::game
                 fb.drawText("HELP", 4, 2, 5);
                 // Keymap (left column).
                 fb.drawText("ARROWS MOVE",  4, 14, 2);
-                fb.drawText("F FIRE",        4, 22, 2);
-                fb.drawText("A AUTO",        4, 30, 2);
-                fb.drawText("P PAUSE",       4, 38, 2);
-                fb.drawText("H HELP",        4, 46, 2);
+                fb.drawText("F TAP FIRE",    4, 22, 2);
+                fb.drawText("F HOLD CHARGE", 4, 30, 2);
+                fb.drawText("A AUTO",        4, 38, 2);
+                fb.drawText("P PAUSE",       4, 46, 2);
                 fb.drawText("ESC QUIT",      4, 54, 2);
                 // Bestiary (right column) — a couple of enemy sprites + labels.
                 fb.blitSprite(&sprites::kMudball[0][0], 10, 10, 96, 14);
@@ -1043,7 +1053,11 @@ namespace bombo::game
                 // them (return true) so they don't leak to other handlers.
                 // (Arrows in menus/shop/initials remain edge-driven below.)
                 if (isLeft || isRight || isUp || isDown) return true;
-                if (ch == 'F' || key == KP::spaceKey) { setCharging(true); return true; }
+                // Charge keys (T/F/Space) are POLLED in BBSComponent::timerCallback
+                // for press AND release (the charged shot fires on release).
+                // Consume them here so they don't leak to other handlers; the
+                // poll owns the charge/fire edges.
+                if (ch == 'T' || ch == 'F' || key == KP::spaceKey) return true;
                 if (ch == 'A') { player_.autofireOn = ! player_.autofireOn; return true; }
                 if (ch == 'P') { togglePause(); return true; }
                 if (ch == 'H') { transitionTo(GameState::Help); return true; }

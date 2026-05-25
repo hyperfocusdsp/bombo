@@ -96,6 +96,7 @@ namespace bombo::game
         void setMoveInput(const InputState& in) noexcept { input_ = in; }
         void setCharging(bool c) noexcept;          // begins/ends player charge
         bool releaseChargedShot() noexcept;         // on charge-key release; fires wide bullet if ready
+        void fireManualShot() noexcept;             // tap fire: one normal bullet (works with autofire off)
 
         // Audio seam (Task 24): assigned by BBS to trigger the active preset/kick on each shot.
         // Null-safe — spawnPlayerShot() invokes it only when set.

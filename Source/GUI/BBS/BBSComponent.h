@@ -121,6 +121,7 @@ private:
     bombo::game::Framebuffer gameV2Fb_;     // reused each frame — no alloc cost
     juce::Image             gameV2Image_;  // kFbW x kFbH ARGB, allocated in launchGame()
     int                     prePresetIdx_ = -1;  // stashed preset index restored on exit
+    bool                    fireKeyWasDown_ = false;  // charge-key release edge (T/F/Space)
 
     // --- Discovery (Task 23): drifting BBS invader + cabinet glyph ---
     std::mt19937            discoveryRng_ { std::random_device{}() };
