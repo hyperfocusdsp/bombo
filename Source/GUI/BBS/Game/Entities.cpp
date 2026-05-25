@@ -241,7 +241,17 @@ namespace bombo::game
             // arc. Boss completion is gated by the now-denser pre-boss WAVE attrition,
             // not by gutting boss HP. Re-swept with the sim to keep completion in the
             // spec §13.3 15-25% band. See tests/GameBalanceSim.cpp calibration notes.
-            case EnemyKind::Rumblr:      return 27;
+            case EnemyKind::Rumblr:      return 40;   // longer final fight; phase 1 = 40..26, phase 2 = 25..0
+            // Extra monsters: light fodder. Elites: tankier.
+            case EnemyKind::Warble:      return 2;
+            case EnemyKind::Hiss:        return 2;
+            case EnemyKind::Crackle:     return 3;
+            case EnemyKind::Wobble:      return 3;
+            case EnemyKind::Stutter:     return 4;
+            case EnemyKind::Overdrive:   return 8;
+            case EnemyKind::Phaser:      return 8;
+            case EnemyKind::Flanger:     return 10;
+            case EnemyKind::Resonator:   return 12;
         }
         return 1;
     }
@@ -286,6 +296,30 @@ namespace bombo::game
                 (s.x < -16.0f || s.x > kFbW + 16.0f ||
                  s.y < -16.0f || s.y > kFbH + 16.0f))
                 s.active = false;
+        }
+
+        // Separation: keep active enemies from overlapping so each one stays
+        // individually visible even when a wave spawns a dense cluster. Gentle
+        // pairwise push toward a minimum spacing (sprites are ~10px). Excludes
+        // the boss (large, screen-confined). O(n^2) over a small fixed pool.
+        constexpr float kMinSep = 11.0f;
+        for (auto& a : slots_)
+        {
+            if (! a.active || a.kind == EnemyKind::Rumblr) continue;
+            for (auto& b : slots_)
+            {
+                if (&b <= &a) continue;   // visit each unordered pair once
+                if (! b.active || b.kind == EnemyKind::Rumblr) continue;
+                float dx = b.x - a.x, dy = b.y - a.y;
+                float d2 = dx * dx + dy * dy;
+                if (d2 <= 0.0001f) { dx = 0.6f; dy = 0.0f; d2 = 0.36f; }  // coincident -> nudge apart
+                if (d2 >= kMinSep * kMinSep) continue;
+                const float d = std::sqrt(d2);
+                const float push = (kMinSep - d) * 0.5f;
+                const float nx = dx / d, ny = dy / d;
+                a.x -= nx * push; a.y -= ny * push;
+                b.x += nx * push; b.y += ny * push;
+            }
         }
     }
 

@@ -11,11 +11,16 @@ namespace
     // WaveClear "WAVE n CLEAR" flash duration (spec §4.4): 1.5s.
     constexpr int kWaveClearFlashTicks = static_cast<int>(1.5f * bombo::game::kTickHz);
 
-    // Boss = wave 8 (the run is 8 waves; W8 is RUMBLR per spec §4.1).
-    constexpr int kBossWave = 8;
+    // Boss = wave 12 (the run is 12 waves; W12 is RUMBLR). Extended from the
+    // original 8-wave run for a longer, harder campaign (W1-W11 normal + boss).
+    constexpr int kBossWave = 12;
 
-    // Shops occur after W2, W4, W6 (spec §4.1 cadence).
-    bool shopFollowsWave(int wave) noexcept { return wave == 2 || wave == 4 || wave == 6; }
+    // Shops occur after W2, W4, W6, W8, W10 (every other wave) — extra mid-run
+    // economy to match the longer campaign.
+    bool shopFollowsWave(int wave) noexcept
+    {
+        return wave == 2 || wave == 4 || wave == 6 || wave == 8 || wave == 10;
+    }
 }
 
 namespace bombo::game
@@ -141,12 +146,12 @@ namespace bombo::game
     void Game::advanceAfterWaveClear()
     {
         // currentWave_ is the wave that just cleared. Decide what comes next.
-        if (shopFollowsWave(currentWave_))      // after W2 / W4 / W6 -> shop
+        if (shopFollowsWave(currentWave_))      // after W2/W4/W6/W8/W10 -> shop
         {
             enterShop();
             return;
         }
-        if (currentWave_ == kBossWave - 1)      // after W7 -> boss (W8)
+        if (currentWave_ == kBossWave - 1)      // after W11 -> boss (W12)
         {
             enterBoss();
             return;
@@ -175,7 +180,7 @@ namespace bombo::game
 
     void Game::enterBoss()
     {
-        ++currentWave_;   // -> 8
+        ++currentWave_;   // -> kBossWave (12)
         // Clear any stray non-boss leftovers, then spawn the RUMBLR.
         enemies_ = EnemyPool{};
         enemies_.spawn(EnemyKind::Rumblr, static_cast<float>(kFbW) - 30.0f,
@@ -430,6 +435,15 @@ namespace bombo::game
             case EnemyKind::DiveBomber:  return 20;
             case EnemyKind::SilenceVoid: return 50;
             case EnemyKind::Rumblr:      return 500;
+            case EnemyKind::Warble:      return 12;
+            case EnemyKind::Hiss:        return 12;
+            case EnemyKind::Crackle:     return 15;
+            case EnemyKind::Wobble:      return 15;
+            case EnemyKind::Stutter:     return 18;
+            case EnemyKind::Overdrive:   return 60;
+            case EnemyKind::Phaser:      return 60;
+            case EnemyKind::Flanger:     return 70;
+            case EnemyKind::Resonator:   return 80;
         }
         return 10;
     }
@@ -636,6 +650,15 @@ namespace bombo::game
                 case EnemyKind::AliaserMini: return { &kAliaserMini[0][0], 10, 10 };
                 case EnemyKind::DiveBomber:  return { &kDiveBomber[0][0],  10, 10 };
                 case EnemyKind::Rumblr:      return { &kRumblr[0][0],      30, 30 };
+                case EnemyKind::Warble:      return { &kWarble[0][0],      10, 10 };
+                case EnemyKind::Hiss:        return { &kHiss[0][0],        10, 10 };
+                case EnemyKind::Crackle:     return { &kCrackle[0][0],     10, 10 };
+                case EnemyKind::Wobble:      return { &kWobble[0][0],      10, 10 };
+                case EnemyKind::Stutter:     return { &kStutter[0][0],     10, 10 };
+                case EnemyKind::Overdrive:   return { &kOverdrive[0][0],   10, 10 };
+                case EnemyKind::Phaser:      return { &kPhaser[0][0],      10, 10 };
+                case EnemyKind::Flanger:     return { &kFlanger[0][0],     10, 10 };
+                case EnemyKind::Resonator:   return { &kResonator[0][0],   10, 10 };
             }
             return { &kMudball[0][0], 10, 10 };
         }
@@ -715,8 +738,8 @@ namespace bombo::game
                 {
                     const bool blink = player_.isInvincible() && ((tickCounter_ / 4) % 2);
                     if (! blink)
-                        fb.blitSprite(&sprites::kPlayer[0][0], 10, 10,
-                                      (int) player_.x - 5, (int) player_.y - 5);
+                        fb.blitSprite(&sprites::kPlayer[0][0], 16, 16,
+                                      (int) player_.x - 8, (int) player_.y - 8);
                 }
 
                 // --- charge meter (when charging) ---
@@ -744,14 +767,27 @@ namespace bombo::game
                     fb.drawText(buf, 128, 1, 4);
                 }
 
-                // --- HUD (bottom row): lives + autofire ---
-                fmtNum(buf, sizeof buf, "LIVES ", lives_, 1);
-                fb.drawText(buf, 1, kFbH - 6, 4);
+                // --- HUD (bottom row): lives as mini-gunships + autofire ---
+                // Each remaining life is a tiny ship. On a hit the player is
+                // briefly invincible (i-frames) — during that window the just-
+                // lost ship is drawn as a ghost blinking in sync with the player
+                // ship, then vanishes when the i-frames end (3 -> 2 -> ...).
+                {
+                    const int icon = 9;   // 8px sprite + 1px gap
+                    const bool blink = ((tickCounter_ / 4) % 2) != 0;
+                    for (int i = 0; i < lives_; ++i)
+                        fb.blitSprite(&sprites::kPlayerMini[0][0], 8, 8,
+                                      1 + i * icon, kFbH - 9);
+                    // Ghost of the life being lost (only while i-frames run).
+                    if (player_.isInvincible() && lives_ < kPlayerMaxLives && blink)
+                        fb.blitSprite(&sprites::kPlayerMini[0][0], 8, 8,
+                                      1 + lives_ * icon, kFbH - 9);
+                }
                 fb.drawText(player_.autofireOn ? "AUTO ON" : "AUTO OFF",
                             100, kFbH - 6, 3);
 
                 if (state_ == GameState::Boss)
-                    fb.drawText("RUMBLR", kFbW / 2 - 12, 8, 4);
+                    fb.drawTextCentered("RUMBLR", 8, 4);
                 break;
             }
 
@@ -761,48 +797,62 @@ namespace bombo::game
                 fb.fillRect(0, 0, kFbW, kFbH, 0);
                 char buf[20];
                 fmtNum(buf, sizeof buf, "WAVE ", currentWave_, 1);
-                fb.drawText(buf, kFbW / 2 - 18, kFbH / 2 - 8, 5);
-                fb.drawText("CLEAR", kFbW / 2 - 10, kFbH / 2, 4);
+                fb.drawTextCentered(buf, kFbH / 2 - 8, 5);
+                fb.drawTextCentered("CLEAR", kFbH / 2, 4);
                 fmtNum(buf, sizeof buf, "SC ", score_, 5);
-                fb.drawText(buf, kFbW / 2 - 16, kFbH / 2 + 10, 3);
+                fb.drawTextCentered(buf, kFbH / 2 + 10, 3);
                 break;
             }
 
             case GameState::Shop:
             {
-                fb.drawText("SHOP", kFbW / 2 - 8, 4, 5);
+                fb.drawTextCentered("SHOP", 3, 5);
+                const int kRight = kFbW - 4;   // shared right-align margin
+                const int kLeft  = 4;          // shared left-align column
+                // Credits you can spend (dB = the currency dropped by enemies).
                 char buf[16];
-                fmtNum(buf, sizeof buf, "DB ", currencyDB_, 4);
-                fb.drawText(buf, 4, 12, 3);
+                fmtNum(buf, sizeof buf, "DB ", currencyDB_, 1);
+                fb.drawText(buf, kLeft, 11, 3);
 
                 if (shop_ != nullptr)
                 {
                     const auto& offers = shop_->offers();
                     for (int i = 0; i < (int) offers.size(); ++i)
                     {
-                        const int y = 26 + i * 16;
+                        const int y = 22 + i * 13;
                         const bool sel = (i == shopSlot_);
-                        if (sel) fb.drawText(">", 2, y, 4);
-                        fb.drawText(offers[(size_t) i].shortName, 10, y,
-                                    (uint8_t) (sel ? 5 : 2));
+                        const bool afford = currencyDB_ >= offers[(size_t) i].cost;
+                        // Selector ">" + name, both left-aligned at a fixed column.
+                        fb.drawText(sel ? ">" : " ", kLeft, y, 4);
+                        fb.drawText(offers[(size_t) i].shortName, kLeft + 6, y,
+                                    (uint8_t) (sel ? 5 : (afford ? 2 : 1)));
+                        // Cost right-aligned at the shared margin.
                         char cb[12];
-                        fmtNum(cb, sizeof cb, "", offers[(size_t) i].cost, 3);
-                        fb.drawText(cb, kFbW - 20, y, 3);
+                        fmtNum(cb, sizeof cb, "", offers[(size_t) i].cost, 1);
+                        fb.drawText(cb, kRight - Framebuffer::textWidth(cb), y,
+                                    (uint8_t) (afford ? 3 : 1));
                     }
+                }
+                // Controls hint + footer actions.
+                fb.drawText("ARROWS PICK  ENTER BUY", kLeft, kFbH - 25, 1);
+                if (shop_ != nullptr)
+                {
                     char rb[20];
-                    fmtNum(rb, sizeof rb, "R REROLL ", shop_->rerollCost(), 2);
-                    fb.drawText(rb, 4, kFbH - 18, 2);
+                    fmtNum(rb, sizeof rb, "R REROLL ", shop_->rerollCost(), 1);
+                    fb.drawText(rb, kLeft, kFbH - 17, 2);
                 }
                 fb.drawText(shopFreeHealAvailable() ? "H HEAL" : "H USED",
-                            4, kFbH - 11, 2);
-                fb.drawText("SPACE READY", kFbW - 48, kFbH - 11, 4);
+                            kLeft, kFbH - 9, 2);
+                // SPACE READY right-aligned to share the cost column edge.
+                fb.drawText("SPACE GO",
+                            kRight - Framebuffer::textWidth("SPACE GO"),
+                            kFbH - 9, 4);
                 break;
             }
 
             case GameState::Title:
             {
-                fb.drawText("KICK", kFbW / 2 - 26, 14, 4);
-                fb.drawText("IMPACT", kFbW / 2 + 2, 14, 4);
+                fb.drawTextCentered("KICK IMPACT", 14, 4);
                 fb.hline(kFbW / 2 - 30, kFbW / 2 + 30, 22, 3);
 
                 static const char* kItems[] = {
@@ -812,8 +862,9 @@ namespace bombo::game
                 {
                     const int y = 36 + i * 10;
                     const bool sel = (i == titleSel_);
-                    if (sel) fb.drawText(">", 38, y, 4);
-                    fb.drawText(kItems[i], 46, y, (uint8_t) (sel ? 5 : 2));
+                    const int lx = (kFbW - Framebuffer::textWidth(kItems[i])) / 2;
+                    if (sel) fb.drawText(">", lx - 6, y, 4);
+                    fb.drawText(kItems[i], lx, y, (uint8_t) (sel ? 5 : 2));
                 }
                 fb.drawText(daily_ ? "DAILY SEED" : "SEED", 4, kFbH - 6, 1);
                 break;
@@ -821,7 +872,7 @@ namespace bombo::game
 
             case GameState::Paused:
             {
-                fb.drawText("PAUSED", kFbW / 2 - 12, 18, 5);
+                fb.drawTextCentered("PAUSED", 18, 5);
                 static const char* kItems[] = {
                     "RESUME", "RESTART", "HIGHSCORES", "HELP", "QUIT"
                 };
@@ -829,8 +880,9 @@ namespace bombo::game
                 {
                     const int y = 36 + i * 10;
                     const bool sel = (i == pauseSel_);
-                    if (sel) fb.drawText(">", 38, y, 4);
-                    fb.drawText(kItems[i], 46, y, (uint8_t) (sel ? 5 : 2));
+                    const int lx = (kFbW - Framebuffer::textWidth(kItems[i])) / 2;
+                    if (sel) fb.drawText(">", lx - 6, y, 4);
+                    fb.drawText(kItems[i], lx, y, (uint8_t) (sel ? 5 : 2));
                 }
                 break;
             }
@@ -858,7 +910,7 @@ namespace bombo::game
 
             case GameState::HighScores:
             {
-                fb.drawText("HIGH SCORES", kFbW / 2 - 22, 2, 5);
+                fb.drawTextCentered("HIGH SCORES", 2, 5);
                 const auto& rows = highScores_.topTen();
                 for (int i = 0; i < (int) rows.size() && i < 10; ++i)
                 {
@@ -875,24 +927,27 @@ namespace bombo::game
                     fb.drawText(wb, 120, y, 4);
                 }
                 if (rows.empty())
-                    fb.drawText("NO SCORES YET", kFbW / 2 - 26, kFbH / 2, 2);
+                    fb.drawTextCentered("NO SCORES YET", kFbH / 2, 2);
                 break;
             }
 
             case GameState::QuitConfirm:
             {
                 fb.fillRect(kFbW / 2 - 36, kFbH / 2 - 12, 72, 24, 1);
-                fb.drawText("QUIT", kFbW / 2 - 22, kFbH / 2 - 6, 5);
-                fb.drawText("Y N", kFbW / 2 - 6, kFbH / 2 + 2, 4);
+                fb.drawTextCentered("QUIT", kFbH / 2 - 6, 5);
+                fb.drawTextCentered("Y N", kFbH / 2 + 2, 4);
                 break;
             }
 
             case GameState::Initials:
             {
-                fb.drawText("ENTER NAME", kFbW / 2 - 20, 18, 5);
+                fb.drawTextCentered("ENTER NAME", 18, 5);
+                // 3 slots spaced 18px apart, centered as a group.
+                const int slotStep = 18;
+                const int groupX = (kFbW - (2 * slotStep + 4)) / 2;
                 for (int i = 0; i < 3; ++i)
                 {
-                    const int x = kFbW / 2 - 24 + i * 18;
+                    const int x = groupX + i * slotStep;
                     const char letter[2] = { initials_[(size_t) i], '\0' };
                     const bool sel = (i == initialsSlot_);
                     // Draw the letter big-ish by stamping it then underlining.
@@ -901,19 +956,19 @@ namespace bombo::game
                 }
                 char sb[16];
                 fmtNum(sb, sizeof sb, "SC ", score_, 5);
-                fb.drawText(sb, kFbW / 2 - 16, kFbH - 12, 3);
+                fb.drawTextCentered(sb, kFbH - 12, 3);
                 break;
             }
 
             case GameState::GameOver:
             case GameState::Results:
             {
-                fb.drawText(victory_ ? "VICTORY" : "GAME OVER",
-                            kFbW / 2 - 18, 24, victory_ ? 5 : 4);
+                fb.drawTextCentered(victory_ ? "VICTORY" : "GAME OVER",
+                                    24, victory_ ? 5 : 4);
                 char sb[16];
                 fmtNum(sb, sizeof sb, "SC ", score_, 5);
-                fb.drawText(sb, kFbW / 2 - 16, kFbH / 2, 3);
-                fb.drawText("PRESS ENTER", kFbW / 2 - 22, kFbH - 16, 2);
+                fb.drawTextCentered(sb, kFbH / 2, 3);
+                fb.drawTextCentered("PRESS ENTER", kFbH - 16, 2);
                 break;
             }
         }
@@ -992,7 +1047,7 @@ namespace bombo::game
                 if (ch == 'A') { player_.autofireOn = ! player_.autofireOn; return true; }
                 if (ch == 'P') { togglePause(); return true; }
                 if (ch == 'H') { transitionTo(GameState::Help); return true; }
-                if (isEsc)     { requestQuit(); return true; }
+                if (isEsc)     { togglePause(); return true; }   // ESC opens the pause menu
                 return false;
             }
 
@@ -1013,7 +1068,7 @@ namespace bombo::game
                     }
                     return true;
                 }
-                if (isEsc) { requestQuit(); return true; }
+                if (isEsc) { togglePause(); return true; }   // ESC resumes from pause
                 return false;
             }
 
@@ -1039,8 +1094,8 @@ namespace bombo::game
 
             case GameState::Shop:
             {
-                if (isLeft)  { shopMoveSelection(-1); return true; }
-                if (isRight) { shopMoveSelection(+1); return true; }
+                if (isLeft || isUp)   { shopMoveSelection(-1); return true; }
+                if (isRight || isDown) { shopMoveSelection(+1); return true; }
                 if (isEnter) { shopBuySelected();     return true; }
                 if (ch == 'R') { shopReroll();        return true; }
                 if (ch == 'H') { shopUseFreeHeal();   return true; }
@@ -1051,11 +1106,21 @@ namespace bombo::game
 
             case GameState::Initials:
             {
-                if (isLeft)  { initialsCycleLetter(initialsSlot_, -1); return true; }
-                if (isRight) { initialsCycleLetter(initialsSlot_, +1); return true; }
-                if (isUp)    { initialsMoveSlot(-1); return true; }
-                if (isDown)  { initialsMoveSlot(+1); return true; }
+                // Left/Right move between the 3 slots; Up/Down scroll the
+                // alphabet at the current slot. Raw A-Z typing fills the slot
+                // and auto-advances (arcade-style). Typing owns letter keys here
+                // so it never collides with BBS shortcuts like T/F.
+                if (isLeft)  { initialsMoveSlot(-1); return true; }
+                if (isRight) { initialsMoveSlot(+1); return true; }
+                if (isUp)    { initialsCycleLetter(initialsSlot_, +1); return true; }
+                if (isDown)  { initialsCycleLetter(initialsSlot_, -1); return true; }
                 if (isEnter) { initialsConfirm();    return true; }
+                if (ch >= 'A' && ch <= 'Z')
+                {
+                    initials_[(size_t) initialsSlot_] = static_cast<char>(ch);
+                    if (initialsSlot_ < 2) ++initialsSlot_;   // auto-advance, clamp at last slot
+                    return true;
+                }
                 return false;
             }
 

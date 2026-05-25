@@ -234,6 +234,14 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::tailKillOn, 1}, "Tail Kill On", true));
 
+    // Key tracking — kick body pitch follows the MIDI note (relative to C2).
+    p.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID{pid::kbtrk, 1}, "Key Tracking", false));
+    // KBTRK target voice(s): A (sub) / B (mid) / A+B. Default A.
+    p.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{pid::kbtrkTarget, 1}, "Key Tracking Target",
+        juce::StringArray{ "A", "B", "A+B" }, 0));
+
     // Transport: loop toggle + BPM (integer, 60–300).
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::loopOn, 1}, "Loop On", false));

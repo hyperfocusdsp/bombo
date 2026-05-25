@@ -55,7 +55,11 @@ namespace bombo::game
     enum class EnemyKind : uint8_t
     {
         Mudball, Clipper, SilenceVoid, Limiter,
-        Aliaser, AliaserMini, DiveBomber, Rumblr
+        Aliaser, AliaserMini, DiveBomber, Rumblr,
+        // Extra straight-mover kinds (sprites from the sheet's spare cells).
+        // Monsters: light/fast fodder. Elites: tankier, higher score.
+        Warble, Hiss, Crackle, Wobble, Stutter,
+        Overdrive, Phaser, Flanger, Resonator
     };
 
     struct Enemy

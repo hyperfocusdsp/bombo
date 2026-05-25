@@ -96,6 +96,14 @@ namespace pid
     // tail. When OFF the deferred kill is skipped so long delay/reverb
     // tails ring naturally after one-shot edge cases.
     inline constexpr const char* tailKillOn      = "tail_kill_on";
+    // KEY TRACKING — when ON, the kick body pitch (sub + mid sweep) follows
+    // the incoming MIDI note number, transposed relative to C2 (note 36).
+    // When OFF, pitch is fixed by the PITCH params regardless of note.
+    inline constexpr const char* kbtrk           = "kbtrk";
+    // Which voice(s) KBTRK transposes: 0 = Voice A (sub) only, 1 = Voice B
+    // (mid) only, 2 = both. Default A — Voice B usually stays unpitched for a
+    // consistent punch transient.
+    inline constexpr const char* kbtrkTarget     = "kbtrk_target";
     // SECTION MUTES — click the section title strip in the UI to toggle.
     // Voice A mute silences the SUB layer; Voice B mute silences MID +
     // click + noise + sample. DRIVE mute bypasses both the per-voice

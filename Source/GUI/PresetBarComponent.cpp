@@ -186,10 +186,13 @@ void PresetBarComponent::showMenu()
 
     juce::PopupMenu m;
     const bool onUser = bank_.isCurrentUserPreset();
-    m.addItem(1, "Save",       onUser);
+    const bool hasCurrent = bank_.currentIndex() >= 0;
+    m.addItem(1, "Save",       onUser);            // overwrite needs a user file
     m.addItem(2, "Save As...");
-    m.addItem(3, "Rename...", onUser);
-    m.addItem(4, "Delete",      onUser);
+    // Rename/Delete now work on factory presets too (session-only override —
+    // used to design the final bank before baking into the source JSONs).
+    m.addItem(3, "Rename...", hasCurrent);
+    m.addItem(4, "Delete",    hasCurrent);
     m.addSeparator();
     m.addItem(5, "Init (reset to defaults)");
     m.addSeparator();
@@ -234,7 +237,7 @@ void PresetBarComponent::showMenu()
                     beginEdit(EditMode::Rename);
                     break;
                 case 4:
-                    if (bank_.isCurrentUserPreset())
+                    if (bank_.currentIndex() >= 0)
                     {
                         bank_.deleteAt(bank_.currentIndex());
                         // Re-apply whatever the bank fell back to so the

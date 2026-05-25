@@ -155,8 +155,32 @@ void PresetBank::loadFactoryFromBinaryData()
         const char* data = BinaryData::getNamedResource(e.resource, sz);
         Preset preset;
         preset.source = Source::Factory;
-        if (parseBlob(data, sz, preset))
-            presets_.push_back(std::move(preset));
+        if (! parseBlob(data, sz, preset)) continue;
+        // Apply session-only factory edits (see header): hide deleted ones,
+        // override the display name of renamed ones (keyed by canonical name).
+        if (std::find(hiddenFactoryNames_.begin(), hiddenFactoryNames_.end(),
+                      preset.name) != hiddenFactoryNames_.end())
+            continue;
+        for (const auto& r : renamedFactory_)
+            if (r.first == preset.name) { preset.displayName = r.second; break; }
+        presets_.push_back(std::move(preset));
+    }
+}
+
+void PresetBank::rebuildAll()
+{
+    juce::String anchorName;
+    if (current_ >= 0 && current_ < (int) presets_.size())
+        anchorName = juce::String(presets_[(size_t) current_].displayName);
+
+    presets_.clear();
+    loadFactoryFromBinaryData();
+    refreshUserPresets();   // appends user presets + re-anchors current_
+
+    if (anchorName.isNotEmpty())
+    {
+        current_ = findByDisplayName(anchorName);
+        if (current_ < 0) current_ = presets_.empty() ? -1 : 0;
     }
 }
 
@@ -335,7 +359,23 @@ bool PresetBank::renameAt(int idx, const juce::String& newDisplayName)
 {
     if (idx < 0 || idx >= (int) presets_.size()) return false;
     auto& p = presets_[(size_t) idx];
-    if (p.source != Source::User) return false;
+
+    // Factory presets: session-only display-name override (keyed by canonical
+    // name), since there's no file to rename. Persisted bank edit = bake source.
+    if (p.source == Source::Factory)
+    {
+        if (newDisplayName.trim().isEmpty()) return false;
+        const std::string key = p.name;
+        const std::string val = newDisplayName.toStdString();
+        bool found = false;
+        for (auto& r : renamedFactory_)
+            if (r.first == key) { r.second = val; found = true; break; }
+        if (! found) renamedFactory_.emplace_back(key, val);
+        rebuildAll();
+        current_ = findByDisplayName(newDisplayName);
+        if (current_ < 0) current_ = presets_.empty() ? -1 : 0;
+        return true;
+    }
 
     const auto safeStem = sanitizeFilename(newDisplayName);
     if (safeStem.isEmpty()) return false;
@@ -361,10 +401,20 @@ bool PresetBank::deleteAt(int idx)
 {
     if (idx < 0 || idx >= (int) presets_.size()) return false;
     auto& p = presets_[(size_t) idx];
-    if (p.source != Source::User) return false;
+    const int newCurrent = juce::jmax(0, idx - 1);
+
+    // Factory presets: session-only hide (can't remove BinaryData). Persisted
+    // bank edit = remove the entry from Resources/Presets/ and rebuild.
+    if (p.source == Source::Factory)
+    {
+        hiddenFactoryNames_.push_back(p.name);
+        rebuildAll();
+        current_ = juce::jlimit(-1, (int) presets_.size() - 1, newCurrent);
+        return true;
+    }
+
     const auto file = p.filePath;
     if (! file.deleteFile()) return false;
-    const int newCurrent = juce::jmax(0, idx - 1);
     refreshUserPresets();
     current_ = juce::jlimit(-1, (int) presets_.size() - 1, newCurrent);
     return true;

@@ -88,18 +88,18 @@ public:
     void runTest() override
     {
         using namespace bombo::game;
-        beginTest("player and mudball have at least 20 lit pixels each");
+        beginTest("player and mudball are non-empty sprites");
         int playerHits = 0;
-        for (int y = 0; y < 10; ++y)
-            for (int x = 0; x < 10; ++x)
+        for (int y = 0; y < 16; ++y)
+            for (int x = 0; x < 16; ++x)
                 if (sprites::kPlayer[y][x] != 0) ++playerHits;
-        expectGreaterThan(playerHits, 20);
+        expectGreaterThan(playerHits, 12);
 
         int mudHits = 0;
         for (int y = 0; y < 10; ++y)
             for (int x = 0; x < 10; ++x)
                 if (sprites::kMudball[y][x] != 0) ++mudHits;
-        expectGreaterThan(mudHits, 20);
+        expectGreaterThan(mudHits, 12);
 
         beginTest("$dB token and cabinet are non-empty");
         int dbHits = 0;

@@ -70,6 +70,17 @@ public:
         pLoopOn->endChangeGesture();
     }
 
+    // Toggle key-tracking (KBTRK) via the AudioParameterBool so DAW automation
+    // + the header toggle stay in sync. Bound to the editor's 'k' shortcut.
+    void toggleKbtrk()
+    {
+        if (pKbtrk == nullptr) return;
+        const bool cur = pKbtrk->get();
+        pKbtrk->beginChangeGesture();
+        pKbtrk->setValueNotifyingHost(cur ? 0.0f : 1.0f);
+        pKbtrk->endChangeGesture();
+    }
+
     // VOICE B sample slot. UI calls these on the message thread; audio
     // thread reads voiceBSample_ at trigger time only (allocator-free
     // shared_ptr copy). A juce::SpinLock guards the swap.
@@ -136,6 +147,12 @@ public:
     // fire enemy-hit / jingle / pickup sounds; processBlock mixes its output
     // into the buffer after the kick chain renders. RT-safe (see Audio.h).
     bombo::game::GameAudioBus& gameAudioBus() noexcept { return gameAudio_; }
+
+    // Set by the BBS layer while the Kick Impact game is live. When true the
+    // loop scheduler is suppressed so the on-beat background kick doesn't bleed
+    // under the game's shot/SFX audio; player shots (keyboardTriggers_) and the
+    // GameAudioBus still sound. Cleared on game exit so a running loop resumes.
+    void setGameActive(bool b) noexcept { gameActive_.store(b, std::memory_order_relaxed); }
 
     // FX chain order — DRIVE / FILTER / DELAY / REVERB in user-set sequence.
     // Lock-free atomic underneath; safe to call from any thread.
@@ -217,6 +234,11 @@ private:
     juce::AudioParameterFloat*  pLimiterAmount = nullptr;
     juce::AudioParameterBool*   pTailKillOn = nullptr;
     juce::AudioParameterBool*   pLoopOn = nullptr;
+    juce::AudioParameterBool*   pKbtrk = nullptr;
+    juce::AudioParameterChoice* pKbtrkTarget = nullptr;  // 0=A, 1=B, 2=A+B
+    // Last MIDI note seen (audio-thread only). Drives the KBTRK pitch
+    // transpose in buildTriggerFromParams. Default C2 (36) = no transpose.
+    int kbtrkLastNote_ = 36;
     juce::AudioParameterFloat*  pBpm = nullptr;
     juce::AudioParameterBool*   pVoiceAMute = nullptr;
     juce::AudioParameterBool*   pVoiceBMute = nullptr;
@@ -245,6 +267,7 @@ private:
 
     std::atomic<int> keyboardTriggers_{0};
     std::atomic<int> oneShotTriggers_{0};   // T-style: fires + arms tail kill
+    std::atomic<bool> gameActive_{ false };  // true while Kick Impact game is live
 
     // Loop scheduler state. samplesUntilLoopFire_ is the per-buffer counter
     // for free-running mode (standalone, or DAW with transport stopped).

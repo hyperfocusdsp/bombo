@@ -35,8 +35,8 @@ using namespace bombo::game;
 
 namespace
 {
-    // A run is 8 waves: W1..W7 ordinary, W8 = RUMBLR boss.
-    constexpr int kMaxWave = 8;
+    // A run is 12 waves: W1..W11 ordinary, W12 = RUMBLR boss.
+    constexpr int kMaxWave = 12;
 
     // Safety cap so a stuck run can never loop forever. A real wave lasts a few
     // dozen seconds of schedule + clear; at 60Hz this is generous headroom per

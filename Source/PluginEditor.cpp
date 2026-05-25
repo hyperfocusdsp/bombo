@@ -363,6 +363,14 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
     // no hardcoded colours; no solid-black corners; works across all themes.
     {
         juce::Graphics::ScopedSaveState ss (g);
+
+        // Don't repaint the hull over a live tooltip. tooltipWindow_ is a child
+        // of the editor, so the hull re-paint below would otherwise cover any
+        // tooltip that pops up over the bomb body. Exclude its bounds (window
+        // coords, before the design-space transform) so the tip stays visible.
+        if (tooltipWindow_.isVisible() && ! tooltipWindow_.getBounds().isEmpty())
+            g.excludeClipRegion (tooltipWindow_.getBounds());
+
         g.addTransform (fullT); // switch to design-space coords (scale + crop offset)
 
         const bombo::chassisRenderer::Ctx ctx {
@@ -745,6 +753,20 @@ bool BomboEditor::keyPressed(const juce::KeyPress& key)
     if (ch == 't')
     {
         processorRef.triggerOneShot();
+        return true;
+    }
+    // D rolls the DICE (full randomize). Gated on !bbs_.isVisible() like preset
+    // nav below: while the BBS/game is open the preset is the in-game "Pew"
+    // shot sound and randomizing it would corrupt the game audio.
+    if (ch == 'd' && ! bbs_.isVisible())
+    {
+        faceplate.rollDice();
+        return true;
+    }
+    // K toggles key-tracking (KBTRK). Mirrors the header toggle.
+    if (ch == 'k' && ! bbs_.isVisible())
+    {
+        processorRef.toggleKbtrk();
         return true;
     }
 

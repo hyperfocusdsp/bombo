@@ -24,8 +24,15 @@ namespace bombo::game
         void blitSprite(const uint8_t* data, int w, int h, int dx, int dy) noexcept;
 
         // Draw null-terminated string using the 4×5 bitmap font from SpriteData.h.
-        // Characters outside 0x20..0x7F are skipped. Stride is 4px per character.
+        // Characters outside 0x20..0x7F are skipped. Stride is 5px per character
+        // (4px glyph + 1px gap) so letters don't visually cram together.
         void drawText(const char* str, int x, int y, uint8_t idx) noexcept;
+
+        // Rendered pixel width of a string at the 5px stride (no trailing gap).
+        static int textWidth(const char* str) noexcept;
+
+        // Draw text horizontally centered on the framebuffer at row y.
+        void drawTextCentered(const char* str, int y, uint8_t idx) noexcept;
 
         // Resolve the palette-index buffer to ARGB into dst (must be kFbW×kFbH ARGB).
         void resolveToARGB(juce::Image& dst, const Palette& palette) const;

@@ -71,6 +71,8 @@ void BomboProcessor::cacheParameterPointers()
     pLimiterAmount   = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(limiterAmount));
     pTailKillOn      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(tailKillOn));
     pLoopOn          = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(loopOn));
+    pKbtrk           = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(kbtrk));
+    pKbtrkTarget     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(kbtrkTarget));
     pBpm             = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(bpm));
     pVoiceAMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceAMute));
     pVoiceBMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(voiceBMute));
@@ -165,6 +167,28 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     {
         juce::SpinLock::ScopedTryLockType lock(voiceBSampleLock_);
         if (lock.isLocked()) t.sampleBuf = voiceBSample_;
+    }
+
+    // KEY TRACKING — transpose the body pitch to follow the last MIDI note,
+    // relative to C2 (note 36). Target chooses which voice(s) track: A (sub),
+    // B (mid), or both. Default A — Voice B usually stays unpitched for a
+    // consistent punch transient. No-op when no note has played
+    // (kbtrkLastNote_ defaults to 36 → factor 1).
+    if (pKbtrk != nullptr && pKbtrk->get())
+    {
+        const float semis  = static_cast<float>(kbtrkLastNote_ - 36);
+        const float factor = std::pow(2.0f, semis / 12.0f);
+        const int target = (pKbtrkTarget != nullptr) ? pKbtrkTarget->getIndex() : 0;
+        if (target == 0 || target == 2)   // A or A+B
+        {
+            t.pitchStartHz *= factor;
+            t.pitchEndHz   *= factor;
+        }
+        if (target == 1 || target == 2)   // B or A+B
+        {
+            t.midPitchStartHz *= factor;
+            t.midPitchEndHz   *= factor;
+        }
     }
     return t;
 }
@@ -292,6 +316,10 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         const auto& msg = meta.getMessage();
         if (msg.isNoteOn())
         {
+            // Remember the note for KBTRK pitch tracking. Captured before
+            // buildTriggerFromParams() runs below so the trigger snapshot
+            // picks up this buffer's note.
+            kbtrkLastNote_ = msg.getNoteNumber();
             if (scheduled >= bombo::VoiceManager::kNumVoices) continue;
             int offset = meta.samplePosition;
             if (offset < 0) offset = 0;
@@ -327,7 +355,11 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     // Loop on: schedule extra triggers at the BPM rate. When the host is
     // playing, triggers snap to the integer PPQ grid (so they ride the
     // host's beat phase); otherwise we free-run from samplesUntilLoopFire_.
-    const bool loopNow = pLoopOn->get();
+    // Suppress the loop while the Kick Impact game is live so the on-beat
+    // background kick doesn't bleed under the game's shot/SFX audio. The
+    // loopJustTurnedOff edge below then schedules a clean tail kill on entry,
+    // and the loop resumes on game exit if pLoopOn is still set.
+    const bool loopNow = pLoopOn->get() && ! gameActive_.load(std::memory_order_relaxed);
     // Edge-detect: catch the moment the user turns loop OFF so we can
     // schedule an immediate tail-kill (within ~1 block) rather than
     // waiting a full beat for the universal deferred timer. With long

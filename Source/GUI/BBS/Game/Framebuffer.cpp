@@ -55,7 +55,7 @@ namespace bombo::game
     void Framebuffer::drawText(const char* str, int x, int y, uint8_t idx) noexcept
     {
         int cx = x;
-        for (const char* p = str; *p; ++p, cx += 4)
+        for (const char* p = str; *p; ++p, cx += 5)   // 4px glyph + 1px gap
         {
             auto c = static_cast<unsigned char>(*p);
             if (c < 32 || c > 127) continue;
@@ -67,6 +67,18 @@ namespace bombo::game
                     if (bits & (1u << row)) pset(cx + col, y + row, idx);
             }
         }
+    }
+
+    int Framebuffer::textWidth(const char* str) noexcept
+    {
+        int n = 0;
+        for (const char* p = str; *p; ++p) ++n;
+        return n > 0 ? n * 5 - 1 : 0;   // 5px stride, drop the trailing gap
+    }
+
+    void Framebuffer::drawTextCentered(const char* str, int y, uint8_t idx) noexcept
+    {
+        drawText(str, (kFbW - textWidth(str)) / 2, y, idx);
     }
 
     void Framebuffer::resolveToARGB(juce::Image& dst, const Palette& palette) const

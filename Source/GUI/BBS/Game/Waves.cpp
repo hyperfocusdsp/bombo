@@ -1,6 +1,7 @@
 // Source/GUI/BBS/Game/Waves.cpp
 #include "Waves.h"
 #include "Constants.h"
+#include <algorithm>
 #include <random>
 #include <cmath>
 
@@ -26,11 +27,25 @@ namespace bombo::game
                 case 1: return { { EnemyKind::Mudball }, 2 };
                 case 2: return { { EnemyKind::Mudball, EnemyKind::Clipper }, 2 };
                 case 3: return { { EnemyKind::Mudball, EnemyKind::Clipper, EnemyKind::DiveBomber }, 3 };
-                case 4: return { { EnemyKind::Clipper, EnemyKind::Aliaser, EnemyKind::DiveBomber }, 4 };
-                case 5: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Clipper,
-                                   EnemyKind::Limiter }, 5 };
-                case 6: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber }, 4 };
-                case 7: return { { EnemyKind::Limiter, EnemyKind::Clipper, EnemyKind::Aliaser }, 4 };
+                case 4: return { { EnemyKind::Clipper, EnemyKind::Aliaser,
+                                   EnemyKind::Warble, EnemyKind::DiveBomber }, 4 };
+                case 5: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Hiss,
+                                   EnemyKind::Limiter, EnemyKind::Crackle }, 5 };
+                case 6: return { { EnemyKind::Aliaser, EnemyKind::Warble,
+                                   EnemyKind::Wobble, EnemyKind::DiveBomber }, 4 };
+                case 7: return { { EnemyKind::Limiter, EnemyKind::Crackle,
+                                   EnemyKind::Stutter, EnemyKind::Aliaser }, 4 };
+                // W8-W11: extended late-game gauntlet. Denser formations + the new
+                // tankier ELITE kinds; the per-wave speed multiplier in
+                // scheduleWave() ramps approach speed on top of this.
+                case 8:  return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Stutter,
+                                    EnemyKind::Overdrive, EnemyKind::Clipper }, 5 };
+                case 9:  return { { EnemyKind::Aliaser, EnemyKind::Phaser,
+                                    EnemyKind::DiveBomber, EnemyKind::Wobble }, 5 };
+                case 10: return { { EnemyKind::Overdrive, EnemyKind::Flanger, EnemyKind::Aliaser,
+                                    EnemyKind::DiveBomber, EnemyKind::Limiter }, 6 };
+                case 11: return { { EnemyKind::Resonator, EnemyKind::Flanger, EnemyKind::Phaser,
+                                    EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Stutter }, 7 };
                 default: return { { EnemyKind::Mudball }, 1 };
             }
         }
@@ -47,22 +62,36 @@ namespace bombo::game
                 // Slower movers give the player room to dodge between i-frame windows
                 // even when the screen is busy -- engagement and survivability are
                 // independent once contact damage is i-frame-gated (spec §6.1).
-                case EnemyKind::Mudball:     return -28.0f;
-                case EnemyKind::Clipper:     return -45.0f;
-                case EnemyKind::SilenceVoid: return -25.0f;
-                case EnemyKind::Limiter:     return -15.0f;
-                case EnemyKind::Aliaser:     return -60.0f;
+                // Eased ~35% from the prior pass: at the corrected 60 Hz tick the
+                // old speeds left too many enemies escaping off-screen to ever
+                // clear a wave perfectly. Slower approach = a perfect run is
+                // achievable while the 12-wave length keeps it demanding.
+                case EnemyKind::Mudball:     return -18.0f;
+                case EnemyKind::Clipper:     return -30.0f;
+                case EnemyKind::SilenceVoid: return -16.0f;
+                case EnemyKind::Limiter:     return -10.0f;
+                case EnemyKind::Aliaser:     return -40.0f;
                 case EnemyKind::DiveBomber:  return  0.0f;   // tickDiveBomber drives its own x
-                default:                     return -40.0f;
+                // New monsters (light) + elites (slower, tankier).
+                case EnemyKind::Warble:      return -22.0f;
+                case EnemyKind::Hiss:        return -20.0f;
+                case EnemyKind::Crackle:     return -24.0f;
+                case EnemyKind::Wobble:      return -18.0f;
+                case EnemyKind::Stutter:     return -28.0f;
+                case EnemyKind::Overdrive:   return -14.0f;
+                case EnemyKind::Phaser:      return -16.0f;
+                case EnemyKind::Flanger:     return -14.0f;
+                case EnemyKind::Resonator:   return -12.0f;
+                default:                     return -26.0f;
             }
         }
 
         void emitFormation(std::mt19937& rng, std::vector<WaveSchedule::Event>& out,
-                           float t0, EnemyKind kind, Formation f)
+                           float t0, EnemyKind kind, Formation f, float speedMult)
         {
             std::uniform_real_distribution<float> yDist(20.0f, static_cast<float>(kFbH) - 20.0f);
             const float baseY = yDist(rng);
-            const float vx = baseVx(kind);
+            const float vx = baseVx(kind) * speedMult;
             // Limiter gets vy so its bounce/wall behaviour fires correctly.
             const float vy = (kind == EnemyKind::Limiter) ? 40.0f : 0.0f;
 
@@ -122,13 +151,20 @@ namespace bombo::game
         std::mt19937 rng(seed ^ static_cast<uint32_t>(waveIdx * 31));
         std::uniform_int_distribution<int>    fDist(0, 5);
         std::uniform_int_distribution<size_t> kDist(0, spec.pool.size() - 1);
+        // Approach-speed ramp: gentle per-wave acceleration, capped so late
+        // waves stay fast but fair. Reuses the same early-game kinds at higher
+        // speed rather than only leaning on enemy count.
+        const float speedMult = std::min(1.22f, 1.0f + 0.020f * static_cast<float>(waveIdx - 1));
+        // Tighten the inter-formation gap as waves climb (denser pressure late).
+        const float gapLo = std::max(2.6f, 3.0f - 0.04f * static_cast<float>(waveIdx - 1));
+        const float gapHi = std::max(4.8f, 6.0f - 0.07f * static_cast<float>(waveIdx - 1));
         float t = 0.0f;
         for (int i = 0; i < spec.formations; ++i)
         {
             const auto f = static_cast<Formation>(fDist(rng));
             const auto k = spec.pool[kDist(rng)];
-            emitFormation(rng, s.events, t, k, f);
-            t += std::uniform_real_distribution<float>(3.0f, 6.0f)(rng);
+            emitFormation(rng, s.events, t, k, f, speedMult);
+            t += std::uniform_real_distribution<float>(gapLo, gapHi)(rng);
         }
         return s;
     }

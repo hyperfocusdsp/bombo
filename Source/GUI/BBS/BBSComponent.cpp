@@ -104,6 +104,13 @@ void BBSComponent::show()
 
 void BBSComponent::hide()
 {
+    // Defensive: ensure the loop is never left suppressed if the BBS is closed
+    // while a game is live (otherwise SPACE only toggles the loop param with no
+    // sound until relaunch, while T still triggers — the game-active flag stuck
+    // on). exitGame() also clears it; this covers every other dismiss path.
+    if (apvts_ != nullptr)
+        static_cast<BomboProcessor&>(apvts_->processor).setGameActive(false);
+
     // Fade out 200 ms then drop visibility. Keep the intro timer running
     // until the fade is done so the scroll/intro animation doesn't freeze
     // mid-frame as it's disappearing.
@@ -219,10 +226,11 @@ bool BBSComponent::keyPressed(const juce::KeyPress& key)
 #if BOMBO_GAME_V2
         // ESC is NOT intercepted here under v2: forward it to the game so the
         // game decides what ESC means in the current state (in Playing/Boss it
-        // opens QuitConfirm; in QuitConfirm a second ESC/Y confirms quit). The
-        // game raises wantsExit_ on confirmQuit(), and timerCallback() polls
-        // that and calls exitGame() to tear the game down. Calling exitGame()
-        // directly here would skip QuitConfirm and hard-exit the run.
+        // opens the Pause menu; in Paused it resumes; the pause QUIT item leads
+        // to QuitConfirm where ESC/Y confirms quit). The game raises wantsExit_
+        // on confirmQuit(), and timerCallback() polls that and calls exitGame()
+        // to tear the game down. Calling exitGame() directly here would skip the
+        // pause/confirm flow and hard-exit the run.
         return gameV2_.handleKey(key.getKeyCode(), key.getModifiers());
 #else
         // v1 behaviour: ESC exits the game (not the whole BBS).
@@ -895,7 +903,9 @@ void BBSComponent::launchGame()
     // null-safe; if apvts_ isn't wired we just leave the SFX silent.
     if (apvts_ != nullptr)
     {
-        auto* bus = &static_cast<BomboProcessor&>(apvts_->processor).gameAudioBus();
+        auto& proc = static_cast<BomboProcessor&>(apvts_->processor);
+        proc.setGameActive(true);   // pause the loop so it doesn't bleed under game audio
+        auto* bus = &proc.gameAudioBus();
         gameV2_.onEnemyHit      = [bus](bombo::game::EnemyKind k) { bus->triggerEnemyHit(k); };
         gameV2_.onWaveClear     = [bus]                          { bus->triggerWaveClearJingle(); };
         gameV2_.onGameOverFx    = [bus](bool victory)            { bus->triggerGameOverJingle(victory); };
@@ -914,6 +924,12 @@ void BBSComponent::launchGame()
     // be reached via a mouse click (cabinet glyph) which may not have focused
     // us — grab it explicitly so arrows register no matter the launch path.
     grabKeyboardFocus();
+
+    // The game integrates with a fixed 60 Hz step (kTickDt = 1/60). The BBS
+    // timer otherwise runs at 25 Hz (40 ms, tuned for the intro/scroller), which
+    // would run the whole sim at ~42% speed. Bump to ~60 Hz while the game is
+    // live; exitGame() restores the 25 Hz BBS cadence.
+    startTimer(16);
 #else
     game_.onKick = triggerCb_;
     game_.startGame();
@@ -928,12 +944,20 @@ void BBSComponent::exitGame()
 #if BOMBO_GAME_V2
     gameV2_ = bombo::game::Game{};  // reset to Title state, clears wantsExit
 
+    // Re-enable the loop scheduler (launchGame paused it). Safe even if apvts_
+    // is the same path used for the preset restore below.
+    if (apvts_ != nullptr)
+        static_cast<BomboProcessor&>(apvts_->processor).setGameActive(false);
+
     // Restore the preset the user had before the game launched.
     if (presetBank_ != nullptr && apvts_ != nullptr && prePresetIdx_ >= 0)
     {
         presetBank_->applyByIndex(prePresetIdx_, *apvts_);
         prePresetIdx_ = -1;
     }
+
+    // Restore the 25 Hz BBS cadence (launchGame bumped it to ~60 Hz for the sim).
+    startTimer(40);
 
     screens_.transitionTo(BBSScreen::BoomFeed);
     commandBuffer_.clear();

@@ -83,11 +83,13 @@ public:
             expect(g.player().autofireOn == before);
         }
 
-        beginTest("ESC -> QuitConfirm");
+        beginTest("ESC -> Paused; ESC again resumes");
         {
             Game g; g.startNewRun(false);
             expect(send(g, KP::escapeKey));
-            expect(g.state() == GameState::QuitConfirm);
+            expect(g.state() == GameState::Paused);
+            expect(send(g, KP::escapeKey));     // ESC in Paused resumes
+            expect(g.state() == GameState::Playing);
         }
 
         beginTest("H -> Help, F charges; arrows are consumed but do NOT nudge (movement is polled)");
@@ -240,19 +242,41 @@ public:
             g.tick();   // resolveCombat -> takeHit -> lives 0 -> onGameOver
             expect(g.state() == GameState::Initials);
 
+            // New mapping: Left/Right move between slots; Up/Down scroll the
+            // alphabet at the current slot (Up = next letter).
             // Slot 0 starts at 'A'. Leave it. Move to slot 1, cycle to 'B'.
-            expect(send(g, KP::downKey));   // slot -> 1
+            expect(send(g, KP::rightKey));  // slot -> 1
             expectEquals(g.initialsSlot(), 1);
-            expect(send(g, KP::rightKey));  // 'A' -> 'B'
-            expect(send(g, KP::downKey));   // slot -> 2
-            expect(send(g, KP::rightKey));  // 'A' -> 'B'
-            expect(send(g, KP::rightKey));  // 'B' -> 'C'
+            expect(send(g, KP::upKey));     // 'A' -> 'B'
+            expect(send(g, KP::rightKey));  // slot -> 2
+            expect(send(g, KP::upKey));     // 'A' -> 'B'
+            expect(send(g, KP::upKey));     // 'B' -> 'C'
             const auto in = g.initials();
             expectEquals((int) in[0], (int) 'A');
             expectEquals((int) in[1], (int) 'B');
             expectEquals((int) in[2], (int) 'C');
             expect(send(g, KP::returnKey)); // confirm
             expect(g.state() == GameState::Results);
+        }
+
+        beginTest("typing letters fills slots and auto-advances");
+        {
+            Game g;
+            g.testSetHighScoresPath(juce::File{});
+            g.startNewRun(false);
+            g.testSetScore(99999);
+            g.testSetLives(1);
+            g.testEnemyShots().spawn(g.player().x, g.player().y, 0.0f, 0.0f, 1);
+            g.tick();
+            expect(g.state() == GameState::Initials);
+
+            expect(send(g, 'D'));   // slot 0 = D, advance -> 1
+            expect(send(g, 'A'));   // slot 1 = A, advance -> 2
+            expect(send(g, 'Z'));   // slot 2 = Z (clamped at last slot)
+            const auto in = g.initials();
+            expectEquals((int) in[0], (int) 'D');
+            expectEquals((int) in[1], (int) 'A');
+            expectEquals((int) in[2], (int) 'Z');
         }
     }
 };
@@ -353,10 +377,10 @@ public:
             check("Shop", g, GameState::Shop);
         }
 
-        // Boss.
+        // Boss (clearing the last normal wave, kBossWave-1 == 11, enters boss).
         {
             Game g; g.startNewRun(false);
-            g.testSetCurrentWave(7); g.testForceWaveClear(); g.tick();
+            g.testSetCurrentWave(11); g.testForceWaveClear(); g.tick();
             int guard = 0;
             while (g.state() == GameState::WaveClear && guard++ < 1000) g.tick();
             check("Boss", g, GameState::Boss);

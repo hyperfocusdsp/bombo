@@ -99,13 +99,15 @@ public:
     // state. No-op + returns false if current is factory.
     bool overwriteCurrent(juce::AudioProcessorValueTreeState& apvts);
 
-    // Rename the user preset at idx. No-op + returns false if idx points
-    // to a factory preset, the new name sanitizes to empty, or the new
-    // file already exists.
+    // Rename the preset at idx. User presets rename their on-disk file.
+    // Factory presets (compiled-in, no file) are renamed for the SESSION only
+    // via an in-memory override — used to design the final factory bank, which
+    // is then baked into Resources/Presets/*.json and rebuilt to lock it.
     bool renameAt(int idx, const juce::String& newDisplayName);
 
-    // Delete the user preset at idx. No-op + returns false for factory.
-    // current_ snaps to idx-1 (or 0) after deletion.
+    // Delete the preset at idx. User presets delete their on-disk file.
+    // Factory presets are HIDDEN for the SESSION only (can't remove BinaryData);
+    // resets on plugin reload. current_ snaps to idx-1 (or 0) after deletion.
     bool deleteAt(int idx);
 
     // Cross-platform location for user-written presets. Created lazily.
@@ -114,10 +116,17 @@ public:
 
 private:
     void loadFactoryFromBinaryData();
+    void rebuildAll();   // factory (with session overrides) + user, re-anchored
     int  findByDisplayName(const juce::String& name) const;
 
     std::vector<Preset> presets_;
     int                 current_ = -1;
+
+    // SESSION-only factory edits (factory presets are compiled-in, so these
+    // can't persist across a plugin reload). Used to design the final factory
+    // bank before baking it into the source JSONs. Keyed by canonical `name`.
+    std::vector<std::string>                         hiddenFactoryNames_;
+    std::vector<std::pair<std::string, std::string>> renamedFactory_;
 };
 
 } // namespace bombo

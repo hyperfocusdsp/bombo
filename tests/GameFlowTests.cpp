@@ -84,16 +84,16 @@ public:
             expectEquals(g.currentWave(), 2);
         }
 
-        beginTest("W7 clear -> Boss state with a Rumblr enemy spawned");
+        beginTest("W11 clear -> Boss state with a Rumblr enemy spawned");
         {
             Game g;
             g.startNewRun(false);
-            g.testSetCurrentWave(7);
+            g.testSetCurrentWave(11);
             g.testForceWaveClear();
             g.tick();
             runWaveClearFlash(g);
             expect(g.state() == GameState::Boss);
-            expectEquals(g.currentWave(), 8);
+            expectEquals(g.currentWave(), 12);
             expectEquals(countActiveEnemies(g.enemies(), EnemyKind::Rumblr), 1);
         }
 
@@ -102,7 +102,7 @@ public:
             Game g;
             g.startNewRun(false);
             g.testSetHighScoresPath(juce::File{});   // in-memory: always qualifies-> Initials? no, empty table qualifies
-            g.testSetCurrentWave(7);
+            g.testSetCurrentWave(11);
             g.testForceWaveClear();
             g.tick();
             runWaveClearFlash(g);

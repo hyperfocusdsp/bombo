@@ -25,6 +25,7 @@ class BpmDisplay;
 class BalanceFader;
 class DiceButton;
 class LoopButton;
+class KbtrkButton;
 
 // Bombo faceplate. Four bands stacked top-to-bottom:
 //   1. Header  — BOMBO logo, DICE/LIM/LOOP/BPM pills (always-visible, no pages)
@@ -117,6 +118,10 @@ public:
     // need direct access to the private scope_ member.
     void flashScopeResetConfirmation() { scope_.showResetConfirmation(); }
     void refreshPresetBar() { if (presetBar_) presetBar_->refresh(); }
+
+    // Trigger the DICE (randomize) as if clicked — used by the editor's `d`
+    // keyboard shortcut so the face rotates and randomize fires together.
+    void rollDice();
 
     // Inner chassis rectangle in faceplate design-space coordinates (pre-scale).
     // BomboEditor multiplies by the active scale transform to get editor-space bounds.
@@ -305,6 +310,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tailAtt_;
     std::unique_ptr<LoopButton>         loopBtn_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> loopAtt_;
+    std::unique_ptr<KbtrkButton>        kbtrkBtn_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> kbtrkAtt_;
     // Voice B synth-layer gate — small ramp-down-icon pill sits inside
     // the VOICE B section title bar (right-aligned). ON = synth active
     // (legacy behaviour, default); OFF = sample-only Voice B.

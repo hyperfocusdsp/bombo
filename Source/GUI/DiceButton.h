@@ -106,10 +106,14 @@ public:
     void mouseEnter(const juce::MouseEvent&) override { repaint(); }
     void mouseExit (const juce::MouseEvent&) override { repaint(); }
 
-    void mouseDown(const juce::MouseEvent&) override
+    void mouseDown(const juce::MouseEvent&) override { roll(); }
+
+    // Roll the face + fire onClick. Shared by the mouse click and the editor's
+    // `d` keyboard shortcut so both give identical visual + audio feedback.
+    void roll()
     {
-        // Roll the face — pick a new value different from the current one
-        // so users always see "something happened" on click.
+        // Pick a new value different from the current one so users always see
+        // "something happened".
         int next = face_;
         while (next == face_) next = 1 + rng_.nextInt(6);
         face_ = next;

@@ -8,6 +8,7 @@
 #include "Colours.h"
 #include "DiceButton.h"
 #include "LoopButton.h"
+#include "KbtrkButton.h"
 #include "Fonts.h"
 #include "HeaderRenderer.h"
 #include "RoutedDecayKnob.h"
@@ -126,6 +127,11 @@ void FaceplatePanel::setPresetBank(PresetBank& bank)
     presetBar_ = std::make_unique<PresetBarComponent>(bank, apvts_);
     addAndMakeVisible(*presetBar_);
     if (! getBounds().isEmpty()) resized();
+}
+
+void FaceplatePanel::rollDice()
+{
+    if (diceButton_ != nullptr) diceButton_->roll();
 }
 
 void FaceplatePanel::setThemeStrip(juce::Component* strip)
@@ -335,6 +341,42 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     loopAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts_, pid::loopOn, *loopBtn_);
     addAndMakeVisible(*loopBtn_);
+
+    // KBTRK square toggle — kick body pitch follows the MIDI note. Also bound
+    // to the editor's 'k' shortcut.
+    kbtrkBtn_ = std::make_unique<KbtrkButton>();
+    kbtrkBtn_->setWantsKeyboardFocus(false);
+    kbtrkBtn_->setMouseClickGrabsKeyboardFocus(false);
+    kbtrkBtn_->setTooltip("Key tracking - kick body pitch follows the MIDI note "
+                          "(relative to C2). Off = fixed pitch. Shortcut: K");
+    kbtrkAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        apvts_, pid::kbtrk, *kbtrkBtn_);
+    addAndMakeVisible(*kbtrkBtn_);
+
+    // Right-click the KBTRK square to choose which voice(s) track the note
+    // (A / B / A+B). Left-click still toggles via the ButtonAttachment above.
+    if (auto* tp = dynamic_cast<juce::AudioParameterChoice*>(apvts_.getParameter(pid::kbtrkTarget)))
+    {
+        kbtrkBtn_->getTarget = [tp] { return tp->getIndex(); };
+        auto* btn = kbtrkBtn_.get();
+        kbtrkBtn_->onContextMenu = [tp, btn]
+        {
+            juce::PopupMenu m;
+            const int cur = tp->getIndex();
+            m.addItem(1, "Track Voice A (sub)", true, cur == 0);
+            m.addItem(2, "Track Voice B (mid)", true, cur == 1);
+            m.addItem(3, "Track A + B",         true, cur == 2);
+            m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(btn),
+                [tp, btn](int choice)
+                {
+                    if (choice <= 0) return;
+                    tp->beginChangeGesture();
+                    tp->setValueNotifyingHost(tp->convertTo0to1((float) (choice - 1)));
+                    tp->endChangeGesture();
+                    btn->repaint();
+                });
+        };
+    }
 
     // ── Voice B synth-layer toggle (ramp-down icon pill) ──────────
     // Lives inside the VOICE B section title bar (resized() positions it
@@ -1189,6 +1231,11 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
         // DICE is square - centre it vertically in the pill height
         const int diceY = row1Y + (kPillH - kSq) / 2;
         if (diceButton_) diceButton_->setBounds(lx,           diceY, kSq,    kSq);
+
+        // Row 2 (mirrors the right fin's second row): KBTRK square toggle,
+        // centred under the BNC+DICE pair on the left fin.
+        const int kbtrkY = row2Y + (kPillH - kSq) / 2;
+        if (kbtrkBtn_) kbtrkBtn_->setBounds(leftFinCx - kSq / 2, kbtrkY, kSq, kSq);
     }
 
     // ── Right fin: row1 LIM+TAIL, row2 LOOP-icon+BPM ─────────────────
