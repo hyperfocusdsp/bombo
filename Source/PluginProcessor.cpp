@@ -18,6 +18,16 @@ BomboProcessor::BomboProcessor()
 void BomboProcessor::cacheParameterPointers()
 {
     using namespace bombo::pid;
+
+    // MIDI-learn table: every host-automatable RangedAudioParameter, in a
+    // stable order. Index into learnParams_ IS the MidiLearn param index;
+    // persistence maps that index <-> the stable paramID so saved CC bindings
+    // survive parameter reordering between builds.
+    learnParams_.clear();
+    for (auto* p : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(p))
+            learnParams_.push_back(rp);
+
     pMasterOut     = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(masterOut));
     pWaveform      = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(waveform));
     pPitchStart    = dynamic_cast<juce::AudioParameterFloat*> (apvts.getParameter(pitchStart));
@@ -327,6 +337,16 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             if (offset > bufSamples) offset = bufSamples;
             voiceMgr_.pushPending(offset);
             ++scheduled;
+        }
+        else if (msg.isController())
+        {
+            // MIDI Learn: when armed, the first CC binds; otherwise a mapped
+            // CC drives its param. setValueNotifyingHost is the standard MIDI
+            // -> param path (host gets the change + automation follows).
+            const int pidx = midiLearn_.handleCc(msg.getControllerNumber());
+            if (pidx >= 0 && pidx < (int) learnParams_.size())
+                learnParams_[(std::size_t) pidx]
+                    ->setValueNotifyingHost((float) msg.getControllerValue() / 127.0f);
         }
     }
 
@@ -1001,6 +1021,31 @@ int BomboProcessor::voiceBSampleIndex() const
     return voiceBFolderIndex_;
 }
 
+void BomboProcessor::midiArmLearn(const juce::String& paramId)
+{
+    midiLearn_.arm(paramId.isEmpty() ? bombo::MidiLearn::kNone
+                                     : indexForParamId(paramId));
+}
+
+void BomboProcessor::midiForget(const juce::String& paramId)
+{
+    const int idx = indexForParamId(paramId);
+    if (idx >= 0) { midiLearn_.forgetParam(idx); midiLearn_.markDirty(); }
+}
+
+int BomboProcessor::midiCcForParam(const juce::String& paramId) const
+{
+    const int idx = indexForParamId(paramId);
+    return idx >= 0 ? midiLearn_.ccForParam(idx) : -1;
+}
+
+juce::String BomboProcessor::midiArmedParamId() const
+{
+    const int a = midiLearn_.armedParam();
+    return (a >= 0 && a < (int) learnParams_.size())
+        ? learnParams_[(std::size_t) a]->getParameterID() : juce::String();
+}
+
 void BomboProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     // Stamp the sample path AND folder context onto the APVTS tree as a
@@ -1035,6 +1080,20 @@ void BomboProcessor::getStateInformation(juce::MemoryBlock& destData)
         for (auto f : order) parts.add(bombo::fxIdToString(f));
         child.setProperty("order", parts.joinIntoString(","), nullptr);
     }
+    // MIDI Learn map — CC bindings keyed by stable paramID so they survive
+    // parameter reordering. Lives on the state tree (DAW state); presets never
+    // touch this child, so loading a preset never remaps the user's hardware.
+    {
+        auto child = apvts.state.getOrCreateChildWithName("MidiLearn", nullptr);
+        child.removeAllProperties(nullptr);
+        for (int i = 0; i < (int) learnParams_.size(); ++i)
+        {
+            const int cc = midiLearn_.ccForParam(i);
+            if (cc >= 0)
+                child.setProperty(learnParams_[(std::size_t) i]->getParameterID(),
+                                  cc, nullptr);
+        }
+    }
     if (auto xml = apvts.state.createXml())
         copyXmlToBinary(*xml, destData);
 }
@@ -1062,6 +1121,20 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
                 for (int i = 0; i < 4; ++i)
                     ok = ok && bombo::fxIdFromString(parts[i], o[(std::size_t) i]);
                 if (ok) chain_.setFxOrder(o);  // setFxOrder re-validates
+            }
+        }
+
+        // Restore MIDI Learn bindings (paramID -> CC). Legacy state has no
+        // MidiLearn child — the map just stays empty.
+        midiLearn_.clear();
+        if (auto mlNode = apvts.state.getChildWithName("MidiLearn"); mlNode.isValid())
+        {
+            for (int i = 0; i < mlNode.getNumProperties(); ++i)
+            {
+                const auto id  = mlNode.getPropertyName(i);
+                const int  cc  = (int) mlNode.getProperty(id);
+                const int  idx = indexForParamId(id.toString());
+                if (idx >= 0) midiLearn_.bind(cc, idx);
             }
         }
 

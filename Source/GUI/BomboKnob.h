@@ -1,6 +1,11 @@
 #pragma once
 
+#include <functional>
+
 #include <juce_gui_basics/juce_gui_basics.h>
+
+#include "Colours.h"
+#include "Fonts.h"
 
 namespace bombo
 {
@@ -54,6 +59,45 @@ public:
         setMouseDragSensitivity(240);
     }
 
+    // MIDI Learn badge state — pushed by the editor's timer. cc < 0 means
+    // unmapped; armed = this knob is waiting to bind the next CC.
+    void setMidiBadge(int cc, bool armed)
+    {
+        if (cc == midiCc_ && armed == midiArmed_) return;
+        midiCc_ = cc;
+        midiArmed_ = armed;
+        repaint();
+    }
+
+    // Set by the construction site (FaceplatePanel::addKnob) to a closure that
+    // pops the right-click menu (MIDI Learn / Forget / reset / type value).
+    // When set, it REPLACES JUCE's built-in slider popup.
+    std::function<void()> onContextMenu;
+
+    void paint(juce::Graphics& g) override
+    {
+        juce::Slider::paint(g);   // L&F draws the rotary
+
+        if (midiArmed_)
+        {
+            // Pulsing-intent ring while waiting to bind.
+            g.setColour(col::accentAmber().withAlpha(0.9f));
+            g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 4.0f, 1.5f);
+        }
+        if (midiCc_ >= 0)
+        {
+            // Small "CCnn" tab, top-right corner.
+            auto b = getLocalBounds();
+            const int w = 22, h = 9;
+            juce::Rectangle<int> tab(b.getRight() - w, b.getY(), w, h);
+            g.setColour(col::accentAmber().withAlpha(0.85f));
+            g.fillRoundedRectangle(tab.toFloat(), 2.0f);
+            g.setColour(col::graphite());
+            g.setFont(fonts::label(7.0f));
+            g.drawText("CC" + juce::String(midiCc_), tab, juce::Justification::centred);
+        }
+    }
+
     void mouseEnter(const juce::MouseEvent& e) override
     {
         juce::Slider::mouseEnter(e);
@@ -81,6 +125,13 @@ public:
                 setValue(getDoubleClickReturnValue(), juce::sendNotificationSync);
                 return;  // skip base mouseDown — no drag should follow
             }
+        }
+        // Right-click / popup: show our custom menu (MIDI Learn + reset +
+        // type value) instead of JUCE's built-in slider popup.
+        if ((e.mods.isRightButtonDown() || e.mods.isPopupMenu()) && onContextMenu)
+        {
+            onContextMenu();
+            return;
         }
         // Hide the cursor for the duration of the drag so it feels like
         // turning a physical knob instead of dragging a pointer up a screen.
@@ -116,6 +167,8 @@ public:
 private:
     juce::Point<int> dragStartScreenPos_;
     bool             cursorHidden_ = false;
+    int              midiCc_    = -1;     // mapped CC (0..127) or -1
+    bool             midiArmed_ = false;  // waiting to bind the next CC
 
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BomboKnob)

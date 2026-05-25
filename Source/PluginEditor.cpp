@@ -194,6 +194,16 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     faceplate.setNoseForceResetCallback([this]() { resetBbsProgression(); });
     faceplate.onRackBoundsChanged = [this]() { updateBbsBounds(); };
 
+    // MIDI Learn — route the panel's knob menu through to the processor, and
+    // poll the map at ~10 Hz so a CC bound on the audio thread lights its badge.
+    faceplate.midiLearnRequest    = [this](const juce::String& id) { processorRef.midiArmLearn(id); };
+    faceplate.midiForget          = [this](const juce::String& id) { processorRef.midiForget(id); };
+    faceplate.getMidiCc           = [this](const juce::String& id) { return processorRef.midiCcForParam(id); };
+    faceplate.getMidiArmedParam   = [this]()                       { return processorRef.midiArmedParamId(); };
+    midiBadgeTimer_.fn = [this] { faceplate.refreshMidiBadges(); };
+    midiBadgeTimer_.startTimerHz(10);
+    faceplate.refreshMidiBadges();
+
     // Layout-edit overlay — ported from an earlier project. F2 / Ctrl+Shift+E
     // toggles. Sits between faceplate and bbs_ in z-order so it doesn't
     // bleed through the BBS overlay.

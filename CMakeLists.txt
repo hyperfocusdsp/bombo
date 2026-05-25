@@ -245,6 +245,7 @@ if(BOMBO_BUILD_TESTS)
         tests/GameInputTests.cpp
         tests/GameDiscoveryTests.cpp
         tests/GameAudioTests.cpp
+        tests/MidiLearnTests.cpp
         Source/GUI/BBS/Game/Palette.cpp
         Source/GUI/BBS/Game/Framebuffer.cpp
         Source/GUI/BBS/Game/Entities.cpp

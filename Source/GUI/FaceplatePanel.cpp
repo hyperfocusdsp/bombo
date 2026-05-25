@@ -492,6 +492,9 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
     addAndMakeVisible(*c->slider);
     addAndMakeVisible(*c->label);
     Control* raw = c.get();
+    raw->paramId = paramId;
+    if (auto* bk = dynamic_cast<bombo::BomboKnob*>(raw->slider.get()))
+        bk->onContextMenu = [this, raw] { showKnobMenu(*raw); };
     s.controls.push_back(std::move(c));
     return raw;
 }
@@ -550,6 +553,9 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
     addAndMakeVisible(*c->slider);
     addAndMakeVisible(*c->label);
     Control* raw = c.get();
+    raw->paramId = paramId;
+    if (auto* bk = dynamic_cast<bombo::BomboKnob*>(raw->slider.get()))
+        bk->onContextMenu = [this, raw] { showKnobMenu(*raw); };
     s.controls.push_back(std::move(c));
     return raw;
 }
@@ -1210,6 +1216,58 @@ void FaceplatePanel::layoutSection(Section& s)
         }
         y += rowH;
     }
+}
+
+void FaceplatePanel::showKnobMenu(Control& c)
+{
+    auto* bk = dynamic_cast<bombo::BomboKnob*>(c.slider.get());
+    if (bk == nullptr) return;
+
+    const juce::String pid = c.paramId;
+    const int  cc    = getMidiCc ? getMidiCc(pid) : -1;
+    const bool armed = getMidiArmedParam && getMidiArmedParam() == pid;
+
+    juce::PopupMenu m;
+    m.addItem(1, armed ? "Cancel MIDI Learn" : "MIDI Learn");
+    if (cc >= 0) m.addItem(2, "Forget CC " + juce::String(cc));
+    m.addSeparator();
+    if (bk->isDoubleClickReturnEnabled()) m.addItem(3, "Reset to default");
+    m.addItem(4, "Type value...");
+
+    m.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(bk),
+        [this, pid, bk](int r)
+        {
+            switch (r)
+            {
+                case 1:  // toggle arm/disarm
+                    if (midiLearnRequest)
+                    {
+                        const bool nowArmed = getMidiArmedParam && getMidiArmedParam() == pid;
+                        midiLearnRequest(nowArmed ? juce::String() : pid);
+                    }
+                    refreshMidiBadges();
+                    break;
+                case 2:  if (midiForget) midiForget(pid); refreshMidiBadges(); break;
+                case 3:  if (bk->isDoubleClickReturnEnabled())
+                             bk->setValue(bk->getDoubleClickReturnValue(),
+                                          juce::sendNotificationSync);
+                         break;
+                case 4:  bk->showTextBox(); break;
+                default: break;
+            }
+        });
+}
+
+void FaceplatePanel::refreshMidiBadges()
+{
+    const juce::String armedId = getMidiArmedParam ? getMidiArmedParam() : juce::String();
+    for (auto& s : sections_)
+        for (auto& c : s.controls)
+            if (auto* bk = dynamic_cast<bombo::BomboKnob*>(c->slider.get()))
+            {
+                const int cc = getMidiCc ? getMidiCc(c->paramId) : -1;
+                bk->setMidiBadge(cc, armedId.isNotEmpty() && armedId == c->paramId);
+            }
 }
 
 void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)

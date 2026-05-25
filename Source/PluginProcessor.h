@@ -14,6 +14,7 @@
 #include "GUI/WaveBuffer.h"
 #include "State/PresetBank.h"
 #include "State/PersistentState.h"
+#include "State/MidiLearn.h"
 #include "GUI/BBS/ProgressionManager.h"
 #include "GUI/BBS/Game/Audio.h"
 
@@ -170,6 +171,17 @@ public:
         presetTailResetPending_.store(true, std::memory_order_release);
     }
 
+    // ── MIDI Learn ──────────────────────────────────────────────────
+    // Right-click a knob to arm; the next CC binds and thereafter drives the
+    // param. The CC<->param map persists in the APVTS state tree (DAW state)
+    // and is excluded from presets. All lock-free — see State/MidiLearn.h.
+    void midiArmLearn(const juce::String& paramId);   // arm (or disarm if "")
+    void midiForget(const juce::String& paramId);     // drop this param's CC
+    int  midiCcForParam(const juce::String& paramId) const;  // 0..127 or -1
+    juce::String midiArmedParamId() const;            // "" if nothing armed
+    // GUI timer polls this after an audio-thread bind to refresh badges.
+    bool consumeMidiMapDirty() noexcept { return midiLearn_.consumeDirty(); }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -258,6 +270,19 @@ private:
 
     bombo::RumbleChain chain_{ 48000.0f };
     bombo::StereoFinalizer stereoFin_;
+
+    // MIDI Learn map + the stable param-index table it indexes into. Built in
+    // cacheParameterPointers() from every RangedAudioParameter; index == slot
+    // in learnParams_. Persistence (get/setStateInformation) maps index<->ID.
+    bombo::MidiLearn midiLearn_;
+    std::vector<juce::RangedAudioParameter*> learnParams_;
+    int indexForParamId(const juce::String& id) const noexcept
+    {
+        for (int i = 0; i < (int) learnParams_.size(); ++i)
+            if (learnParams_[(std::size_t) i]->getParameterID() == id) return i;
+        return bombo::MidiLearn::kNone;
+    }
+
     bombo::ChainParams chainParams_{}; // Phase 1b: defaults only; APVTS wiring lands in Phase 2.
 
     // Set by requestPresetTailReset() from the message thread; consumed at

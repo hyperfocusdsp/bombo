@@ -103,6 +103,16 @@ public:
     std::function<void()>    onNoseActivated;
     std::function<void(int)> onNoseGlitchTap;
 
+    // MIDI Learn — wired by BomboEditor to BomboProcessor (panel stays free of
+    // the processor header, same pattern as the other callbacks above).
+    std::function<void(const juce::String&)> midiLearnRequest;   // arm paramId
+    std::function<void(const juce::String&)> midiForget;         // drop its CC
+    std::function<int(const juce::String&)>  getMidiCc;          // cc or -1
+    std::function<juce::String()>            getMidiArmedParam;  // "" if none
+    // Push current MIDI map state onto every knob's badge. Editor calls this
+    // on its UI timer (and after a learn completes).
+    void refreshMidiBadges();
+
     // Fired at the end of resized() so BomboEditor can re-sync the BBS
     // overlay bounds whenever the layout editor moves/resizes the rack.
     std::function<void()> onRackBoundsChanged;
@@ -161,6 +171,7 @@ private:
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>   sAtt;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> cAtt;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>   bAtt;
+        juce::String paramId;   // APVTS id this control drives (for MIDI Learn)
 
         // Out-of-line ctor/dtor so unique_ptr<SampleSlotWidget> can stay
         // a forward-declaration here — libc++ instantiates default_delete's
@@ -194,6 +205,9 @@ private:
                             juce::Colour labelColour, const juce::String& tooltip = {});
     Control* addSampleSlot (Section& s, const juce::String& displayName,
                             juce::Colour labelColour);
+
+    // Right-click menu for a knob: MIDI Learn / Forget CC + reset + type value.
+    void showKnobMenu(Control& c);
 
     // Standalone control creators (not bound to a Section).
     std::unique_ptr<Control> makeBoundKnob(const juce::String& paramId,

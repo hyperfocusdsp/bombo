@@ -30,6 +30,16 @@ public:
     void timerCallback() override;
 
 private:
+    // Periodic UI poll, separate from the one-shot glitch Timer the editor
+    // itself uses. Refreshes MIDI-learn knob badges so a CC bound on the audio
+    // thread shows up on the knob within ~100 ms.
+    struct LambdaTimer : juce::Timer
+    {
+        std::function<void()> fn;
+        void timerCallback() override { if (fn) fn(); }
+    };
+    LambdaTimer midiBadgeTimer_;
+
     BomboProcessor& processorRef;
     bombo::BomboLookAndFeel lnf;
     // Tooltip window — picks up `setTooltip(...)` calls from any child
