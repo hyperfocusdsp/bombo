@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 #include "Parameters.h"        // createParameterLayout (heavy include, .cpp-only)
 #include "DSP/SampleSlot.h"
+#include "DSP/LoopSeam.h"      // applyLoopSeamFade — loop-cache seam declick
 #include <BinaryData.h>        // factory WAV bank baked in by juce_add_binary_data
 #include <algorithm>
 #include <numeric>
@@ -586,6 +587,17 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
                     loopCache_.capturing = false;
                     loopCache_.valid     = true;
                     loopCache_.readPos   = loopCache_.beatSamples;  // wait for next trig
+
+                    // Seam declick — see LoopSeam.h. The captured beat
+                    // starts just after killTail() (quiet onset at buf[0])
+                    // but ends mid-tail (loud with a long reverb). The hard
+                    // replay wrap buf[last] -> buf[0] would click on every
+                    // beat after the first; the raised-cosine fade-to-zero
+                    // on the tail end mirrors the per-kick TAIL-ON chop the
+                    // live signal applies between beats.
+                    bombo::applyLoopSeamFade(loopCache_.buf,
+                                             loopCache_.beatSamples,
+                                             currentSampleRate_);
                 }
             }
             else if (loopCache_.valid

@@ -23,6 +23,7 @@
 #include "DSP/ConvolutionReverb.h"
 #include "DSP/IRBank.h"
 #include "DSP/RumbleChain.h"
+#include "DSP/LoopSeam.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 
 #include <cmath>
@@ -1534,10 +1535,101 @@ public:
     }
 };
 
+// Loop-cache seam declick — guards the 2026-05-25 reverb-loop click fix.
+// The cache replays a one-beat buffer whose end holds a loud reverb tail
+// while its start is a near-silent attack onset; the raw wrap is a click
+// on every beat after the first. applyLoopSeamFade fades the tail end to
+// zero so the wrap is continuous.
+class LoopSeamTests : public juce::UnitTest
+{
+public:
+    LoopSeamTests() : juce::UnitTest("LoopSeam: seam declick") {}
+
+    void runTest() override
+    {
+        const float sr = 48000.0f;
+        const int   beatSamples = static_cast<int>(0.4286f * sr);  // ~140 BPM
+
+        auto makeBeat = [&] () {
+            juce::AudioBuffer<float> b(2, beatSamples);
+            // Quiet attack onset at the head (ramps up over 2 ms),
+            // loud sustained "reverb tail" filling the rest — exactly the
+            // capture shape: buf[0] ~ 0, buf[last] ~ loud.
+            const int atk = static_cast<int>(0.002f * sr);
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < beatSamples; ++i)
+                {
+                    float v = (i < atk) ? (float) i / (float) atk : 0.8f;
+                    b.setSample(ch, i, v);
+                }
+            return b;
+        };
+
+        beginTest("raw wrap has a large discontinuity (the bug)");
+        {
+            auto b = makeBeat();
+            const float wrapStep = std::abs(b.getSample(0, beatSamples - 1)
+                                          - b.getSample(0, 0));
+            expect(wrapStep > 0.5f,
+                   "test setup: loud tail -> quiet onset step should be large, got "
+                   + juce::String(wrapStep, 4));
+        }
+
+        beginTest("applyLoopSeamFade removes the wrap discontinuity");
+        {
+            auto b = makeBeat();
+            bombo::applyLoopSeamFade(b, beatSamples, sr);
+            // After the fade, buf[last] is ~0, so the wrap to buf[0] (~0)
+            // is continuous.
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                const float wrapStep = std::abs(b.getSample(ch, beatSamples - 1)
+                                              - b.getSample(ch, 0));
+                expect(wrapStep < 0.01f,
+                       "seam wrap step must be near zero post-fade, got "
+                       + juce::String(wrapStep, 6));
+            }
+        }
+
+        beginTest("fade only touches the tail, leaves the body intact");
+        {
+            auto b = makeBeat();
+            const int fade = juce::jlimit(1, beatSamples / 4,
+                                          static_cast<int>(0.010f * sr));
+            bombo::applyLoopSeamFade(b, beatSamples, sr);
+            // A sample well before the fade region is untouched.
+            const int probe = beatSamples - fade - 100;
+            expect(probe > 0 && std::abs(b.getSample(0, probe) - 0.8f) < 1e-6f,
+                   "body sample before fade region must be unchanged");
+            // The fade is monotonic non-increasing across its span.
+            float prev = 1e9f;
+            bool monotonic = true;
+            for (int i = beatSamples - fade; i < beatSamples; ++i)
+            {
+                const float s = b.getSample(0, i);
+                if (s > prev + 1e-6f) monotonic = false;
+                prev = s;
+            }
+            expect(monotonic, "fade ramp must be monotonic non-increasing");
+        }
+
+        beginTest("degenerate inputs are safe no-ops");
+        {
+            juce::AudioBuffer<float> tiny(2, 1);
+            tiny.setSample(0, 0, 0.5f); tiny.setSample(1, 0, 0.5f);
+            bombo::applyLoopSeamFade(tiny, 1, sr);          // beatSamples<=1
+            bombo::applyLoopSeamFade(tiny, 1, 0.0f);        // sr<=0
+            expect(std::abs(tiny.getSample(0, 0) - 0.5f) < 1e-9f,
+                   "no-op on degenerate input");
+        }
+    }
+};
+
 // Static test instances -- JUCE finds them via the UnitTest registry.
 // Palette/ThemeProvider tests live in tests/PaletteTests.cpp, which is
 // compiled as its own translation unit (see CMakeLists.txt) and registers
 // its own static UnitTest instances in an anonymous namespace.
+static LoopSeamTests    loopSeamTests;
 static VoiceClipTests   voiceClipTests;
 static MasterBusTests   masterBusTests;
 static AmpEnvelopeTests ampEnvelopeTests;
