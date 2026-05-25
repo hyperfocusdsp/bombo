@@ -7,9 +7,11 @@
 namespace bombo
 {
 
-// Small downward triangle toggle for the reverse-bass duck on Voice A
-// ("pull down" = duck). Lives at the bottom of the VOICE A column. Filled
-// accent when ON, faint accent outline when OFF; brightens on hover.
+// Reverse-bass duck toggle for Voice A — a right-triangle wedge that fills the
+// corner under the VOICE A column: horizontal top edge (along the rack
+// bottom), vertical right edge, and a hypotenuse running top-left -> bottom-
+// right along the bomb body's angled side. Filled accent when ON, faint accent
+// outline when OFF; brightens on hover.
 class DuckTriangleButton : public juce::ToggleButton
 {
 public:
@@ -17,14 +19,14 @@ public:
 
     void paintButton(juce::Graphics& g, bool, bool) override
     {
-        const auto r   = getLocalBounds().toFloat().reduced(1.0f);
+        const auto r   = getLocalBounds().toFloat();
         const bool on  = getToggleState();
         const bool hot = isMouseOverOrDragging();
 
-        juce::Path tri;  // apex points down
-        tri.addTriangle(r.getX(),        r.getY(),
-                        r.getRight(),    r.getY(),
-                        r.getCentreX(),  r.getBottom());
+        juce::Path tri;  // right angle at top-right; hypotenuse = body side
+        tri.addTriangle(r.getX(),     r.getY(),        // top-left
+                        r.getRight(), r.getY(),        // top-right (right angle)
+                        r.getRight(), r.getBottom());  // bottom-right
 
         const auto accent = col::accentAmber();
         if (on)

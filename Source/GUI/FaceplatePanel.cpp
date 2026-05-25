@@ -1136,13 +1136,16 @@ void FaceplatePanel::resized()
     // column (under SUB HP). Draggable for fine alignment.
     if (duckAPill_ && ! sections_.empty())
     {
-        constexpr int kTriW = 16, kTriH = 11;
+        constexpr int kTriW = 27, kTriH = 58;
         bool placed = false;
         for (const auto& s : sections_)
         {
             if (s.mutePid != pid::voiceAMute) continue;
-            const int x = s.rectBounds.getCentreX() - kTriW / 2;
-            const int y = s.rectBounds.getBottom() - kTriH - 2;
+            // Below the rack (clear of the SUB HP label), tucked into the body
+            // wedge at the left of the VOICE A column. Tall + narrow so the
+            // hypotenuse follows the bomb body's steep angled side.
+            const int x = s.rectBounds.getX() + 23;  // shift onto the body edge
+            const int y = s.rectBounds.getBottom() + 2;
             duckAPill_->setBounds(layout_.boundsOr("duckTriangle",
                                   juce::Rectangle<int>(x, y, kTriW, kTriH)));
             duckAPill_->setVisible(true);
