@@ -20,6 +20,20 @@ else()
     FetchContent_MakeAvailable(JUCE)
 endif()
 
+# CLAP support via clap-juce-extensions (free-audio). Builds a CLAP target
+# alongside the juce_add_plugin formats — CLAP is NOT listed in FORMATS;
+# clap_juce_extensions_plugin() below wires it up from the existing JUCE
+# plugin target. Pulls its own clap/clap-helpers submodules via FetchContent.
+# Pinned to a main commit (post-0.26.0) for JUCE 8.0.11+ compatibility: the
+# 0.26.0 tag still includes juce_LegacyAudioParameter.cpp, which JUCE 8.0.12
+# relocated to the juce_audio_processors_headless module (clap-juce PR #169).
+include(FetchContent)
+FetchContent_Declare(
+    clap-juce-extensions
+    GIT_REPOSITORY https://github.com/free-audio/clap-juce-extensions.git
+    GIT_TAG        e8de9e8571626633b8541a54c2406fccc4272767)
+FetchContent_MakeAvailable(clap-juce-extensions)
+
 # AU is macOS-only; JUCE silently drops it on other platforms.
 juce_add_plugin(Bombo
     COMPANY_NAME "Hyperfocus DSP"
@@ -39,6 +53,13 @@ juce_add_plugin(Bombo
     VST3_CATEGORIES "Instrument" "Drum"
     AU_MAIN_TYPE "kAudioUnitType_MusicDevice"
     DESCRIPTION "Half kick instrument, half 1992 BBS. One plugin.")
+
+# Wire the CLAP build off the existing Bombo JUCE target. Produces
+# build/Bombo_artefacts/<cfg>/CLAP/Bombo.clap. CLAP_FEATURES drives the
+# CLAP plugin-category metadata (Bombo is a drum/kick instrument).
+clap_juce_extensions_plugin(TARGET Bombo
+    CLAP_ID "com.hyperfocusdsp.bombo"
+    CLAP_FEATURES instrument drum drum-machine)
 
 juce_add_binary_data(BomboResources
     SOURCES

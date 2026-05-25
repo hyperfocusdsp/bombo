@@ -24,28 +24,40 @@ namespace bombo::game
                 // §13.3 survival curve is recovered via enemy SPEED/HP, not by
                 // emptying the screen. Early waves stay forgiving because they lean on
                 // slow, low-HP kinds (Mudball/Clipper), not on being sparse.
-                case 1: return { { EnemyKind::Mudball }, 2 };
-                case 2: return { { EnemyKind::Mudball, EnemyKind::Clipper }, 2 };
+                // 16-wave, 3-act campaign. Every NORMAL wave is 3 formations
+                // (~15 enemies) — the player asked for longer waves and beats the
+                // game easily, so the balance sim's AutoPlayer survival band is no
+                // longer the gate (it under-represents a real player). The boss /
+                // mini-boss waves (4, 7, 10, 13, 16) are handled by the cadence in
+                // Game.cpp, not by these specs — their entries below are unused
+                // fallbacks kept harmless.
+                // ── Act I ──
+                case 1: return { { EnemyKind::Mudball }, 3 };
+                case 2: return { { EnemyKind::Mudball, EnemyKind::Clipper }, 3 };
                 case 3: return { { EnemyKind::Mudball, EnemyKind::Clipper, EnemyKind::DiveBomber }, 3 };
-                case 4: return { { EnemyKind::Clipper, EnemyKind::Aliaser,
-                                   EnemyKind::Warble, EnemyKind::DiveBomber }, 4 };
-                case 5: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Hiss,
-                                   EnemyKind::Limiter, EnemyKind::Crackle }, 5 };
-                case 6: return { { EnemyKind::Aliaser, EnemyKind::Warble,
-                                   EnemyKind::Wobble, EnemyKind::DiveBomber }, 4 };
-                case 7: return { { EnemyKind::Limiter, EnemyKind::Crackle,
-                                   EnemyKind::Stutter, EnemyKind::Aliaser }, 4 };
-                // W8-W11: extended late-game gauntlet. Denser formations + the new
-                // tankier ELITE kinds; the per-wave speed multiplier in
-                // scheduleWave() ramps approach speed on top of this.
-                case 8:  return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Stutter,
-                                    EnemyKind::Overdrive, EnemyKind::Clipper }, 5 };
-                case 9:  return { { EnemyKind::Aliaser, EnemyKind::Phaser,
-                                    EnemyKind::DiveBomber, EnemyKind::Wobble }, 5 };
-                case 10: return { { EnemyKind::Overdrive, EnemyKind::Flanger, EnemyKind::Aliaser,
-                                    EnemyKind::DiveBomber, EnemyKind::Limiter }, 6 };
-                case 11: return { { EnemyKind::Resonator, EnemyKind::Flanger, EnemyKind::Phaser,
-                                    EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Stutter }, 7 };
+                case 4: return { { EnemyKind::Mudball }, 1 };   // MINI-BOSS 1 (unused spec)
+                case 5: return { { EnemyKind::Clipper, EnemyKind::Aliaser,
+                                   EnemyKind::Warble, EnemyKind::DiveBomber }, 3 };
+                case 6: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber,
+                                   EnemyKind::Hiss, EnemyKind::Crackle }, 3 };
+                case 7: return { { EnemyKind::Mudball }, 1 };   // BOSS 1 / RUMBLR (unused spec)
+                // ── Act II ──
+                case 8:  return { { EnemyKind::Aliaser, EnemyKind::Warble, EnemyKind::Wobble,
+                                    EnemyKind::DiveBomber, EnemyKind::Crackle }, 3 };
+                case 9:  return { { EnemyKind::Limiter, EnemyKind::Crackle,
+                                    EnemyKind::Stutter, EnemyKind::Aliaser }, 3 };
+                case 10: return { { EnemyKind::Mudball }, 1 };  // MINI-BOSS 2 (unused spec)
+                case 11: return { { EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Stutter,
+                                    EnemyKind::Overdrive, EnemyKind::Clipper }, 3 };
+                case 12: return { { EnemyKind::Aliaser, EnemyKind::Phaser, EnemyKind::DiveBomber,
+                                    EnemyKind::Wobble, EnemyKind::Overdrive }, 3 };
+                case 13: return { { EnemyKind::Mudball }, 1 };  // BOSS 2 (unused spec)
+                // ── Act III ──
+                case 14: return { { EnemyKind::Overdrive, EnemyKind::Flanger, EnemyKind::Aliaser,
+                                    EnemyKind::DiveBomber, EnemyKind::Limiter }, 3 };
+                case 15: return { { EnemyKind::Resonator, EnemyKind::Flanger, EnemyKind::Phaser,
+                                    EnemyKind::Aliaser, EnemyKind::DiveBomber, EnemyKind::Stutter }, 3 };
+                case 16: return { { EnemyKind::Mudball }, 1 };  // BOSS 3 / final (unused spec)
                 default: return { { EnemyKind::Mudball }, 1 };
             }
         }

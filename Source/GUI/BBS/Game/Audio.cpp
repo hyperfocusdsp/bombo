@@ -264,6 +264,29 @@ namespace bombo::game
                 if (v.amp < 1.0e-4f) { v.active = false; break; }
             }
         }
+
+        // Background-music loop (optional). Mixed under the SFX, mono onto every
+        // channel, read cyclically. No alloc / no locks — music_ is a stable
+        // shared_ptr set before the game went active (set-before-active contract).
+        if (musicEnabled_.load(std::memory_order_relaxed) && music_ != nullptr)
+        {
+            const auto* buf = music_.get();
+            const int   len = buf->getNumSamples();
+            if (len > 0)
+            {
+                const float* src = buf->getReadPointer(0);
+                int pos = musicPos_;
+                if (pos >= len) pos = 0;
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    const float out = src[pos] * kMusicGain;
+                    for (int ch = 0; ch < nCh; ++ch)
+                        chPtr[ch][i] += out;
+                    if (++pos >= len) pos = 0;   // loop
+                }
+                musicPos_ = pos;
+            }
+        }
     }
 
    #if defined(BOMBO_GAME_TEST_HOOKS)

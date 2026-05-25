@@ -12,7 +12,7 @@ KVRDC 2026 entry, target submission **July 5, 2026**. Active rewrite from nih-pl
 
 ## Stack
 
-- [JUCE 8](https://juce.com/) (C++17) — VST3 + AU + Standalone (CLAP planned)
+- [JUCE 8](https://juce.com/) (C++17) — VST3 + AU + CLAP + Standalone
 - CMake build, FetchContent for JUCE
 - GPL-3.0-or-later
 

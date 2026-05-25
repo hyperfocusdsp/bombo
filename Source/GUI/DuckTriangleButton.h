@@ -63,27 +63,35 @@ public:
             g.strokePath(tri, juce::PathStrokeType(1.2f));
         }
 
-        // "DUCK" reading down the angled edge (tl -> apex), parallel to body.
-        const float dx  = apex.x - tl.x;
-        const float dy  = apex.y - tl.y;
+        // "DUCK" centered along the triangle's LONGEST edge (tr -> apex, the
+        // diagonal hypotenuse), at the same size as the rack knob labels.
+        const float dx  = apex.x - tr.x;
+        const float dy  = apex.y - tr.y;
         const float len = std::sqrt(dx * dx + dy * dy);
-        if (len > 24.0f)
+        if (len > 20.0f)
         {
-            const float ang = std::atan2(dy, dx);
-            const juce::Point<float> dir(dx / len, dy / len);
-            const juce::Point<float> nIn(dy / len, -dx / len);  // into the wedge (right/up)
-            const float fh    = juce::jlimit(8.0f, 12.0f, len * 0.16f);
-            const auto  start = tl + dir * (len * 0.16f) + nIn * (fh * 0.75f);
+            float ang = std::atan2(dy, dx);
+            if (std::cos(ang) < 0.0f)                      // keep the text upright
+                ang += juce::MathConstants<float>::pi;
+
+            const juce::Point<float> mid = (tr + apex) * 0.5f;
+            // Inset toward the interior (third vertex tl) so the glyphs sit on
+            // the wedge fill rather than straddling the edge line.
+            juce::Point<float> nIn(dy / len, -dx / len);
+            if ((tl - mid).getDotProduct(nIn) < 0.0f) nIn = -nIn;
+
+            constexpr float fh = 10.0f;                    // == rack knob label size
+            const juce::Point<float> c = mid + nIn * (fh * 0.70f);
+            const float w = len * 0.9f, h = fh * 1.4f;
 
             g.saveState();
-            g.addTransform(juce::AffineTransform::rotation(ang, start.x, start.y));
-            g.setFont(fonts::value(fh).boldened());
+            g.addTransform(juce::AffineTransform::rotation(ang, c.x, c.y));
+            g.setFont(fonts::label(fh));                   // match the rack column labels
             g.setColour(on ? juce::Colours::black.withAlpha(0.85f)
                            : accent.withAlpha(hot ? 0.95f : 0.65f));
             g.drawText("DUCK",
-                       juce::Rectangle<float>(start.x, start.y - fh * 0.6f,
-                                              len * 0.7f, fh * 1.2f),
-                       juce::Justification::centredLeft, false);
+                       juce::Rectangle<float>(c.x - w * 0.5f, c.y - h * 0.5f, w, h),
+                       juce::Justification::centred, false);
             g.restoreState();
         }
     }

@@ -171,40 +171,72 @@ public:
         g.fillEllipse(cx - radius - 2.0f, cy - radius - 2.0f,
                       (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
 
-        // 2. Rubber grip — dark with subtle top highlight.
-        g.setColour(col::knobRubber());
-        g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
-        g.setColour(juce::Colour(0xFF24'24'26u));
-        const float hlR = radius * 0.95f;
-        g.fillEllipse(cx - hlR, cy - radius - radius * 0.05f, hlR * 2.0f, hlR * 2.0f);
-        g.setColour(col::knobRubber());
-        g.fillEllipse(cx - radius * 0.88f, cy - radius * 0.88f,
-                      radius * 0.88f * 2.0f, radius * 0.88f * 2.0f);
-
-        // 3. Metal bevel ring between rubber and the cap core.
+        // Cap geometry — needed by the indicator + readout regardless of face style.
         const float coreOuterR = radius * 0.80f;
-        g.setColour(col::knobBevel());
-        g.fillEllipse(cx - coreOuterR - 1.5f, cy - coreOuterR - 1.5f,
-                      (coreOuterR + 1.5f) * 2.0f, (coreOuterR + 1.5f) * 2.0f);
+        const float coreR      = coreOuterR - 1.0f;
+        const bool  isHover    = slider.isMouseOverOrDragging();
+        // Hero OUT knob opts into the Hyperfocus logo face via this property
+        // (set in FaceplatePanel where macro_[6] is built).
+        const bool  logoKnob   = static_cast<bool>(
+            slider.getProperties().getWithDefault("logoKnob", false));
 
-        // 4. Cap core. Subtle top-down gradient sells the moulded-plastic feel.
-        // Hover state (Day 3 polish ported from SquelchPro): brighten the cap
-        // gradient when the mouse is over the slider so the user gets
-        // immediate tactile feedback before they click. drawRotarySlider is
-        // a paint hook — slider.isMouseOverOrDragging() is the JUCE-idiomatic
-        // hover-or-active probe.
-        const bool isHover = slider.isMouseOverOrDragging();
-        const float hoverBoost = isHover ? 0.08f : 0.0f;
-        const float coreR = coreOuterR - 1.0f;
-        const auto coreTop = core.brighter(0.10f + hoverBoost);
-        const auto coreBot = core.darker (0.18f - hoverBoost * 0.5f);
-        g.setGradientFill(juce::ColourGradient(coreTop, cx, cy - coreR,
-                                               coreBot, cx, cy + coreR, false));
-        g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
+        if (logoKnob)
+        {
+            // The Hyperfocus "focus ring" mark as the cap face: concentric
+            // aperture rings in the active THEME ACCENT, so the hero knob
+            // recolours per theme (amber on classic, neon hue on
+            // matrix/cyber/plasma). It sits on the dark recess from step 1; the
+            // gaps between rings show that dark backing. Normalised ring radii
+            // are lifted from the logo master (mark-only.svg). This is tier-3
+            // functional UI — theming the mark here does NOT touch the
+            // monochrome brand-lockup rule.
+            const float mR   = radius * 0.92f;
+            const auto  ring = col::accentAmber().withAlpha(isHover ? 1.0f : 0.92f);
+            auto annulus = [&](float rOut, float rIn)
+            {
+                juce::Path p;
+                p.addEllipse(cx - mR * rOut, cy - mR * rOut, mR * rOut * 2.0f, mR * rOut * 2.0f);
+                p.addEllipse(cx - mR * rIn,  cy - mR * rIn,  mR * rIn  * 2.0f, mR * rIn  * 2.0f);
+                p.setUsingNonZeroWinding(false);   // even-odd → a ring with a hole
+                g.setColour(ring);
+                g.fillPath(p);
+            };
+            annulus(1.000f, 0.727f);   // outer ring
+            annulus(0.566f, 0.417f);   // mid ring
+            g.setColour(ring);
+            g.fillEllipse(cx - mR * 0.228f, cy - mR * 0.228f,
+                          mR * 0.228f * 2.0f, mR * 0.228f * 2.0f);  // centre disc
+        }
+        else
+        {
+            // 2. Rubber grip — dark with subtle top highlight.
+            g.setColour(col::knobRubber());
+            g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
+            g.setColour(juce::Colour(0xFF24'24'26u));
+            const float hlR = radius * 0.95f;
+            g.fillEllipse(cx - hlR, cy - radius - radius * 0.05f, hlR * 2.0f, hlR * 2.0f);
+            g.setColour(col::knobRubber());
+            g.fillEllipse(cx - radius * 0.88f, cy - radius * 0.88f,
+                          radius * 0.88f * 2.0f, radius * 0.88f * 2.0f);
 
-        // 5. Inner shadow at cap edge for recessed look.
-        g.setColour(juce::Colour::fromRGBA(0, 0, 0, 0x55));
-        g.drawEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f, 1.0f);
+            // 3. Metal bevel ring between rubber and the cap core.
+            g.setColour(col::knobBevel());
+            g.fillEllipse(cx - coreOuterR - 1.5f, cy - coreOuterR - 1.5f,
+                          (coreOuterR + 1.5f) * 2.0f, (coreOuterR + 1.5f) * 2.0f);
+
+            // 4. Cap core. Subtle top-down gradient sells the moulded-plastic feel.
+            // Hover brightens the cap so the user gets tactile feedback pre-click.
+            const float hoverBoost = isHover ? 0.08f : 0.0f;
+            const auto coreTop = core.brighter(0.10f + hoverBoost);
+            const auto coreBot = core.darker (0.18f - hoverBoost * 0.5f);
+            g.setGradientFill(juce::ColourGradient(coreTop, cx, cy - coreR,
+                                                   coreBot, cx, cy + coreR, false));
+            g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
+
+            // 5. Inner shadow at cap edge for recessed look.
+            g.setColour(juce::Colour::fromRGBA(0, 0, 0, 0x55));
+            g.drawEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f, 1.0f);
+        }
 
         // 6. Indicator stem — wedge from cap edge out to the rubber outer.
         const float a = juce::jmap(sliderPos, rotaryStartAngle, rotaryEndAngle);
@@ -226,8 +258,20 @@ public:
         stem.lineTo(cx + ic * stemInR  - perpC * stemW * 0.5f,
                     cy + is * stemInR  - perpS * stemW * 0.5f);
         stem.closeSubPath();
-        g.setColour(indicatorColour);
-        g.fillPath(stem);
+        if (logoKnob)
+        {
+            // Bone pointer + thin ink outline so it reads over BOTH the bright
+            // accent rings and the dark gaps between them.
+            g.setColour(col::bone());
+            g.fillPath(stem);
+            g.setColour(col::ink().withAlpha(0.85f));
+            g.strokePath(stem, juce::PathStrokeType(0.8f));
+        }
+        else
+        {
+            g.setColour(indicatorColour);
+            g.fillPath(stem);
+        }
 
         // 7. Tick markers. Discrete-choice knobs (addChoice in FaceplatePanel)
         //    stash a "numChoices" int in slider.properties so we draw exactly
@@ -277,6 +321,11 @@ public:
         //    by addChoice; for continuous knobs we use the param's formatter.
         //    Two-line layout (number above, unit below) kicks in only when the
         //    formatter returns "<number> <unit>" — choice names ignore it.
+        // The logo-mark hero knob shows no numeric readout — the focus-ring mark
+        // is its identity and the indicator shows the level. Keeps it clean.
+        if (logoKnob)
+            return;
+
         juce::String text;
         bool isChoiceText = false;
         if (numChoices > 1)

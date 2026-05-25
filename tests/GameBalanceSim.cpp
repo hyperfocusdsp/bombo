@@ -84,7 +84,7 @@ namespace
             for (const auto& e : g.testEnemies().enemies())
             {
                 if (! e.active) continue;
-                if (e.kind == EnemyKind::Rumblr) continue;   // boss handled below
+                if (isBoss(e.kind)) continue;                // boss handled below
                 if (e.x < me.x - 6.0f) continue;             // already passed us
                 const float dx = e.x - me.x;
                 const float dy = std::abs(e.y - me.y);
@@ -197,7 +197,7 @@ namespace
             for (const auto& e : g.testEnemies().enemies())
             {
                 if (! e.active) continue;
-                if (e.kind == EnemyKind::Rumblr) continue;
+                if (isBoss(e.kind)) continue;
                 if (e.x < me.x) continue;
                 const float dx = e.x - me.x;
                 if (dx < bestDx) { bestDx = dx; best = &e; }

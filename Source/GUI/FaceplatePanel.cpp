@@ -303,7 +303,12 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
     macro_[5] = makePlaceholderKnob("SPACE",  macroLbl);
     macro_[6] = makeBoundKnob(pid::masterOut, "OUT", col::knobCap(), macroLbl);
     if (macro_[6] && macro_[6]->slider)
+    {
         macro_[6]->slider->setTooltip("Master output level");
+        // Hero knob renders the Hyperfocus focus-ring mark (theme-accent) as its
+        // face instead of the plastic cap — see BomboLookAndFeel::drawRotarySlider.
+        macro_[6]->slider->getProperties().set("logoKnob", true);
+    }
     for (auto& m : macro_)
     {
         if (m == nullptr) continue;

@@ -11,15 +11,41 @@ namespace
     // WaveClear "WAVE n CLEAR" flash duration (spec §4.4): 1.5s.
     constexpr int kWaveClearFlashTicks = static_cast<int>(1.5f * bombo::game::kTickHz);
 
-    // Boss = wave 12 (the run is 12 waves; W12 is RUMBLR). Extended from the
-    // original 8-wave run for a longer, harder campaign (W1-W11 normal + boss).
-    constexpr int kBossWave = 12;
+    // 16-wave, 3-act campaign with 2 mini-bosses + 3 bosses (the final at W16):
+    //   Act I  : W1-3 normal · W4 MINI-BOSS 1 · W5-6 normal · W7 BOSS 1 (RUMBLR)
+    //   Act II : W8-9 normal · W10 MINI-BOSS 2 · W11-12 normal · W13 BOSS 2
+    //   Act III: W14-15 normal · W16 BOSS 3 (final — victory on its death)
+    constexpr int kFinalWave = 16;
 
-    // Shops occur after W2, W4, W6, W8, W10 (every other wave) — extra mid-run
-    // economy to match the longer campaign.
+    enum class WaveKind { Normal, MiniBoss, Boss };
+
+    WaveKind waveKindFor(int wave) noexcept
+    {
+        if (wave == 7 || wave == 13 || wave == 16) return WaveKind::Boss;
+        if (wave == 4 || wave == 10)               return WaveKind::MiniBoss;
+        return WaveKind::Normal;
+    }
+
+    // Which boss-class enemy occupies a given encounter wave.
+    bombo::game::EnemyKind bossKindFor(int wave) noexcept
+    {
+        using K = bombo::game::EnemyKind;
+        switch (wave)
+        {
+            case 4:  return K::MiniBoss1;
+            case 10: return K::MiniBoss2;
+            case 7:  return K::Rumblr;   // boss 1
+            case 13: return K::Boss2;
+            case 16: return K::Boss3;    // final
+            default: return K::Rumblr;
+        }
+    }
+
+    // Shops sit just before each encounter (after W3/6/9/12/15) so the player can
+    // gear up. Encounter waves themselves never lead into a shop.
     bool shopFollowsWave(int wave) noexcept
     {
-        return wave == 2 || wave == 4 || wave == 6 || wave == 8 || wave == 10;
+        return wave == 3 || wave == 6 || wave == 9 || wave == 12 || wave == 15;
     }
 }
 
@@ -33,7 +59,7 @@ namespace bombo::game
         state_      = s;
     }
 
-    void Game::startNewRun(bool dailySeed)
+    void Game::startNewRun(bool dailySeed, int ngPlusTier)
     {
         currentWave_ = 1;
         score_       = 0;
@@ -41,6 +67,7 @@ namespace bombo::game
         currencyDB_  = 0;
         daily_       = dailySeed;
         victory_     = false;
+        ngPlus_      = juce::jmax(0, ngPlusTier);
 
         if (dailySeed)
         {
@@ -64,7 +91,9 @@ namespace bombo::game
         chain_         = ChainState{};
         effects_       = EffectState{};
         ownedItems_    = {};
+        weaponLevel_   = 0;
         tickCounter_   = 0;
+        enemies_.setHpBonus(ngPlus_);   // NG+: +tier HP on every spawn
         runRng_.seed(runSeed_);
         wave_          = scheduleWave(runSeed_, currentWave_);
 
@@ -137,7 +166,7 @@ namespace bombo::game
     {
         if (! wave_.done()) return false;   // schedule still has spawns to fire
         for (const auto& e : enemies_.enemies())
-            if (e.active && e.kind != EnemyKind::Rumblr)
+            if (e.active && ! isBoss(e.kind))
                 return false;               // a live non-boss enemy remains
         return true;
     }
@@ -155,21 +184,15 @@ namespace bombo::game
 
     void Game::advanceAfterWaveClear()
     {
-        // currentWave_ is the wave that just cleared. Decide what comes next.
-        if (shopFollowsWave(currentWave_))      // after W2/W4/W6/W8/W10 -> shop
+        // currentWave_ is the wave that just cleared. A shop sits before each
+        // encounter (after W3/6/9/12/15); otherwise step into the next wave.
+        if (shopFollowsWave(currentWave_))
         {
             enterShop();
             return;
         }
-        if (currentWave_ == kBossWave - 1)      // after W11 -> boss (W12)
-        {
-            enterBoss();
-            return;
-        }
-        // Otherwise advance to the next ordinary wave.
         ++currentWave_;
-        wave_ = scheduleWave(runSeed_, currentWave_);
-        transitionTo(GameState::Playing);
+        beginWave();
     }
 
     void Game::enterShop()
@@ -184,17 +207,39 @@ namespace bombo::game
     {
         shop_.reset();
         ++currentWave_;
-        wave_ = scheduleWave(runSeed_, currentWave_);
-        transitionTo(GameState::Playing);
+        beginWave();
+    }
+
+    // Dispatch the wave currentWave_ now points at: a normal drip-fed wave, or a
+    // mini-boss / boss encounter (per waveKindFor).
+    void Game::beginWave()
+    {
+        if (waveKindFor(currentWave_) == WaveKind::Normal)
+        {
+            wave_ = scheduleWave(runSeed_, currentWave_);
+            transitionTo(GameState::Playing);
+        }
+        else
+        {
+            enterBoss();
+        }
     }
 
     void Game::enterBoss()
     {
-        ++currentWave_;   // -> kBossWave (12)
-        // Clear any stray non-boss leftovers, then spawn the RUMBLR.
+        // Clear any stray non-boss leftovers, then spawn the encounter for the
+        // current wave (mini-boss or boss). NG+ adds +1 HP per tier on top of the
+        // kind's base HP. Mini-bosses get a vertical patrol velocity.
         enemies_ = EnemyPool{};
-        enemies_.spawn(EnemyKind::Rumblr, static_cast<float>(kFbW) - 30.0f,
-                       static_cast<float>(kFbH) / 2.0f, 0.0f, 0.0f);
+        if (auto* b = enemies_.spawn(bossKindFor(currentWave_),
+                                     static_cast<float>(kFbW) - 30.0f,
+                                     static_cast<float>(kFbH) / 2.0f, 0.0f, 0.0f))
+        {
+            // NG+ HP is already folded in by the pool's hpBonus_. Mini-bosses
+            // patrol vertically — give them a starting vy.
+            if (b->kind == EnemyKind::MiniBoss1 || b->kind == EnemyKind::MiniBoss2)
+                b->vy = 35.0f;
+        }
         transitionTo(GameState::Boss);
         if (onBossTelegraph) onBossTelegraph();   // Task 24 SFX seam (additive)
     }
@@ -202,7 +247,7 @@ namespace bombo::game
     bool Game::bossIsDead() const noexcept
     {
         for (const auto& e : enemies_.enemies())
-            if (e.active && e.kind == EnemyKind::Rumblr)
+            if (e.active && isBoss(e.kind))
                 return false;
         return true;
     }
@@ -216,6 +261,9 @@ namespace bombo::game
         victory_ = victory;
         if (onGameOverFx) onGameOverFx(victory);   // Task 24 SFX seam (additive)
         highScores_.load();   // refresh from disk before checking qualification
+        // Beating the run unlocks the next NG+ tier (persisted across runs).
+        if (victory)
+            highScores_.setMaxNgPlus(ngPlus_ + 1);
         if (highScores_.qualifiesForTopTen(score_))
         {
             initials_     = { 'A', 'A', 'A' };
@@ -302,16 +350,29 @@ namespace bombo::game
         e.date     = juce::Time::getCurrentTime().formatted("%Y-%m-%d");
         e.daily    = daily_;
         e.seed     = daily_ ? runSeed_ : 0u;
+        e.won      = victory_;     // beat the final boss → ★ in the table
+        e.ngPlus   = ngPlus_;      // NG+ tier this run was played at
 
         highScores_.recordRun(e);
         highScores_.save();
         transitionTo(GameState::Results);
     }
 
+    void Game::toggleMusic()
+    {
+        musicOn_ = ! musicOn_;
+        if (onMusicToggle) onMusicToggle(musicOn_);
+    }
+
     void Game::resultsContinue()
     {
         if (state_ != GameState::Results) return;
-        transitionTo(GameState::Title);
+        // A cleared run rolls straight into NEW GAME+ at the next tier; a loss
+        // returns to the Title.
+        if (victory_)
+            startNewRun(/*dailySeed=*/false, ngPlus_ + 1);
+        else
+            transitionTo(GameState::Title);
     }
 
    #if defined(BOMBO_GAME_TEST_HOOKS)
@@ -319,7 +380,7 @@ namespace bombo::game
     {
         wave_ = WaveSchedule{};            // schedule done
         for (auto& e : enemies_.enemies()) // clear all non-boss enemies
-            if (e.kind != EnemyKind::Rumblr)
+            if (! isBoss(e.kind))
                 e.active = false;
     }
    #endif
@@ -341,13 +402,27 @@ namespace bombo::game
         const float bx      = player_.x + 4.0f;
         const float by      = player_.y;
 
-        playerBullets_.spawn(bx, by, kBulletSpeedPxS, 0.0f, dmg);
+        // Weapon patterns DON'T stack — they'd compound to a 6-bullet wall that's
+        // unbalanced. They're mutually-exclusive modes, strongest first:
+        //   spread (3-way fan)  >  double-shot (2 parallel lanes)  >  single.
+        // So a player who owns BOTH spread and the DoubleShot drop fires 3-way
+        // (3 bullets), never 2x3. Spread "wins" because the fan is the higher tier.
         if (spread)
         {
-            // +/- ~15deg angled bullets (tan(15deg) ~ 0.27).
-            const float vy = kBulletSpeedPxS * 0.27f;
-            playerBullets_.spawn(bx, by, kBulletSpeedPxS, -vy, dmg);
-            playerBullets_.spawn(bx, by, kBulletSpeedPxS,  vy, dmg);
+            const float vy = kBulletSpeedPxS * 0.27f;   // +/- ~15deg (tan15 ~ 0.27)
+            playerBullets_.spawn(bx, by, kBulletSpeedPxS,  0.0f, dmg);
+            playerBullets_.spawn(bx, by, kBulletSpeedPxS,  -vy,  dmg);
+            playerBullets_.spawn(bx, by, kBulletSpeedPxS,   vy,  dmg);
+        }
+        else if (weaponLevel_ >= 1)
+        {
+            constexpr float kDoubleShotOffset = 3.0f;   // two parallel lanes
+            playerBullets_.spawn(bx, by - kDoubleShotOffset, kBulletSpeedPxS, 0.0f, dmg);
+            playerBullets_.spawn(bx, by + kDoubleShotOffset, kBulletSpeedPxS, 0.0f, dmg);
+        }
+        else
+        {
+            playerBullets_.spawn(bx, by, kBulletSpeedPxS, 0.0f, dmg);
         }
         if (onShot) onShot();   // Task 24 audio seam — fires the active preset/kick.
     }
@@ -404,7 +479,7 @@ namespace bombo::game
         const float dt = kTickDt * speedMult();
         playerBullets_.tick();
         enemyShots_.tick();
-        enemies_.tick(&player_, &enemyShots_);
+        enemies_.tick(&player_, &enemyShots_, currentWave_);
         pickups_.tick(player_.x, player_.y,
                       ownedItems_[(int) ShopItemId::DbMagnet] > 0);
         wave_.tick(enemies_, dt);
@@ -421,9 +496,14 @@ namespace bombo::game
         {
             if (bossIsDead())
             {
-                // Boss-clear bonus (spec §9.1): 5000 + lives*200.
-                score_ += 5000 + lives_ * 200;
-                onGameOver(/*victory=*/true);
+                // Encounter-clear bonus. Only the FINAL boss (W16) ends the run in
+                // victory; mini-bosses and the earlier act bosses flow back through
+                // the normal wave-clear cadence so the campaign continues.
+                score_ += 3000 + lives_ * 200;
+                if (currentWave_ >= kFinalWave)
+                    onGameOver(/*victory=*/true);
+                else
+                    onWaveCleared();
             }
             return;
         }
@@ -454,6 +534,10 @@ namespace bombo::game
             case EnemyKind::Phaser:      return 60;
             case EnemyKind::Flanger:     return 70;
             case EnemyKind::Resonator:   return 80;
+            case EnemyKind::MiniBoss1:   return 300;
+            case EnemyKind::MiniBoss2:   return 350;
+            case EnemyKind::Boss2:       return 800;
+            case EnemyKind::Boss3:       return 1500;
         }
         return 10;
     }
@@ -580,6 +664,8 @@ namespace bombo::game
                 player_.invincTimer = 2 * kTickHz;   // 2s phase-lock
             if (o.grantRandomShopItem)
                 grantRandomShopItem();
+            if (o.grantDoubleShot)
+                weaponLevel_ = 1;   // persists until a life is lost (see resolveCombat)
 
             if (onPickup) onPickup(dropTierOf(p.kind));   // Task 24 SFX seam (additive)
 
@@ -605,6 +691,7 @@ namespace bombo::game
         if (! player_.isInvincible() && enemyShotsHitPlayer())
         {
             player_.takeHit();
+            weaponLevel_ = 0;   // firepower upgrades are lost on death
             --lives_;
             if (lives_ <= 0)
             {
@@ -622,6 +709,7 @@ namespace bombo::game
         if (resolveEnemyBodyContact())
         {
             player_.takeHit();
+            weaponLevel_ = 0;   // firepower upgrades are lost on death
             --lives_;
             if (lives_ <= 0)
             {
@@ -669,6 +757,13 @@ namespace bombo::game
                 case EnemyKind::Phaser:      return { &kPhaser[0][0],      10, 10 };
                 case EnemyKind::Flanger:     return { &kFlanger[0][0],     10, 10 };
                 case EnemyKind::Resonator:   return { &kResonator[0][0],   10, 10 };
+                // Boss-class encounters reuse the 30x30 RUMBLR sprite for now;
+                // they read as distinct via size/HP/attack pattern + theme tint.
+                // (Dedicated mini/boss sprites are a bug-fix-window follow-up.)
+                case EnemyKind::MiniBoss1:
+                case EnemyKind::MiniBoss2:
+                case EnemyKind::Boss2:
+                case EnemyKind::Boss3:        return { &kRumblr[0][0],      30, 30 };
             }
             return { &kMudball[0][0], 10, 10 };
         }
@@ -866,15 +961,24 @@ namespace bombo::game
                 fb.hline(kFbW / 2 - 30, kFbW / 2 + 30, 22, 3);
 
                 static const char* kItems[] = {
-                    "NEW GAME", "DAILY RUN", "HIGHSCORES", "HELP", "EXIT"
+                    "NEW GAME", "DAILY RUN", "HIGHSCORES", "HELP", "EXIT", "MUSIC"
                 };
-                for (int i = 0; i < 5; ++i)
+                for (int i = 0; i < 6; ++i)
                 {
-                    const int y = 36 + i * 10;
+                    const int y = 34 + i * 9;
                     const bool sel = (i == titleSel_);
-                    const int lx = (kFbW - Framebuffer::textWidth(kItems[i])) / 2;
+                    const char* label = (i == 5) ? (musicOn_ ? "MUSIC: ON" : "MUSIC: OFF")
+                                                  : kItems[i];
+                    const int lx = (kFbW - Framebuffer::textWidth(label)) / 2;
                     if (sel) fb.drawText(">", lx - 6, y, 4);
-                    fb.drawText(kItems[i], lx, y, (uint8_t) (sel ? 5 : 2));
+                    fb.drawText(label, lx, y, (uint8_t) (sel ? 5 : 2));
+                }
+                // NG+ progress (persisted): shown once the player has cleared a run.
+                if (highScores_.maxNgPlus() > 0)
+                {
+                    char nb[16];
+                    fmtNum(nb, sizeof nb, "NG+ MAX ", highScores_.maxNgPlus(), 1);
+                    fb.drawText(nb, 4, kFbH - 14, 3);
                 }
                 fb.drawText(daily_ ? "DAILY SEED" : "SEED", 4, kFbH - 6, 1);
                 break;
@@ -884,15 +988,17 @@ namespace bombo::game
             {
                 fb.drawTextCentered("PAUSED", 18, 5);
                 static const char* kItems[] = {
-                    "RESUME", "RESTART", "HIGHSCORES", "HELP", "QUIT"
+                    "RESUME", "RESTART", "HIGHSCORES", "HELP", "QUIT", "MUSIC"
                 };
-                for (int i = 0; i < 5; ++i)
+                for (int i = 0; i < 6; ++i)
                 {
-                    const int y = 36 + i * 10;
+                    const int y = 34 + i * 9;
                     const bool sel = (i == pauseSel_);
-                    const int lx = (kFbW - Framebuffer::textWidth(kItems[i])) / 2;
+                    const char* label = (i == 5) ? (musicOn_ ? "MUSIC: ON" : "MUSIC: OFF")
+                                                  : kItems[i];
+                    const int lx = (kFbW - Framebuffer::textWidth(label)) / 2;
                     if (sel) fb.drawText(">", lx - 6, y, 4);
-                    fb.drawText(kItems[i], lx, y, (uint8_t) (sel ? 5 : 2));
+                    fb.drawText(label, lx, y, (uint8_t) (sel ? 5 : 2));
                 }
                 break;
             }
@@ -935,6 +1041,9 @@ namespace bombo::game
                     char wb[6];
                     fmtNum(wb, sizeof wb, "W", rows[(size_t) i].wave, 1);
                     fb.drawText(wb, 120, y, 4);
+                    // ★ marks a run that beat the final boss (victory).
+                    if (rows[(size_t) i].won)
+                        fb.drawText("*", 140, y, 5);
                 }
                 if (rows.empty())
                     fb.drawTextCentered("NO SCORES YET", kFbH / 2, 2);
@@ -978,7 +1087,16 @@ namespace bombo::game
                 char sb[16];
                 fmtNum(sb, sizeof sb, "SC ", score_, 5);
                 fb.drawTextCentered(sb, kFbH / 2, 3);
-                fb.drawTextCentered("PRESS ENTER", kFbH - 16, 2);
+                if (victory_)
+                {
+                    char nb[20];
+                    std::snprintf(nb, sizeof nb, "ENTER: NG+%d", ngPlus_ + 1);
+                    fb.drawTextCentered(nb, kFbH - 16, 5);
+                }
+                else
+                {
+                    fb.drawTextCentered("PRESS ENTER", kFbH - 16, 2);
+                }
                 break;
             }
         }
@@ -1024,8 +1142,8 @@ namespace bombo::game
         {
             case GameState::Title:
             {
-                if (isUp)   { titleSel_ = (titleSel_ + 4) % 5; return true; }
-                if (isDown) { titleSel_ = (titleSel_ + 1) % 5; return true; }
+                if (isUp)   { titleSel_ = (titleSel_ + 5) % 6; return true; }
+                if (isDown) { titleSel_ = (titleSel_ + 1) % 6; return true; }
                 if (isEnter)
                 {
                     switch (titleSel_)
@@ -1035,6 +1153,7 @@ namespace bombo::game
                         case 2: transitionTo(GameState::HighScores); return true;
                         case 3: transitionTo(GameState::Help);   return true;
                         case 4: wantsExit_ = true;               return true;
+                        case 5: toggleMusic();                   return true;
                     }
                     return true;
                 }
@@ -1067,8 +1186,8 @@ namespace bombo::game
 
             case GameState::Paused:
             {
-                if (isUp)   { pauseSel_ = (pauseSel_ + 4) % 5; return true; }
-                if (isDown) { pauseSel_ = (pauseSel_ + 1) % 5; return true; }
+                if (isUp)   { pauseSel_ = (pauseSel_ + 5) % 6; return true; }
+                if (isDown) { pauseSel_ = (pauseSel_ + 1) % 6; return true; }
                 if (ch == 'P') { togglePause(); return true; }   // resume
                 if (isEnter)
                 {
@@ -1079,6 +1198,7 @@ namespace bombo::game
                         case 2: transitionTo(GameState::HighScores); return true;
                         case 3: transitionTo(GameState::Help);       return true;
                         case 4: requestQuit();                       return true;
+                        case 5: toggleMusic();                       return true;
                     }
                     return true;
                 }
@@ -1157,7 +1277,8 @@ namespace bombo::game
 
     float Game::speedMult() const noexcept
     {
-        return std::max(kBpmMinMult, std::min(kBpmMaxMult, hostBpm_ / kBpmRef));
+        const float bpm = std::max(kBpmMinMult, std::min(kBpmMaxMult, hostBpm_ / kBpmRef));
+        return bpm * (1.0f + 0.10f * static_cast<float>(ngPlus_));   // NG+ speeds approach
     }
 
     int computeWaveClearBonus(int timeRem, int peakChain, int lives) noexcept

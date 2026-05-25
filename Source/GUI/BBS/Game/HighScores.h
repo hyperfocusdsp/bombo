@@ -14,6 +14,8 @@ namespace bombo::game
         juce::String date;       // YYYY-MM-DD
         bool         daily = false;
         uint32_t     seed  = 0;  // 0 if non-daily
+        bool         won   = false;  // beat the final boss → ★ in the table
+        int          ngPlus = 0;     // NG+ tier the run was played at (0 = base)
     };
 
     class HighScores
@@ -31,12 +33,17 @@ namespace bombo::game
         bool isCabinetLit() const noexcept { return cabinetLit_; }
         void setCabinetLit(bool v);             // persists immediately
 
+        // Highest NG+ tier the player has ever unlocked (0 = never beat the game).
+        int  maxNgPlus() const noexcept { return maxNgPlus_; }
+        void setMaxNgPlus(int tier);            // raises + persists if higher
+
     private:
         juce::File path_;
         std::vector<ScoreEntry> top_;
         std::map<juce::String, ScoreEntry> dailyBest_;   // date -> best (reserved for future use)
         bool cabinetLit_ = false;
         juce::String firstInvaderAt_;
+        int  maxNgPlus_ = 0;
     };
 
     uint32_t  dailySeedToday() noexcept;

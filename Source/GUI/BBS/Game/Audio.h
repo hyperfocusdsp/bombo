@@ -17,6 +17,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 
 #include "Entities.h"   // EnemyKind
 #include "Drops.h"      // DropTier
@@ -38,6 +39,15 @@ namespace bombo::game
         void triggerWaveClearJingle() noexcept;
         void triggerGameOverJingle(bool victory) noexcept;
         void triggerPickupArpeggio(DropTier tier) noexcept;
+
+        // ── Background music (optional, user-supplied 8-bit loop) ───────────
+        // The decoded mono loop is handed in ONCE from the message thread before
+        // the game goes active (loadMusic). renderInto then mixes it cyclically
+        // when enabled. Enable/disable is an atomic flag (toggled from the menu).
+        // Both are no-ops until a loop is loaded, so the game is silent-safe.
+        void loadMusic(std::shared_ptr<juce::AudioBuffer<float>> loop) noexcept { music_ = std::move(loop); }
+        void setMusicEnabled(bool on) noexcept { musicEnabled_.store(on, std::memory_order_relaxed); }
+        bool musicEnabled() const noexcept { return musicEnabled_.load(std::memory_order_relaxed); }
 
         // ── Audio thread: mix all active tone voices additively into buffer.
         // Mono-summed onto every channel. RT-safe.
@@ -104,6 +114,14 @@ namespace bombo::game
 
         float sampleRate_ = 48000.0f;
         uint32_t noiseState_ = 0x1234567u; // xorshift PRNG (audio thread only)
+
+        // Background-music loop. music_ is set before the game goes active and
+        // not swapped during play (set-before-active contract). musicPos_ is
+        // audio-thread-only. Mixed at kMusicGain under the SFX so it sits behind.
+        std::shared_ptr<juce::AudioBuffer<float>> music_;
+        std::atomic<bool> musicEnabled_{ false };
+        int   musicPos_ = 0;
+        static constexpr float kMusicGain = 0.16f;
 
         float nextNoise() noexcept;
     };

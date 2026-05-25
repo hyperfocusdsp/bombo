@@ -56,11 +56,13 @@ public:
             expect(g.state() == GameState::Playing);   // ...but a mob is alive -> not clear
         }
 
-        beginTest("cadence: W2 clear -> Shop; shop continue -> W3 Playing");
+        beginTest("cadence: W3 clear -> Shop; shop continue -> W4 mini-boss (Boss state)");
         {
+            // Shops now sit before each encounter (after W3/6/9/12/15). W4 is the
+            // first mini-boss, so continuing from the W3 shop enters a Boss state.
             Game g;
             g.startNewRun(false);
-            g.testSetCurrentWave(2);
+            g.testSetCurrentWave(3);
             g.testForceWaveClear();
             g.tick();
             expect(g.state() == GameState::WaveClear);
@@ -68,8 +70,9 @@ public:
             expect(g.state() == GameState::Shop);
             expect(g.shop() != nullptr);
             g.shopContinue();
-            expect(g.state() == GameState::Playing);
-            expectEquals(g.currentWave(), 3);
+            expect(g.state() == GameState::Boss);
+            expectEquals(g.currentWave(), 4);
+            expectEquals(countActiveEnemies(g.enemies(), EnemyKind::MiniBoss1), 1);
         }
 
         beginTest("cadence: W1 clear -> straight to W2 Playing (no shop)");
@@ -84,43 +87,48 @@ public:
             expectEquals(g.currentWave(), 2);
         }
 
-        beginTest("W11 clear -> Boss state with a Rumblr enemy spawned");
+        beginTest("W6 clear -> Shop -> continue -> Boss(RUMBLR) at W7");
         {
             Game g;
             g.startNewRun(false);
-            g.testSetCurrentWave(11);
+            g.testSetCurrentWave(6);
             g.testForceWaveClear();
             g.tick();
             runWaveClearFlash(g);
+            expect(g.state() == GameState::Shop);   // shop precedes the W7 boss
+            g.shopContinue();
             expect(g.state() == GameState::Boss);
-            expectEquals(g.currentWave(), 12);
+            expectEquals(g.currentWave(), 7);
             expectEquals(countActiveEnemies(g.enemies(), EnemyKind::Rumblr), 1);
         }
 
-        beginTest("boss death -> GameOver victory + boss bonus added");
+        beginTest("non-final boss death -> continues; FINAL boss (W16) -> victory + bonus");
         {
             Game g;
             g.startNewRun(false);
-            g.testSetHighScoresPath(juce::File{});   // in-memory: always qualifies-> Initials? no, empty table qualifies
-            g.testSetCurrentWave(11);
+            g.testSetHighScoresPath(juce::File{});   // in-memory: empty table qualifies
+            // Jump to the W15 shop, gear into the final boss at W16.
+            g.testSetCurrentWave(15);
             g.testForceWaveClear();
             g.tick();
             runWaveClearFlash(g);
+            expect(g.state() == GameState::Shop);
+            g.shopContinue();
             expect(g.state() == GameState::Boss);
+            expectEquals(g.currentWave(), 16);
+            expectEquals(countActiveEnemies(g.enemies(), EnemyKind::Boss3), 1);
+
             const int scoreBefore = g.score();
             const int lives = g.lives();
-            // Kill the boss directly, then tick once so the cadence sees it dead.
             for (auto& e : g.testEnemies().enemies())
-                if (e.kind == EnemyKind::Rumblr) e.active = false;
+                if (isBoss(e.kind)) e.active = false;   // kill the final boss
             g.tick();
             expect(g.gameOverVictory());
-            // GameOver OR Initials (empty score table qualifies) — both are post-victory.
             expect(g.state() == GameState::GameOver || g.state() == GameState::Initials);
-            expectEquals(g.score(), scoreBefore + 5000 + lives * 200);
-            // Ticking further must not re-add the victory bonus (added exactly once).
+            expectEquals(g.score(), scoreBefore + 3000 + lives * 200);
             const int scoreAfterWin = g.score();
             for (int i = 0; i < 10; ++i) g.tick();
-            expectEquals(g.score(), scoreAfterWin);
+            expectEquals(g.score(), scoreAfterWin);   // bonus added exactly once
         }
 
         beginTest("lives hitting 0 -> GameOver; if score qualifies -> Initials");
@@ -243,7 +251,7 @@ public:
         {
             Game g;
             g.startNewRun(false);
-            g.testSetCurrentWave(2);
+            g.testSetCurrentWave(6);
             g.testForceWaveClear();
             g.tick();
             runWaveClearFlash(g);
@@ -262,7 +270,7 @@ public:
         {
             Game g;
             g.startNewRun(false);
-            g.testSetCurrentWave(4);
+            g.testSetCurrentWave(6);
             g.testForceWaveClear();
             g.tick();
             runWaveClearFlash(g);
@@ -277,7 +285,7 @@ public:
         {
             Game g;
             g.startNewRun(false);
-            g.testSetCurrentWave(2);
+            g.testSetCurrentWave(6);
             g.testForceWaveClear();
             g.tick();
             runWaveClearFlash(g);

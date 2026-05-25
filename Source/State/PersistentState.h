@@ -60,6 +60,10 @@ public:
     juce::File getLastBounceDir() const;
     void       setLastBounceDir(const juce::File& dir);
 
+    // Kick-Impact game background music on/off. Default OFF.
+    bool getGameMusicEnabled() const;
+    void setGameMusicEnabled(bool on);
+
 private:
     std::unique_ptr<juce::PropertiesFile> props_;
 

@@ -19,6 +19,7 @@ namespace bombo::game
             case K::EqFilter:       o.setSpreadTimer = 8.0f; break;
             case K::ChainBank:      o.chainBankAdd = 10; break;
             case K::DbCluster:      o.spawnCurrencyCluster = 5; break;
+            case K::DoubleShot:     o.grantDoubleShot = true; break;
             case K::TimeFreeze:     o.setSlowMoTimer = 3.0f; break;
             case K::SidechainPulse: o.clearEnemyBullets = true; break;
             case K::Mute:           o.setMuteTimer = 4.0f; break;
@@ -50,7 +51,7 @@ namespace bombo::game
             case K::DbSmall: case K::DbMed: case K::DbBig:
             case K::OneUp: case K::TransientBurst: case K::Compression:
                 return DropTier::Common;
-            case K::EqFilter: case K::ChainBank: case K::DbCluster:
+            case K::EqFilter: case K::ChainBank: case K::DbCluster: case K::DoubleShot:
                 return DropTier::Uncommon;
             case K::TimeFreeze: case K::SidechainPulse: case K::Mute: case K::PhaseLock:
                 return DropTier::Rare;

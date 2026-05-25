@@ -4,6 +4,48 @@
 #include "../../State/PresetBank.h"
 #include "../../PluginProcessor.h"
 #include <juce_core/juce_core.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+
+namespace
+{
+    // Decode an optional user-supplied 8-bit music loop into a mono buffer at the
+    // host sample rate. The file is NOT bundled (it's GPL-incompatible to embed
+    // most generated audio) — the user drops a WAV at <appdata>/Bombo/music/
+    // track.wav and it loops while the game is open. Returns null if absent.
+    std::shared_ptr<juce::AudioBuffer<float>> loadGameMusicLoop(double targetSr)
+    {
+        const auto f = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                           .getChildFile("Bombo").getChildFile("music").getChildFile("track.wav");
+        if (! f.existsAsFile() || targetSr <= 0.0) return {};
+
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(f));
+        if (r == nullptr || r->lengthInSamples <= 0 || r->numChannels == 0) return {};
+
+        // Cap at 2 minutes to bound memory; longer files just loop the first 2 min.
+        const int srcLen = (int) juce::jmin<juce::int64>(
+            r->lengthInSamples, (juce::int64) (r->sampleRate * 120.0));
+        juce::AudioBuffer<float> src((int) r->numChannels, srcLen);
+        r->read(&src, 0, srcLen, 0, true, true);
+
+        juce::AudioBuffer<float> mono(1, srcLen);
+        mono.clear();
+        for (int ch = 0; ch < src.getNumChannels(); ++ch)
+            mono.addFrom(0, 0, src, ch, 0, srcLen, 1.0f / (float) src.getNumChannels());
+
+        const double ratio = r->sampleRate / targetSr;
+        if (std::abs(ratio - 1.0) < 1.0e-6)
+            return std::make_shared<juce::AudioBuffer<float>>(std::move(mono));
+
+        const int outLen = (int) std::ceil((double) srcLen / ratio);
+        auto out = std::make_shared<juce::AudioBuffer<float>>(1, outLen);
+        out->clear();
+        juce::LagrangeInterpolator interp;
+        interp.process(ratio, mono.getReadPointer(0), out->getWritePointer(0), outLen);
+        return out;
+    }
+}
 
 namespace bombo
 {
@@ -933,6 +975,20 @@ void BBSComponent::launchGame()
         gameV2_.onGameOverFx    = [bus](bool victory)            { bus->triggerGameOverJingle(victory); };
         gameV2_.onPickup        = [bus](bombo::game::DropTier t) { bus->triggerPickupArpeggio(t); };
         gameV2_.onBossTelegraph = [bus]                          { bus->triggerBossTelegraph(); };
+
+        // Background music: load the (optional) user loop, seed the on/off state
+        // from the persisted setting (default OFF), and wire the menu toggle to
+        // both the bus and persistence. music_ is set before the game goes active.
+        auto* ps = &proc.persistentState();
+        const bool musicOn = ps->getGameMusicEnabled();
+        bus->loadMusic(loadGameMusicLoop(proc.getSampleRate()));
+        bus->setMusicEnabled(musicOn);
+        gameV2_.setMusicOn(musicOn);
+        gameV2_.onMusicToggle = [bus, ps](bool on)
+        {
+            bus->setMusicEnabled(on);
+            ps->setGameMusicEnabled(on);
+        };
     }
 
     gameV2_.startNewRun(/*dailySeed=*/false);

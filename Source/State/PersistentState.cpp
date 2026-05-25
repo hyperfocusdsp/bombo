@@ -133,4 +133,15 @@ void PersistentState::setLastBounceDir(const juce::File& dir)
     props_->saveIfNeeded();
 }
 
+bool PersistentState::getGameMusicEnabled() const
+{
+    return props_->getBoolValue("game.musicEnabled", false);   // default OFF
+}
+
+void PersistentState::setGameMusicEnabled(bool on)
+{
+    props_->setValue("game.musicEnabled", on);
+    props_->saveIfNeeded();
+}
+
 } // namespace bombo

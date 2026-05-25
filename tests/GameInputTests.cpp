@@ -50,10 +50,11 @@ public:
             expect(g.state() == GameState::HighScores);
         }
 
-        beginTest("Up wraps to EXIT -> sets wantsExit");
+        beginTest("Up wraps to MUSIC then EXIT -> sets wantsExit");
         {
             Game g;
-            expect(send(g, KP::upKey));      // wrap to EXIT (index 4)
+            expect(send(g, KP::upKey));      // 0 -> wrap to MUSIC (index 5)
+            expect(send(g, KP::upKey));      // 5 -> EXIT (index 4)
             expect(send(g, KP::returnKey));
             expect(g.wantsExit());
         }
@@ -228,7 +229,7 @@ public:
         {
             // Drive into the shop via the W2 wave-clear cadence.
             Game g; g.startNewRun(false);
-            g.testSetCurrentWave(2);
+            g.testSetCurrentWave(6);
             g.testForceWaveClear();
             g.tick();   // Playing -> WaveClear (onWaveCleared)
             // Burn the WaveClear flash to reach the shop.
@@ -245,7 +246,7 @@ public:
         beginTest("Left/Right move selection wrap; R/H consumed");
         {
             Game g; g.startNewRun(false);
-            g.testSetCurrentWave(2);
+            g.testSetCurrentWave(6);
             g.testForceWaveClear();
             g.tick();
             int guard = 0;
@@ -412,18 +413,19 @@ public:
         // Shop.
         {
             Game g; g.startNewRun(false);
-            g.testSetCurrentWave(2); g.testForceWaveClear(); g.tick();
+            g.testSetCurrentWave(6); g.testForceWaveClear(); g.tick();
             int guard = 0;
             while (g.state() == GameState::WaveClear && guard++ < 1000) g.tick();
             check("Shop", g, GameState::Shop);
         }
 
-        // Boss (clearing the last normal wave, kBossWave-1 == 11, enters boss).
+        // Boss (W6 clear -> shop -> continue -> W7 boss; encounters are shop-gated).
         {
             Game g; g.startNewRun(false);
-            g.testSetCurrentWave(11); g.testForceWaveClear(); g.tick();
+            g.testSetCurrentWave(6); g.testForceWaveClear(); g.tick();
             int guard = 0;
             while (g.state() == GameState::WaveClear && guard++ < 1000) g.tick();
+            g.shopContinue();
             check("Boss", g, GameState::Boss);
         }
 

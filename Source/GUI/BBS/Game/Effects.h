@@ -19,6 +19,7 @@ namespace bombo::game
         float setMuteTimer         = 0.0f;
         bool  grantPhaseLock       = false;
         bool  grantRandomShopItem  = false;
+        bool  grantDoubleShot      = false;
     };
 
     PickupOutcome resolvePickup(Pickup::Kind k) noexcept;

@@ -10,7 +10,7 @@ namespace bombo::game
                      {Pickup::Kind::DbBig, 1.0f}, {Pickup::Kind::OneUp, 0.4f},
                      {Pickup::Kind::TransientBurst, 1.2f}, {Pickup::Kind::Compression, 0.8f} };
         t.uncommon = { {Pickup::Kind::EqFilter, 1.0f}, {Pickup::Kind::ChainBank, 1.0f},
-                       {Pickup::Kind::DbCluster, 1.0f} };
+                       {Pickup::Kind::DbCluster, 1.0f}, {Pickup::Kind::DoubleShot, 1.0f} };
         t.rare = { {Pickup::Kind::TimeFreeze, 1.0f}, {Pickup::Kind::SidechainPulse, 1.0f},
                    {Pickup::Kind::Mute, 1.0f}, {Pickup::Kind::PhaseLock, 1.0f} };
         t.legendary = { {Pickup::Kind::Mystery, 1.0f} };

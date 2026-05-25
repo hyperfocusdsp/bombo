@@ -313,4 +313,91 @@ public:
 };
 
 static GameLoopTest gameLoopTest;
+
+// ── DoubleShot firepower upgrade (resets on life loss) ──────────────────────
+class DoubleShotPersistenceTest : public juce::UnitTest
+{
+public:
+    DoubleShotPersistenceTest()
+        : juce::UnitTest("DoubleShot: doubles fire, resets on life loss") {}
+
+    static int countActiveBullets(const BulletPool& bp)
+    {
+        int n = 0;
+        for (const auto& b : bp.bullets())
+            if (b.active) ++n;
+        return n;
+    }
+
+    void runTest() override
+    {
+        beginTest("single shot fires one bullet");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();        // no incoming mobs to interfere
+            g.testSetWeaponLevel(0);
+            g.fireManualShot();
+            expectEquals(countActiveBullets(g.playerBullets()), 1);
+        }
+
+        beginTest("DoubleShot fires two parallel lanes");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            g.testSetWeaponLevel(1);
+            g.fireManualShot();
+            expectEquals(countActiveBullets(g.playerBullets()), 2);
+        }
+
+        beginTest("weapon level resets to single shot when a life is lost");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            g.testSetWeaponLevel(1);
+
+            // Park a mob on top of the player to force a body-contact life loss.
+            const auto& pl = g.player();
+            g.testEnemies().spawn(EnemyKind::Mudball, pl.x, pl.y, 0.0f, 0.0f);
+
+            const int livesBefore = g.lives();
+            g.tick();                          // resolveCombat -> body contact -> life lost
+
+            expectEquals(g.weaponLevel(), 0);
+            expectEquals(g.lives(), livesBefore - 1);
+
+            // Firing now yields a single bullet again.
+            g.testPlayerBullets() = BulletPool{};
+            g.fireManualShot();
+            expectEquals(countActiveBullets(g.playerBullets()), 1);
+        }
+
+        beginTest("double-shot + spread do NOT stack - capped at 3-way, not 6");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            g.testSetWeaponLevel(1);                    // DoubleShot active
+            g.testGrantItem(ShopItemId::Spread, 1);     // Spread also active
+            g.fireManualShot();
+            // Spread wins; no doubling. 3 bullets, never 2x3 = 6.
+            expectEquals(countActiveBullets(g.playerBullets()), 3);
+        }
+
+        beginTest("spread alone fires 3-way");
+        {
+            Game g;
+            g.startNewRun(false);
+            g.testClearWaveSchedule();
+            g.testSetWeaponLevel(0);
+            g.testGrantItem(ShopItemId::Spread, 1);
+            g.fireManualShot();
+            expectEquals(countActiveBullets(g.playerBullets()), 3);
+        }
+    }
+};
+
+static DoubleShotPersistenceTest doubleShotPersistenceTest;
 }

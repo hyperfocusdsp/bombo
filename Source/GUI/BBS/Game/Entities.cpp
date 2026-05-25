@@ -80,6 +80,123 @@ namespace
             e.y += e.vy * kTickDt;
         }
     }
+
+    // ── Added movement variety (2026-05-25 engagement pass) ─────────────────
+    // Before this, 10 of the 17 kinds fell through to tickMudball (pure straight
+    // drift), so mid/late waves all moved identically. Each function below uses
+    // the spawn-time vx for horizontal speed (so the per-wave speedMult ramp
+    // still applies) and only adds a distinct VERTICAL behaviour.
+
+    // Sine weave around the spawn row. A clear visual wiggle, but modest
+    // amplitude so the enemy stays roughly on its lane and is still hittable
+    // (a big weave makes it dodge the player's autofire and linger forever).
+    void tickWeave(Enemy& e) noexcept
+    {
+        e.phase += kTickDt;
+        e.x += e.vx * kTickDt;
+        e.y += std::sin(e.phase * 2.6f) * 30.0f * kTickDt;
+    }
+
+    // Stutter-step: short burst / short pause, faster cadence than Clipper.
+    void tickStutter(Enemy& e) noexcept
+    {
+        e.phase += kTickDt;
+        constexpr float kBurst = -55.0f;
+        if      (e.phase < 0.50f) e.vx = kBurst;
+        else if (e.phase < 0.85f) e.vx = 0.0f;
+        else                    { e.phase = 0.0f; e.vx = kBurst; }
+        e.x += e.vx * kTickDt;
+    }
+
+    // Phaser: drifts left while periodically "jumping" its Y by a fixed step,
+    // alternating direction. Reads as a glitchy teleport rather than a glide.
+    void tickPhaser(Enemy& e) noexcept
+    {
+        e.phase += kTickDt;
+        e.x += e.vx * kTickDt;
+        if (e.phase >= 1.5f)
+        {
+            e.phase = 0.0f;
+            const float step = (e.subState % 2 == 0) ? 12.0f : -12.0f;
+            e.y += step;
+            e.y = std::max(12.0f, std::min(static_cast<float>(kFbH) - 12.0f, e.y));
+            ++e.subState;
+        }
+    }
+
+    // Late-wave enemy fire. Projectiles only exist from kEnemyFireMinWave on, so
+    // early waves stay a gentle on-ramp (movement variety only, no incoming fire).
+    // Slow, dodgeable shots aimed loosely at the player; the boss fires via its
+    // own tickRumblr path and is excluded by the caller.
+    constexpr int kEnemyFireMinWave = 5;
+
+    float enemyFireInterval(EnemyKind k) noexcept
+    {
+        switch (k)
+        {
+            case EnemyKind::Crackle:   return 4.0f;   // light shooter, introduces projectiles ~W5
+            case EnemyKind::Overdrive: return 3.5f;   // elite, W8+
+            case EnemyKind::Resonator: return 4.0f;   // elite, W11
+            // Phaser is intentionally NOT a shooter — its vertical-jump movement is
+            // its gimmick. Adding fire on top stacked too much projectile pressure
+            // at W9-W11 and sank boss completion below the §13.3 band.
+            default:                   return 0.0f;   // non-shooter
+        }
+    }
+
+    void maybeEnemyFire(Enemy& e, const Player* player, BulletPool* enemyShots,
+                        int waveIdx) noexcept
+    {
+        if (enemyShots == nullptr || waveIdx < kEnemyFireMinWave) return;
+        const float interval = enemyFireInterval(e.kind);
+        if (interval <= 0.0f) return;
+        if (e.x > static_cast<float>(kFbW) - 4.0f) return;   // wait until on-screen
+
+        e.fireTimer += kTickDt;
+        if (e.fireTimer < interval) return;
+        e.fireTimer = 0.0f;
+
+        const float sx = e.x - 6.0f, sy = e.y;
+        float vy = 0.0f;
+        if (player != nullptr)
+        {
+            const float dy = player->y - e.y;
+            vy = std::max(-18.0f, std::min(18.0f, dy * 0.6f));   // loose aim
+        }
+        constexpr float vx = -30.0f;   // slow, dodgeable
+        enemyShots->spawn(sx, sy, vx, vy);
+    }
+
+    // ── Boss fire primitives (shared by the boss tick functions) ────────────
+    constexpr float kBossPi = 3.14159265f;
+
+    // One slow shot aimed loosely at the player (player sits to the left).
+    void bossFireAimed(Enemy& b, const Player* player, BulletPool* shots, float speed) noexcept
+    {
+        if (shots == nullptr) return;
+        float vy = 0.0f;
+        if (player != nullptr)
+        {
+            const float dy = player->y - b.y;
+            const float dx = std::max(1.0f, b.x - player->x);
+            vy = (dy / std::sqrt(dx * dx + dy * dy)) * speed;
+        }
+        shots->spawn(b.x - 8.0f, b.y, -speed, std::max(-speed, std::min(speed, vy)));
+    }
+
+    // N-shot fan sweeping +/- ~57deg around straight-left.
+    void bossFireRadial(Enemy& b, BulletPool* shots, int n, float speed) noexcept
+    {
+        if (shots == nullptr || n < 1) return;
+        for (int i = 0; i < n; ++i)
+        {
+            const float t = (n == 1) ? 0.0f
+                                     : (2.0f * static_cast<float>(i)
+                                        / static_cast<float>(n - 1) - 1.0f);  // -1..1
+            const float a = kBossPi + t * 1.0f;
+            shots->spawn(b.x - 6.0f, b.y, speed * std::cos(a), speed * std::sin(a));
+        }
+    }
 } // anonymous namespace
 
 namespace bombo::game
@@ -135,6 +252,91 @@ namespace bombo::game
                     break;
                 default: r.subState = 0; break;
             }
+        }
+    }
+
+    bool isBoss(EnemyKind k) noexcept
+    {
+        switch (k)
+        {
+            case EnemyKind::Rumblr:
+            case EnemyKind::MiniBoss1:
+            case EnemyKind::MiniBoss2:
+            case EnemyKind::Boss2:
+            case EnemyKind::Boss3: return true;
+            default:               return false;
+        }
+    }
+
+    // Mini-boss: a tanky unit that patrols vertically (vy set at spawn, bounces
+    // off the margins) and fires periodically. MiniBoss1 lobs a single aimed
+    // shot; MiniBoss2 throws a 3-shot fan. Weakness in practice: it telegraphs
+    // by pausing at the bounce extremes where it's easiest to line up.
+    void tickMiniBoss(Enemy& b, const Player* player, BulletPool* enemyShots) noexcept
+    {
+        b.y += b.vy * kTickDt;
+        if (b.y < 24.0f)            b.vy =  std::abs(b.vy);
+        if (b.y > kFbH - 24.0f)     b.vy = -std::abs(b.vy);
+
+        b.fireTimer += kTickDt;
+        const float interval = (b.kind == EnemyKind::MiniBoss2) ? 1.8f : 2.2f;
+        if (b.fireTimer >= interval)
+        {
+            b.fireTimer = 0.0f;
+            if (b.kind == EnemyKind::MiniBoss2) bossFireRadial(b, enemyShots, 3, 30.0f);
+            else                                bossFireAimed (b, player, enemyShots, 34.0f);
+        }
+    }
+
+    // Boss 2 ("OVERDRIVE CORE"): near-stationary core that sways slightly and
+    // pumps radial bullet fans, denser in its second HP half (+ an aimed shot).
+    void tickBoss2(Enemy& b, const Player* player, BulletPool* enemyShots) noexcept
+    {
+        b.y += std::sin(b.phase * 0.8f) * 12.0f * kTickDt;
+        b.phase += kTickDt;
+        b.fireTimer += kTickDt;
+        const bool enraged = b.hp <= b.hpMax / 2;
+        if (b.fireTimer >= (enraged ? 1.6f : 2.4f))
+        {
+            b.fireTimer = 0.0f;
+            bossFireRadial(b, enemyShots, enraged ? 7 : 5, 30.0f);
+            if (enraged) bossFireAimed(b, player, enemyShots, 36.0f);
+        }
+    }
+
+    // Boss 3 ("MASTERBUS", final): cycles radial+aimed fire and, in its lower
+    // HP phases, periodically telegraphs then charges across the screen and
+    // returns — combining the earlier bosses' threats. 3 HP-gated phases.
+    void tickBoss3(Enemy& b, const Player* player, BulletPool* enemyShots) noexcept
+    {
+        b.phase += kTickDt;
+        const int ph = (b.hp <= b.hpMax / 3) ? 3
+                     : (b.hp <= 2 * b.hpMax / 3) ? 2 : 1;
+        switch (b.subState)
+        {
+            case 0:  // hold + fire; maybe trigger a charge in phases 2/3
+                b.fireTimer += kTickDt;
+                if (b.fireTimer >= (ph >= 2 ? 1.8f : 2.4f))
+                {
+                    b.fireTimer = 0.0f;
+                    bossFireRadial(b, enemyShots, 5 + ph, 30.0f);
+                    bossFireAimed (b, player, enemyShots, 34.0f);
+                    if (ph >= 2 && (std::rand() % 3) == 0) { b.subState = 1; b.phase = 0.0f; }
+                }
+                break;
+            case 1:  // telegraph
+                if (b.phase >= 0.8f) { b.subState = 2; b.phase = 0.0f; }
+                break;
+            case 2:  // charge left
+                b.x -= 220.0f * kTickDt;
+                if (b.x < 20.0f) { b.subState = 3; }
+                break;
+            case 3:  // return home
+                b.x += 60.0f * kTickDt;
+                if (b.x >= static_cast<float>(kFbW) - 30.0f)
+                { b.x = static_cast<float>(kFbW) - 30.0f; b.subState = 0; b.phase = 0.0f; }
+                break;
+            default: b.subState = 0; break;
         }
     }
 
@@ -252,6 +454,13 @@ namespace bombo::game
             case EnemyKind::Phaser:      return 8;
             case EnemyKind::Flanger:     return 10;
             case EnemyKind::Resonator:   return 12;
+            // Boss-class. Mini-bosses are chunky-but-quick; Boss2/Boss3 escalate;
+            // Boss3 (final) is the tankiest. NG+ adds +1 HP per tier on top (see
+            // Game::spawnEncounter). Rumblr (40) above keeps its phase thresholds.
+            case EnemyKind::MiniBoss1:   return 18;
+            case EnemyKind::MiniBoss2:   return 24;
+            case EnemyKind::Boss2:       return 55;
+            case EnemyKind::Boss3:       return 75;
         }
         return 1;
     }
@@ -266,6 +475,8 @@ namespace bombo::game
                 s.kind = kind;
                 s.x = x; s.y = y; s.vx = vx; s.vy = vy;
                 s.hp = s.hpMax = defaultHp(kind);
+                if (kind != EnemyKind::SilenceVoid)    // SilenceVoid is logically invincible
+                    s.hp = s.hpMax = s.hpMax + hpBonus_;
                 s.active = true;
                 return &s;
             }
@@ -273,7 +484,7 @@ namespace bombo::game
         return nullptr;
     }
 
-    void EnemyPool::tick(const Player* player, BulletPool* enemyShots) noexcept
+    void EnemyPool::tick(const Player* player, BulletPool* enemyShots, int waveIdx) noexcept
     {
         for (auto& s : slots_)
         {
@@ -288,11 +499,33 @@ namespace bombo::game
                 case EnemyKind::AliaserMini: tickAliaserMini(s);             break;
                 case EnemyKind::DiveBomber:  tickDiveBomber(s, player);      break;
                 case EnemyKind::Rumblr:      tickRumblr(s, enemyShots);      break;
-                default:                     tickMudball(s);                 break;
+                // Distinct movement (was all tickMudball fall-through before):
+                case EnemyKind::Wobble:      tickWeave(s);                   break;
+                case EnemyKind::Warble:      tickWeave(s);                   break;
+                case EnemyKind::Hiss:        tickWeave(s);                   break;
+                case EnemyKind::Stutter:     tickStutter(s);                 break;
+                case EnemyKind::Phaser:      tickPhaser(s);                  break;
+                // Plain straight movers. Flanger is a 10-HP tank — kept straight
+                // (a weaving tank dodges autofire and lingers, spiking late-wave
+                // attrition). Crackle/Overdrive/Resonator shoot (see maybeEnemyFire).
+                case EnemyKind::Flanger:     tickMudball(s);                 break;
+                case EnemyKind::Crackle:     tickMudball(s);                 break;
+                case EnemyKind::Overdrive:   tickMudball(s);                 break;
+                case EnemyKind::Resonator:   tickMudball(s);                 break;
+                // Boss-class encounters drive their own movement + fire.
+                case EnemyKind::MiniBoss1:
+                case EnemyKind::MiniBoss2:   tickMiniBoss(s, player, enemyShots); break;
+                case EnemyKind::Boss2:       tickBoss2(s, player, enemyShots);    break;
+                case EnemyKind::Boss3:       tickBoss3(s, player, enemyShots);    break;
             }
+            // Late-wave shooter fire (no-op for bosses — they fire via their own
+            // tick — for non-shooter kinds, and for waves below kEnemyFireMinWave).
+            if (! isBoss(s.kind))
+                maybeEnemyFire(s, player, enemyShots, waveIdx);
+
             // Cull on all four edges (Y-cull added per Task 10 review — vertical movers).
-            // NEVER cull the boss — it's confined to the screen and must persist.
-            if (s.kind != EnemyKind::Rumblr &&
+            // NEVER cull a boss — it's confined to the screen and must persist.
+            if (! isBoss(s.kind) &&
                 (s.x < -16.0f || s.x > kFbW + 16.0f ||
                  s.y < -16.0f || s.y > kFbH + 16.0f))
                 s.active = false;
@@ -305,11 +538,11 @@ namespace bombo::game
         constexpr float kMinSep = 11.0f;
         for (auto& a : slots_)
         {
-            if (! a.active || a.kind == EnemyKind::Rumblr) continue;
+            if (! a.active || isBoss(a.kind)) continue;
             for (auto& b : slots_)
             {
                 if (&b <= &a) continue;   // visit each unordered pair once
-                if (! b.active || b.kind == EnemyKind::Rumblr) continue;
+                if (! b.active || isBoss(b.kind)) continue;
                 float dx = b.x - a.x, dy = b.y - a.y;
                 float d2 = dx * dx + dy * dy;
                 if (d2 <= 0.0001f) { dx = 0.6f; dy = 0.0f; d2 = 0.36f; }  // coincident -> nudge apart

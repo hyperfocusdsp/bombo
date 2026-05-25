@@ -60,8 +60,10 @@ namespace bombo::game
 
         struct InputState { bool up = false, down = false, left = false, right = false; };
 
-        // Lifecycle
-        void startNewRun(bool dailySeed);
+        // Lifecycle. ngPlusTier > 0 starts a New Game+ run: every enemy/boss gets
+        // +tier HP and a faster approach. A plain NEW GAME passes 0.
+        void startNewRun(bool dailySeed, int ngPlusTier = 0);
+        int  ngPlus() const noexcept { return ngPlus_; }
         void togglePause();
         void requestQuit();      // opens QuitConfirm modal from any state
         void confirmQuit();      // returns to Title, sets wantsExit_ = true (BBS polls it to tear down)
@@ -111,6 +113,12 @@ namespace bombo::game
         std::function<void(bool)>      onGameOverFx;   // run ended (true = victory)
         std::function<void(DropTier)>  onPickup;       // a pickup was collected
         std::function<void()>          onBossTelegraph;// boss (RUMBLR) spawned
+        std::function<void(bool)>      onMusicToggle;  // MUSIC menu item flipped (true = on)
+
+        // Music on/off menu state. BBS seeds it from the persisted setting at
+        // launch (setMusicOn); the MUSIC menu item flips it via onMusicToggle.
+        void setMusicOn(bool on) noexcept { musicOn_ = on; }
+        bool musicOn() const noexcept { return musicOn_; }
 
         // --- Shop interaction (input layer / Task 22 calls these) ---
         // Valid only while state()==Shop. Slot selection is 0..2.
@@ -144,6 +152,7 @@ namespace bombo::game
         const PickupPool& pickups()       const noexcept { return pickups_; }
         const ChainState& chain()         const noexcept { return chain_; }
         int  ownedItem(ShopItemId id)     const noexcept { return ownedItems_[(int) id]; }
+        int  weaponLevel()                const noexcept { return weaponLevel_; }
 
        #if defined(BOMBO_GAME_TEST_HOOKS)
         // Test-only mutable accessors for headless integration tests (Task 7).
@@ -154,6 +163,7 @@ namespace bombo::game
         EnemyPool&  testEnemies()       noexcept { return enemies_; }
         PickupPool& testPickups()       noexcept { return pickups_; }
         void        testGrantItem(ShopItemId id, int n) noexcept { ownedItems_[(int) id] = n; }
+        void        testSetWeaponLevel(int n) noexcept { weaponLevel_ = n; }
         void        testClearWaveSchedule() noexcept { wave_ = WaveSchedule{}; }
         void        testSetLives(int n) noexcept { lives_ = n; }
         void        testSetScore(int n) noexcept { score_ = n; }
@@ -191,6 +201,9 @@ namespace bombo::game
             chain_         = ChainState{};
             effects_       = EffectState{};
             ownedItems_    = {};
+            weaponLevel_   = 0;
+            ngPlus_        = 0;
+            enemies_.setHpBonus(0);
             tickCounter_   = 0;
             runRng_.seed(runSeed_);
             wave_          = scheduleWave(runSeed_, currentWave_);
@@ -214,8 +227,10 @@ namespace bombo::game
         void onWaveCleared();                       // bonus + chain reset + -> WaveClear
         void advanceAfterWaveClear();               // WaveClear -> next wave / Shop / Boss
         void advanceAfterShop();                    // Shop continue -> next wave Playing
+        void beginWave();                           // dispatch currentWave_: Normal vs encounter
         void enterShop();                           // create ShopVisit, freeze sim
-        void enterBoss();                           // ++wave to 8, spawn RUMBLR
+        void enterBoss();                           // spawn the encounter for currentWave_
+        void toggleMusic();                         // flip musicOn_ + fire onMusicToggle
         void onGameOver(bool victory);              // death or boss win -> GameOver / Initials
         bool bossIsDead() const noexcept;           // no active Rumblr remains
 
@@ -276,6 +291,16 @@ namespace bombo::game
         EffectState   effects_;
         WaveSchedule  wave_;
         std::array<int, 15> ownedItems_{};   // shop stacks, indexed by (int)ShopItemId
+        // Firepower upgrade level from the DoubleShot drop. Unlike shop items
+        // (ownedItems_, which persist for the whole run) this is a transient
+        // run-state field that resets to 0 whenever a life is lost. 0 = single
+        // shot, 1 = double; leaves headroom for a future triple (2).
+        int           weaponLevel_ = 0;
+        // NG+ tier the current run is played at (0 = base). Each tier gives every
+        // enemy/boss +1 HP and a faster approach. Beating the final boss bumps the
+        // persisted max tier and offers a restart at tier+1 (see B4 / GameProgress).
+        int           ngPlus_ = 0;
+        bool          musicOn_ = false;   // game-music toggle (persisted by BBS)
         int           tickCounter_ = 0;
         std::mt19937  runRng_;               // drop rolls + random-item grants (seeded from runSeed_)
         InputState    input_;

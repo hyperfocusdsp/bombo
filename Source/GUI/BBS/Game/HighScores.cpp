@@ -49,11 +49,14 @@ namespace bombo::game
                 e.date     = v["date"].toString();
                 e.daily    = (bool) v["daily"];
                 e.seed     = (uint32_t)(int) v["seed"];
+                e.won      = (bool) v["won"];        // absent in old files → false
+                e.ngPlus   = (int)  v["ngPlus"];     // absent → 0
                 top_.push_back(e);
             }
         }
         cabinetLit_     = (bool) parsed["discoveryFlags"]["cabinetLit"];
         firstInvaderAt_ = parsed["discoveryFlags"]["firstInvaderSeenAt"].toString();
+        maxNgPlus_      = (int)  parsed["maxNgPlus"];   // absent in old files → 0
     }
 
     void HighScores::save()
@@ -73,6 +76,8 @@ namespace bombo::game
             eo->setProperty("date",     e.date);
             eo->setProperty("daily",    e.daily);
             eo->setProperty("seed",     (int) e.seed);
+            eo->setProperty("won",      e.won);
+            eo->setProperty("ngPlus",   e.ngPlus);
             arr.add(juce::var(eo.get()));
         }
         root->setProperty("scores", arr);
@@ -81,6 +86,7 @@ namespace bombo::game
         flags->setProperty("cabinetLit", cabinetLit_);
         flags->setProperty("firstInvaderSeenAt", firstInvaderAt_);
         root->setProperty("discoveryFlags", juce::var(flags.get()));
+        root->setProperty("maxNgPlus", maxNgPlus_);
 
         path_.replaceWithText(juce::JSON::toString(juce::var(root.get()), true));
     }
@@ -97,6 +103,15 @@ namespace bombo::game
         std::sort(top_.begin(), top_.end(),
                   [](const ScoreEntry& a, const ScoreEntry& b) { return a.score > b.score; });
         if (top_.size() > 10) top_.resize(10);
+    }
+
+    void HighScores::setMaxNgPlus(int tier)
+    {
+        if (tier > maxNgPlus_)
+        {
+            maxNgPlus_ = tier;
+            save();
+        }
     }
 
     void HighScores::setCabinetLit(bool v)
