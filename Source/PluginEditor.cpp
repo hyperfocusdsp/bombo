@@ -348,6 +348,23 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
                            .translated ((float) faceplate.getX(),
                                         (float) faceplate.getY());
 
+    // Outline-only export mode (BOMBO_OUTLINE_ONLY=1): paint over every child
+    // and render just the full bomb silhouette (cap + fins + body union) as a
+    // flat white shape on black — a clean control image for external (GenAI)
+    // texture generation. No rack, knobs, text, or theme colour.
+    if (std::getenv("BOMBO_OUTLINE_ONLY") != nullptr)
+    {
+        g.fillAll (juce::Colours::black);
+        juce::Graphics::ScopedSaveState ss (g);
+        g.addTransform (fullT);
+        g.setColour (juce::Colours::white);
+        g.fillPath (faceplate.getCapPath());
+        g.fillPath (faceplate.getFinPathL());
+        g.fillPath (faceplate.getFinPathR());
+        g.fillPath (faceplate.getChassisPath());
+        return;
+    }
+
     // Rack and chassis bottom in editor (window) coords.
     auto rack = faceplate.getRackBounds().toFloat().transformedBy (fullT);
     const float chassisBot =
@@ -421,9 +438,14 @@ void BomboEditor::paintOverChildren(juce::Graphics& g)
         bombScreenPath.applyTransform (fullT);
         g.reduceClipRegion (bombScreenPath);
 
-        // Amber inner lip — marks the edge of the cutout opening
-        g.setColour (juce::Colour (0xFFFFB800).withAlpha (0.80f));
-        g.drawRect (rack, 1.0f);
+        // Amber inner lip — marks the edge of the cutout opening. Skipped on
+        // neon themes: the accent-coloured body frame is the border there, and
+        // a hardcoded amber lip clashed with the neon palette.
+        if (! bombo::col::isNeon())
+        {
+            g.setColour (juce::Colour (0xFFFFB800).withAlpha (0.80f));
+            g.drawRect (rack, 1.0f);
+        }
 
         // Inner bevel — top shadow (far lip casts shadow down into the opening)
         const float bW = 5.0f * scale;

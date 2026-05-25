@@ -40,6 +40,8 @@ inline juce::Colour bandYellow()  { return bombo::ThemeProvider::current().bandY
 
 inline float chassisOverlayOpacity() { return bombo::ThemeProvider::current().chassisOverlayOpacity; }
 
+inline bombo::BodyStyle bodyStyle() { return bombo::ThemeProvider::current().bodyStyle; }
+
 // True on themes where `ink` is a LIGHT secondary foreground instead of
 // a dark recess colour (MATRIX/CYBER/PLASMA). These themes need
 // dark-bg + accent-text styling for toggle pills, the OUT macro cap,

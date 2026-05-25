@@ -693,7 +693,10 @@ void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
     // rear-cap assembly. U-shape: top + left + right borders ONLY (no
     // bottom - the bottom opens into the macro row).
     constexpr int kBorder = 3;
-    g.setColour(col::noseRed());
+    // Neon themes: match the accent-coloured body frame so the scope reads as
+    // part of the same framed unit. Classic themes keep the nose-red U so the
+    // scope reads as attached to the rear-cap assembly.
+    g.setColour(col::isNeon() ? col::accentAmber() : col::noseRed());
 
     const int x  = scopeBounds_.getX() - kBorder;
     const int y  = scopeBounds_.getY() - kBorder;
@@ -870,18 +873,27 @@ std::vector<LayoutElem> FaceplatePanel::getEditableElements() const
         out.push_back({ "presetBar", presetBarBounds_,    false, "macro_row"   });
     if (balanceFader_ != nullptr)
     {
-        // Hit-box inflated vertically - the 16px tall fader is unreachable
-        // in edit mode otherwise. First drag persists the inflated rect to
-        // Layout.json, so the runtime fader grows to the same easier-to-grab
-        // size. Horizontal is left as-is (already 88px between V.A/V.B).
-        const auto raw = balanceFader_->getBounds();
-        const int kInflateV = 8;  // 16 → 32 tall
-        const juce::Rectangle<int> hit(raw.getX(),
-                                       raw.getY() - kInflateV,
-                                       raw.getWidth(),
-                                       raw.getHeight() + 2 * kInflateV);
-        out.push_back({ "balanceFader", hit, false, "rotary_knob" });
+        // Report the fader's TRUE bounds (16px tall, matching the Voice B
+        // synth pill). The old code inflated this to 32px for easier grabbing,
+        // but the inflated rect got persisted to Layout.json and the runtime
+        // fader grew to double height — so a drag silently broke the sizing.
+        out.push_back({ "balanceFader", balanceFader_->getBounds(), false, "rotary_knob" });
     }
+
+    // Fin pills — draggable for manual alignment. Bounds are in the faceplate's
+    // fixed 600x1066 design space (the editor scales the whole panel), so saved
+    // positions are size-independent and theme-independent.
+    auto addPill = [&](const char* id, juce::Component* c)
+    {
+        if (c != nullptr) out.push_back({ id, c->getBounds(), false, "pill" });
+    };
+    addPill("bncPill",  bncPill_.get());
+    addPill("dice",     diceButton_.get());
+    addPill("kbtrk",    kbtrkBtn_.get());
+    addPill("limPill",  limPill_.get());
+    addPill("tailPill", tailPill_.get());
+    addPill("loop",     loopBtn_.get());
+    addPill("bpm",      bpmDisplay_.get());
 
     for (size_t i = 0; i < sections_.size(); ++i)
     {
@@ -1090,7 +1102,11 @@ void FaceplatePanel::resized()
         const int balX = sections_[0].rectBounds.getX();
         const int balR = sections_[1].rectBounds.getRight();
         const int balY = sections_[0].rectBounds.getY() - kBalFaderH - 2;
-        const juce::Rectangle<int> balDefault(balX, balY, balR - balX, kBalFaderH);
+        // Reserve the right corner for the Voice B synth pill (kSynthPillW + gap)
+        // so the full-width fader doesn't render under it.
+        constexpr int kSynthReserve = 28;
+        const juce::Rectangle<int> balDefault(balX, balY,
+                                              balR - balX - kSynthReserve, kBalFaderH);
         balanceFader_->setBounds(layout_.boundsOr("balanceFader", balDefault));
     }
 
@@ -1226,33 +1242,40 @@ void FaceplatePanel::layoutHeader(juce::Rectangle<int> /*capArea*/)
     {
         const int totalW = kPillW + kGap + kSq;
         int lx = leftFinCx - totalW / 2;
-        if (bncPill_)    bncPill_   ->setBounds(lx,           row1Y, kPillW, kPillH);
+        if (bncPill_)    bncPill_   ->setBounds(layout_.boundsOr("bncPill",
+                                        juce::Rectangle<int>(lx, row1Y, kPillW, kPillH)));
         lx += kPillW + kGap;
         // DICE is square - centre it vertically in the pill height
         const int diceY = row1Y + (kPillH - kSq) / 2;
-        if (diceButton_) diceButton_->setBounds(lx,           diceY, kSq,    kSq);
+        if (diceButton_) diceButton_->setBounds(layout_.boundsOr("dice",
+                                        juce::Rectangle<int>(lx, diceY, kSq, kSq)));
 
         // Row 2 (mirrors the right fin's second row): KBTRK square toggle,
         // centred under the BNC+DICE pair on the left fin.
         const int kbtrkY = row2Y + (kPillH - kSq) / 2;
-        if (kbtrkBtn_) kbtrkBtn_->setBounds(leftFinCx - kSq / 2, kbtrkY, kSq, kSq);
+        if (kbtrkBtn_) kbtrkBtn_->setBounds(layout_.boundsOr("kbtrk",
+                                        juce::Rectangle<int>(leftFinCx - kSq / 2, kbtrkY, kSq, kSq)));
     }
 
     // ── Right fin: row1 LIM+TAIL, row2 LOOP-icon+BPM ─────────────────
     {
         const int pairW = 2 * kPillW + kGap;
         int rx = rightFinCx - pairW / 2;
-        if (limPill_)  limPill_ ->setBounds(rx, row1Y, kPillW, kPillH);
+        if (limPill_)  limPill_ ->setBounds(layout_.boundsOr("limPill",
+                                        juce::Rectangle<int>(rx, row1Y, kPillW, kPillH)));
         rx += kPillW + kGap;
-        if (tailPill_) tailPill_->setBounds(rx, row1Y, kPillW, kPillH);
+        if (tailPill_) tailPill_->setBounds(layout_.boundsOr("tailPill",
+                                        juce::Rectangle<int>(rx, row1Y, kPillW, kPillH)));
 
         // Row 2: LOOP icon (square) + BPM display, centred on rightFinCx
         const int row2W = kSq + kGap + kBpmW;
         int rx2 = rightFinCx - row2W / 2;
         const int loopY = row2Y + (kPillH - kSq) / 2;
-        if (loopBtn_)    loopBtn_   ->setBounds(rx2, loopY, kSq,   kSq);
+        if (loopBtn_)    loopBtn_   ->setBounds(layout_.boundsOr("loop",
+                                        juce::Rectangle<int>(rx2, loopY, kSq, kSq)));
         rx2 += kSq + kGap;
-        if (bpmDisplay_) bpmDisplay_->setBounds(rx2, row2Y, kBpmW, kPillH);
+        if (bpmDisplay_) bpmDisplay_->setBounds(layout_.boundsOr("bpm",
+                                        juce::Rectangle<int>(rx2, row2Y, kBpmW, kPillH)));
     }
 }
 

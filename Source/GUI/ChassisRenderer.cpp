@@ -21,6 +21,51 @@ namespace
         return juce::ImageCache::getFromMemory(BinaryData::chassis_overlay_png,
                                                BinaryData::chassis_overlay_pngSize);
     }
+
+    // Procedural mottled-camo fill for BodyStyle::Camo. Soft overlapping
+    // blobs in three tones derived from the body palette plus a faint accent
+    // tint, clipped to the silhouette. Fixed RNG seed so the pattern is stable
+    // across repaints (no shimmer). A light grain pass on top breaks up the
+    // blob edges so it reads as material, not polka dots.
+    void drawCamo(juce::Graphics& g, const Ctx& ctx)
+    {
+        juce::Graphics::ScopedSaveState ss(g);
+        g.reduceClipRegion(ctx.chassisPath);
+        // Keep the nose cone clean — camo only on the upper body. The nose
+        // (the noseRed region below redRegionTopY) stays a solid colour.
+        g.excludeClipRegion(juce::Rectangle<int>(0, ctx.redRegionTopY,
+                                                 ctx.panelWidth,
+                                                 ctx.panelHeight - ctx.redRegionTopY));
+        const auto b = ctx.chassisPath.getBounds();
+        if (b.isEmpty()) return;
+
+        const juce::Colour tones[3] = {
+            col::bodyHi().brighter(0.10f),
+            col::bodyLo().darker(0.14f),
+            col::accentAmber().withSaturation(0.55f).darker(0.35f)
+        };
+        const float alphas[3] = { 0.45f, 0.50f, 0.22f };
+
+        juce::Random rng((juce::int64) 0xB0BB0);
+        constexpr int kBlobs = 46;
+        for (int i = 0; i < kBlobs; ++i)
+        {
+            const int   t = rng.nextInt(3);
+            const float w = b.getWidth() * (0.18f + rng.nextFloat() * 0.34f);
+            const float h = w * (0.55f + rng.nextFloat() * 0.95f);
+            const float x = b.getX() + rng.nextFloat() * b.getWidth()  - w * 0.5f;
+            const float y = b.getY() + rng.nextFloat() * b.getHeight() - h * 0.5f;
+            g.setColour(tones[t].withAlpha(alphas[t]));
+            g.fillEllipse(x, y, w, h);
+        }
+
+        const auto overlay = loadOverlayImage();
+        if (overlay.isValid())
+        {
+            g.setOpacity(0.18f);
+            g.drawImage(overlay, b, juce::RectanglePlacement::stretchToFit);
+        }
+    }
 }
 
 void drawBackground(juce::Graphics& g)
@@ -87,39 +132,51 @@ void drawChassis(juce::Graphics& g, const Ctx& ctx)
     g.setGradientFill(grad);
     g.fillPath(ctx.chassisPath);
 
-    // Surface texture overlay (chassis_overlay.png), clipped to the silhouette
-    // so the baked scratches + AO + grain only paint inside the bomb. Per-theme
-    // opacity lets dark palettes (NIGHTRUN/MATRIX/CYBER/PLASMA) dial it back.
+    // Chassis interior treatment (per-theme bodyStyle):
+    //   Grain — baked scratches/AO/grain overlay at chassisOverlayOpacity.
+    //   Camo  — procedural mottled blobs (drawCamo) so the body reads as
+    //           material rather than flat black (esp. on neon themes).
+    //   Flat  — body gradient only.
+    switch (col::bodyStyle())
     {
-        const float opacity = col::chassisOverlayOpacity();
-        if (opacity > 0.001f)
+        case BodyStyle::Flat:
+            break;
+
+        case BodyStyle::Camo:
+            drawCamo(g, ctx);
+            break;
+
+        case BodyStyle::Grain:
+        default:
         {
-            const auto overlay = loadOverlayImage();
-            if (overlay.isValid())
+            const float opacity = col::chassisOverlayOpacity();
+            if (opacity > 0.001f)
             {
-                juce::Graphics::ScopedSaveState ss(g);
-                g.reduceClipRegion(ctx.chassisPath);
-                g.setOpacity(juce::jlimit(0.0f, 1.0f, opacity));
-                g.drawImage(overlay,
-                            ctx.chassisPath.getBounds(),
-                            juce::RectanglePlacement::stretchToFit);
+                const auto overlay = loadOverlayImage();
+                if (overlay.isValid())
+                {
+                    juce::Graphics::ScopedSaveState ss(g);
+                    g.reduceClipRegion(ctx.chassisPath);
+                    g.setOpacity(juce::jlimit(0.0f, 1.0f, opacity));
+                    g.drawImage(overlay,
+                                ctx.chassisPath.getBounds(),
+                                juce::RectanglePlacement::stretchToFit);
+                }
             }
+            break;
         }
     }
 
-    // Silhouette outline — bone stroke above the orange region only.
-    // Skipped on neon themes: bone IS the vivid neon colour there, which
-    // produces a bright neon border the user doesn't want. The silhouette
-    // reads fine on neon via the body gradient contrast alone.
-    if (!col::isNeon())
+    // Silhouette outline — a constant-thickness frame tracing the whole body
+    // perimeter so the black areas around the rack read as a shaped unit. On
+    // neon themes it's a thin accent-coloured frame (the neon "edge" the flat
+    // black body was missing); on classic themes a soft bone stroke.
     {
         juce::Graphics::ScopedSaveState ss(g);
-        g.excludeClipRegion(juce::Rectangle<int>(0,
-                                                  static_cast<int>(redY),
-                                                  ctx.panelWidth,
-                                                  ctx.panelHeight - static_cast<int>(redY)));
-        g.setColour(col::bone().withAlpha(0.65f));
-        g.strokePath(ctx.chassisPath, juce::PathStrokeType(1.5f));
+        const bool neon = col::isNeon();
+        g.setColour(neon ? col::accentAmber().withAlpha(0.90f)
+                         : col::bone().withAlpha(0.65f));
+        g.strokePath(ctx.chassisPath, juce::PathStrokeType(neon ? 1.2f : 1.5f));
     }
 }
 

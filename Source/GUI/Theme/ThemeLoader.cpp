@@ -91,6 +91,15 @@ bool fillPalette(const juce::var& pal, Palette& out, std::string& err)
     if (pal.hasProperty("chassisOverlayOpacity"))
         out.chassisOverlayOpacity = juce::jlimit(0.0f, 1.0f,
                                                   static_cast<float>(static_cast<double>(pal["chassisOverlayOpacity"])));
+
+    // Optional chassis interior treatment. Defaults to Grain (legacy look).
+    if (pal.hasProperty("bodyStyle"))
+    {
+        const auto s = pal["bodyStyle"].toString().trim().toLowerCase();
+        if (s == "flat")      out.bodyStyle = BodyStyle::Flat;
+        else if (s == "camo") out.bodyStyle = BodyStyle::Camo;
+        else                  out.bodyStyle = BodyStyle::Grain;
+    }
     return true;
 }
 } // anonymous namespace

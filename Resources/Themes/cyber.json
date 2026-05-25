@@ -22,6 +22,7 @@
     "cap":         "#020608",
     "noseRed":     "#00AACC",
     "bandYellow":  "#00E5FF",
-    "chassisOverlayOpacity": 0.20
+    "chassisOverlayOpacity": 0.38,
+    "bodyStyle": "grain"
   }
 }

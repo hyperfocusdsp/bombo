@@ -97,8 +97,9 @@ void ScopeComponent::paint(juce::Graphics& g)
     // the whole theme set.
     g.setColour(col::isNeon() ? col::graphite().darker(0.5f) : col::ink());
     g.fillRoundedRectangle(bounds, 3.0f);
-    g.setColour(col::graphiteHi());
-    g.drawRoundedRectangle(bounds.reduced(0.5f), 3.0f, 1.0f);
+    // No inner border here — the U-frame in FaceplatePanel::paintScopeFrame is
+    // the scope's frame. A second rounded-rect stroke produced a doubled edge
+    // (square U-frame + rounded inner stroke) that read as uneven thickness.
 
     // Label
     g.setColour(col::boneDim());

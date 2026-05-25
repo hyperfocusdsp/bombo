@@ -5,6 +5,12 @@
 namespace bombo
 {
 
+// How the chassis interior (the body around the rack) is treated.
+//   Flat  — body gradient only, no texture.
+//   Grain — baked scratches/AO/grain overlay (chassisOverlayOpacity).
+//   Camo  — procedural tonal camo blotches tinted to the body/accent.
+enum class BodyStyle { Flat, Grain, Camo };
+
 // POD palette mirroring every entry in the pre-refactor Source/GUI/Colours.h.
 // Add new fields here ONLY when adding a new themeable surface.
 struct Palette
@@ -47,6 +53,10 @@ struct Palette
     // Light-bodied themes carry the overlay near 0.55; already-dark themes dial to
     // ~0.20 so the overlay doesn't muddy them further. 0 disables the overlay.
     float chassisOverlayOpacity = 0.55f;
+
+    // Chassis interior treatment (see BodyStyle). Defaults to Grain so legacy
+    // themes keep their baked-overlay look.
+    BodyStyle bodyStyle = BodyStyle::Grain;
 };
 
 // Hard-coded BANDW palette = exact values from pre-refactor Colours.h.

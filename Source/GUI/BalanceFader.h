@@ -10,12 +10,12 @@
 namespace bombo
 {
 
-// Small rotary knob for VOICE A ↔ VOICE B balance. Lives floating on the
-// border between the two columns, vertically centered between knob rows.
-// Center detent at 0.5 (both layers at unity). Double-click → 0.5.
+// Horizontal VOICE A ↔ VOICE B balance fader. Lives in the strip above the
+// two voice columns and fills its full layout box so it aligns with them.
+// A on the left, B on the right, sliding accent thumb, center detent at 0.5.
+// Click/drag to position, double-click → 0.5, wheel to nudge.
 //
-// Visually a miniature of the standard knob look — same cap gradient and
-// indicator wedge style, just at a smaller size with an "A·B" cap label.
+// Styled as a dark recessed pill to match the BNC/LIM/TAIL pill chrome.
 class BalanceFader : public juce::Component, public bombo::ThemedComponent
 {
 public:
@@ -23,9 +23,6 @@ public:
                  const juce::String& paramId)
     {
         slider_.setRange(0.0, 1.0, 0.0);
-        slider_.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider_.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f,
-                                    juce::MathConstants<float>::pi * 2.75f, true);
         slider_.setVisible(false);
         addChildComponent(slider_);
         slider_.onValueChange = [this] { repaint(); };
@@ -36,86 +33,61 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        const auto bounds = getLocalBounds().toFloat();
-        const float diameter = juce::jmin(bounds.getWidth(), bounds.getHeight());
-        if (diameter < 8.0f) return;
+        const auto b = getLocalBounds().toFloat().reduced(1.0f);
+        if (b.getWidth() < 16.0f || b.getHeight() < 8.0f) return;
 
-        const auto cx = bounds.getCentreX();
-        const auto cy = bounds.getCentreY();
-        const float radius = diameter * 0.5f - 2.0f;
+        const float r        = b.getHeight() * 0.5f;
+        const bool  hot      = isMouseOver(true);
+        const auto  accent   = col::accentAmber();
 
-        // Drop shadow / recess.
-        g.setColour(juce::Colour(0xFF000000).withAlpha(0.45f));
-        g.fillEllipse(cx - radius - 1.0f, cy - radius + 1.0f,
-                      (radius + 1.0f) * 2.0f, (radius + 1.0f) * 2.0f);
+        // Recessed pill housing.
+        g.setColour(juce::Colours::black.withAlpha(0.35f));
+        g.fillRoundedRectangle(b.translated(0.0f, 1.0f), r);
+        g.setColour(col::knobRubber().darker(0.15f));
+        g.fillRoundedRectangle(b, r);
+        // Inner shadow line at the top of the groove (recess cue).
+        g.setColour(juce::Colours::black.withAlpha(0.30f));
+        g.fillRoundedRectangle(b.withHeight(b.getHeight() * 0.5f).reduced(2.0f, 1.0f), r * 0.6f);
+        // Rim.
+        g.setColour((hot ? accent : col::bone()).withAlpha(hot ? 0.85f : 0.40f));
+        g.drawRoundedRectangle(b, r, 1.0f);
 
-        // Rubber outer.
-        g.setColour(col::knobRubber());
-        g.fillEllipse(cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
+        const auto track = trackRect();
 
-        // Cap core — slightly amber-tinted so the user can spot it as the
-        // "global between-A-and-B" control, not a regular column knob.
-        const float coreR = radius * 0.72f;
-        const auto coreTop = col::knobCap().brighter(0.12f);
-        const auto coreBot = col::knobCap().darker(0.22f);
-        g.setGradientFill(juce::ColourGradient(coreTop, cx, cy - coreR,
-                                               coreBot, cx, cy + coreR, false));
-        g.fillEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f);
+        // Center detent tick.
+        g.setColour(col::bone().withAlpha(0.28f));
+        g.fillRect(track.getCentreX() - 0.5f, b.getY() + 3.0f, 1.0f, b.getHeight() - 6.0f);
 
-        const bool hot = isMouseOver(true);
-        g.setColour(hot ? col::accentAmber().withAlpha(0.85f)
-                        : juce::Colour::fromRGBA(0, 0, 0, 0x55));
-        g.drawEllipse(cx - coreR, cy - coreR, coreR * 2.0f, coreR * 2.0f, 1.0f);
+        // End labels.
+        g.setColour(col::bone().withAlpha(0.92f));
+        g.setFont(fonts::value(juce::jlimit(9.0f, 12.0f, b.getHeight() * 0.72f)));
+        g.drawText("A", juce::Rectangle<float>(b.getX() + 3.0f, b.getY(),
+                                               r, b.getHeight()),
+                   juce::Justification::centredLeft);
+        g.drawText("B", juce::Rectangle<float>(b.getRight() - r - 3.0f, b.getY(),
+                                               r, b.getHeight()),
+                   juce::Justification::centredRight);
 
-        // Indicator wedge.
-        constexpr float kStart = juce::MathConstants<float>::pi * 1.25f;
-        constexpr float kEnd   = juce::MathConstants<float>::pi * 2.75f;
+        // Thumb.
         const float v   = static_cast<float>(slider_.getValue());
-        const float ang = juce::jmap(v, kStart, kEnd)
-                        - juce::MathConstants<float>::halfPi;
-        const float ic = std::cos(ang);
-        const float is = std::sin(ang);
-        const float perpC = -is;
-        const float perpS =  ic;
-        constexpr float stemW = 2.2f;
-        const float stemInR  = coreR;
-        const float stemOutR = radius;
-        juce::Path stem;
-        stem.startNewSubPath(cx + ic * stemInR  + perpC * stemW * 0.5f,
-                             cy + is * stemInR  + perpS * stemW * 0.5f);
-        stem.lineTo(cx + ic * stemOutR + perpC * stemW * 0.6f,
-                    cy + is * stemOutR + perpS * stemW * 0.6f);
-        stem.lineTo(cx + ic * stemOutR - perpC * stemW * 0.6f,
-                    cy + is * stemOutR - perpS * stemW * 0.6f);
-        stem.lineTo(cx + ic * stemInR  - perpC * stemW * 0.5f,
-                    cy + is * stemInR  - perpS * stemW * 0.5f);
-        stem.closeSubPath();
-        g.setColour(col::bone());
-        g.fillPath(stem);
-
-        // "A:B" cap label.
-        g.setColour(col::bone().withAlpha(0.85f));
-        g.setFont(fonts::value(juce::jlimit(7.0f, 9.0f, coreR * 0.55f)));
-        g.drawText("A:B",
-                   juce::Rectangle<float>(cx - coreR, cy - coreR,
-                                          coreR * 2.0f, coreR * 2.0f),
-                   juce::Justification::centred);
+        const float th  = b.getHeight() - 6.0f;          // thumb height
+        const float tw  = juce::jmax(8.0f, th * 0.62f);  // thumb width
+        const float tx  = juce::jmap(v, 0.0f, 1.0f,
+                                     track.getX() + tw * 0.5f,
+                                     track.getRight() - tw * 0.5f);
+        const juce::Rectangle<float> thumb(tx - tw * 0.5f, b.getCentreY() - th * 0.5f, tw, th);
+        g.setColour(juce::Colours::black.withAlpha(0.40f));
+        g.fillRoundedRectangle(thumb.translated(0.0f, 1.0f), tw * 0.35f);
+        g.setGradientFill(juce::ColourGradient(accent.brighter(0.20f), thumb.getX(), thumb.getY(),
+                                               accent.darker(0.25f), thumb.getX(), thumb.getBottom(),
+                                               false));
+        g.fillRoundedRectangle(thumb, tw * 0.35f);
+        g.setColour(col::bone().withAlpha(0.55f));
+        g.drawRoundedRectangle(thumb, tw * 0.35f, 1.0f);
     }
 
-    void mouseDown(const juce::MouseEvent& e) override
-    {
-        dragStartY_ = e.position.y;
-        dragStartVal_ = static_cast<float>(slider_.getValue());
-    }
-
-    void mouseDrag(const juce::MouseEvent& e) override
-    {
-        // Up = more B, down = more A. Standard rotary drag feel.
-        const float dy = (dragStartY_ - e.position.y);
-        const float speed = e.mods.isShiftDown() ? 0.002f : 0.008f;
-        const float v = juce::jlimit(0.0f, 1.0f, dragStartVal_ + dy * speed);
-        slider_.setValue(v, juce::sendNotificationSync);
-    }
+    void mouseDown(const juce::MouseEvent& e) override { setFromMouse(e); }
+    void mouseDrag(const juce::MouseEvent& e) override { setFromMouse(e); }
 
     void mouseDoubleClick(const juce::MouseEvent&) override
     {
@@ -126,16 +98,33 @@ public:
     {
         const float step = (w.deltaY > 0 ? 1.0f : (w.deltaY < 0 ? -1.0f : 0.0f)) * 0.02f;
         if (step == 0.0f) return;
-        const float v = juce::jlimit(0.0f, 1.0f,
-                                     static_cast<float>(slider_.getValue()) + step);
-        slider_.setValue(v, juce::sendNotificationSync);
+        slider_.setValue(juce::jlimit(0.0f, 1.0f,
+                                      static_cast<float>(slider_.getValue()) + step),
+                         juce::sendNotificationSync);
     }
 
 private:
+    juce::Rectangle<float> trackRect() const
+    {
+        const auto b = getLocalBounds().toFloat().reduced(1.0f);
+        const float r = b.getHeight() * 0.5f;
+        // Track inset leaves room for the A/B end labels.
+        return b.reduced(r + 6.0f, b.getHeight() * 0.5f - 1.0f);
+    }
+
+    void setFromMouse(const juce::MouseEvent& e)
+    {
+        const auto track = trackRect();
+        if (track.getWidth() <= 1.0f) return;
+        const float fine = e.mods.isShiftDown() ? 0.35f : 1.0f;
+        const float raw  = juce::jmap(e.position.x, track.getX(), track.getRight(), 0.0f, 1.0f);
+        const float cur  = static_cast<float>(slider_.getValue());
+        const float v    = juce::jlimit(0.0f, 1.0f, cur + (raw - cur) * fine);
+        slider_.setValue(v, juce::sendNotificationSync);
+    }
+
     juce::Slider slider_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment_;
-    float dragStartY_ = 0.0f;
-    float dragStartVal_ = 0.5f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BalanceFader)
 };
