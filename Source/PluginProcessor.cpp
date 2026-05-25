@@ -564,16 +564,18 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
 
         const float dry = voiceMgr_.renderSample();
         const float wet = chain_.process(dry);
-        const float g = masterGainSmoothed.getNextValue();
-        const float out = wet * g;
 
-        // Hidden EDM finalizer: sub-mono < 120 Hz, slight Haas-width
-        // on the upper band. Always on, no UI exposure. See
-        // StereoFinalizer.h for the rationale.
-        float oL = out, oR = out;
-        stereoFin_.process(out, oL, oR);
+        // Hidden EDM finalizer: sub-mono < 120 Hz. Always on, no UI
+        // exposure. See StereoFinalizer.h. Runs on the pre-master-gain
+        // signal — it's linear, so master gain commutes and is applied
+        // live below (after the loop cache) so an Out tweak is heard
+        // immediately even while a cached loop replays.
+        float oL = wet, oR = wet;
+        stereoFin_.process(wet, oL, oR);
 
-        // Loop cache capture / playback.
+        // Loop cache capture / playback. Stores the PRE-master-gain signal
+        // so the Out knob stays live during replay (master_out is not part
+        // of chainParams_, so it never invalidated the cache).
         if (loopCacheActive)
         {
             if (loopCache_.capturing
@@ -609,6 +611,12 @@ void BomboProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
                 ++loopCache_.readPos;
             }
         }
+
+        // Master gain applied live, post-cache: an Out change is heard
+        // on the very next sample even while a cached loop is replaying.
+        const float g = masterGainSmoothed.getNextValue();
+        oL *= g;
+        oR *= g;
 
         if (left)  left[i]  = oL;
         if (right) right[i] = oR;

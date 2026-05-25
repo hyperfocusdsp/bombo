@@ -49,23 +49,15 @@ juce_add_binary_data(BomboResources
         Resources/Themes/matrix.json
         Resources/Themes/cyber.json
         Resources/Themes/plasma.json
-        Resources/Presets/01_pulse.json
-        Resources/Presets/02_echo_chamber.json
-        Resources/Presets/03_acid_tape.json
-        Resources/Presets/04_concrete.json
-        Resources/Presets/05_embers.json
-        Resources/Presets/06_sub_rumble.json
-        Resources/Presets/07_klanger.json
-        Resources/Presets/08_trinity_99.json
-        Resources/Presets/09_house_a.json
-        Resources/Presets/10_detroit_slap.json
-        Resources/Presets/11_goa_stomp.json
-        Resources/Presets/12_mainroom_punch.json
-        Resources/Presets/13_synthwave_body.json
-        Resources/Presets/14_lofi_click.json
-        Resources/Presets/15_9000_sub.json
-        Resources/Presets/16_tape_tom.json
-        Resources/Presets/17_pew.json
+        Resources/Presets/00_void.json
+        Resources/Presets/01_hammer.json
+        Resources/Presets/02_rez.json
+        Resources/Presets/03_hypno.json
+        Resources/Presets/04_druck.json
+        Resources/Presets/05_boomer.json
+        Resources/Presets/06_hardtech.json
+        Resources/Presets/07_plonk.json
+        Resources/Presets/08_pew.json
         Resources/Samples/kick_01.wav
         Resources/Samples/kick_02.wav
         Resources/Samples/kick_03.wav
