@@ -93,6 +93,7 @@ void BomboProcessor::cacheParameterPointers()
     pReverbMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(reverbMute));
     pFilterMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(filterMute));
     pDuckMute        = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(duckMute));
+    pDuckVoiceA      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(duckVoiceA));
 
     jassert(pMasterOut != nullptr && pWaveform != nullptr && pDriveMode != nullptr);
     jassert(pLimiterOn != nullptr && pReverbMix != nullptr);
@@ -172,6 +173,16 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     t.voiceBSynthOn   = pVoiceBSynthOn->get();
     t.driveMute       = pDriveMute->get();
     t.voiceBalance    = pVoiceBalance->get();
+    // Reverse-bass duck on Voice A — snapshot the DUCK envelope so the
+    // per-voice ducker matches the DUCK column. Only applied when the toggle
+    // is on (off path is bit-identical to pre-feature).
+    t.duckVoiceA      = pDuckVoiceA->get();
+    t.duckAtkMs       = pDuckAtk->get();
+    t.duckHoldMs      = pDuckHold->get();
+    t.duckRelMs       = pDuckRel->get();
+    t.duckDepth       = pDuckDepth->get();
+    t.duckShape       = pDuckShape->get();
+    t.duckGrowl       = pDuckGrowl->get();
     // Copy the current sample shared_ptr under spin-lock. shared_ptr copy is
     // an atomic refcount bump — allocator-free on libstdc++. try_enter so
     // the audio thread never blocks if the UI is mid-swap.

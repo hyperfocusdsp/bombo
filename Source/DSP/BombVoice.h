@@ -8,6 +8,7 @@
 #include "ClickGen.h"
 #include "NoiseGen.h"
 #include "VoiceClip.h"
+#include "Ducker.h"
 
 namespace bombo
 {
@@ -66,6 +67,18 @@ struct VoiceTrigger
     // 1 = B only.
     float voiceBalance    = 0.5f;
 
+    // Reverse-bass duck on Voice A. When duckVoiceA is true a per-voice ducker
+    // pulls the sub (Voice A) down keyed by Voice B's punch, using the DUCK
+    // envelope params below (snapshot of the DUCK column). false (default)
+    // leaves the sub path untouched — bit-identical to pre-feature.
+    bool  duckVoiceA      = false;
+    float duckAtkMs       = 2.0f;
+    float duckHoldMs      = 0.0f;
+    float duckRelMs       = 250.0f;
+    float duckDepth       = 0.0f;
+    float duckShape       = 0.0f;
+    float duckGrowl       = 0.0f;
+
     // Equality across every field that affects the rendered voice. Used by
     // the loop cache to detect voice-param edits and invalidate so the next
     // captured beat picks up the new trigger. sampleBuf is compared by raw
@@ -98,6 +111,13 @@ struct VoiceTrigger
             && voiceBSynthOn   == o.voiceBSynthOn
             && driveMute       == o.driveMute
             && voiceBalance    == o.voiceBalance
+            && duckVoiceA      == o.duckVoiceA
+            && duckAtkMs       == o.duckAtkMs
+            && duckHoldMs      == o.duckHoldMs
+            && duckRelMs       == o.duckRelMs
+            && duckDepth       == o.duckDepth
+            && duckShape       == o.duckShape
+            && duckGrowl       == o.duckGrowl
             && sampleBuf.get() == o.sampleBuf.get();
     }
     bool operator!=(const VoiceTrigger& o) const noexcept { return !(*this == o); }
@@ -122,6 +142,7 @@ public:
         ampEnv_.setSampleRate(sr);
         midAmpEnv_.setSampleRate(sr);
         noise_.setSampleRate(sr);
+        voiceADucker_.setSampleRate(sr);
         // Force click buffer regen on next trigger at the new rate.
         lastClickCenterHz_ = -1.0f;
     }
@@ -143,6 +164,14 @@ public:
         fadeoutGain_ = 1.0f;
         fadeoutStep_ = 0.0f;
         samplePos_   = 0;
+        // Reverse-bass duck (Voice A): configure the per-voice ducker from the
+        // DUCK-envelope snapshot and clear its state so each hit starts fresh.
+        // Only applied in render when trig_.duckVoiceA is true.
+        voiceADucker_.setTimesMs(t.duckAtkMs, t.duckRelMs);
+        voiceADucker_.setHoldMs(t.duckHoldMs);
+        voiceADucker_.setShape(t.duckShape);
+        voiceADucker_.setGrowl(t.duckGrowl);
+        voiceADucker_.reset();
         // Sub HPF coefficient — cached at trigger time. One-pole HPF:
         //   y[n] = a * (y[n-1] + x[n] - x[n-1])
         // where a = 1 / (1 + (2π fc) / sr) approximated. Below 22 Hz we
@@ -320,10 +349,14 @@ public:
         const float bal = trig_.voiceBalance;
         const float aGain = bal <= 0.5f ? 1.0f : 1.0f - (bal - 0.5f) * 2.0f;
         const float bGain = bal >= 0.5f ? 1.0f : bal * 2.0f;
-        const float subPart  = trig_.voiceAMute ? 0.0f : (sub * aGain);
+        float       subPart  = trig_.voiceAMute ? 0.0f : (sub * aGain);
         const float bodyPart = trig_.voiceBMute
             ? 0.0f
             : (bodyColorZ_ * bGain);
+        // Reverse-bass: pull Voice A (sub) down keyed by Voice B's punch.
+        // Off (default) leaves subPart untouched — bit-identical to before.
+        if (trig_.duckVoiceA)
+            subPart = voiceADucker_.process(bodyPart, subPart, trig_.duckDepth);
         const float raw = subPart + bodyPart;
 
         // DRIVE column mute bypasses the per-voice clipper as well as the
@@ -378,6 +411,7 @@ private:
     AmpEnvelope    midAmpEnv_{};
     ClickGen       click_{};
     NoiseGen       noise_{};
+    Ducker         voiceADucker_{};   // reverse-bass duck on Voice A (sub)
 
     VoiceTrigger   trig_{};
     int            samplePos_ = 0;

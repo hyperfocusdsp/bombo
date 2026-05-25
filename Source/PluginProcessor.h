@@ -260,6 +260,7 @@ private:
     juce::AudioParameterBool*   pReverbMute = nullptr;
     juce::AudioParameterBool*   pFilterMute = nullptr;
     juce::AudioParameterBool*   pDuckMute   = nullptr;
+    juce::AudioParameterBool*   pDuckVoiceA = nullptr;
 
     bombo::ChainParams buildChainParamsFromApvts() const noexcept;
 

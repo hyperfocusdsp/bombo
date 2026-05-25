@@ -391,6 +391,17 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         apvts_, pid::voiceBSynthOn, *voiceBSynthPill_);
     addAndMakeVisible(*voiceBSynthPill_);
 
+    // "D" reverse-bass duck toggle on VOICE A.
+    duckAPill_ = std::make_unique<juce::ToggleButton>();
+    duckAPill_->setButtonText("D");
+    duckAPill_->setWantsKeyboardFocus(false);
+    duckAPill_->setMouseClickGrabsKeyboardFocus(false);
+    duckAPill_->setTooltip("Reverse-bass: also duck VOICE A (sub) with the DUCK "
+                           "envelope, keyed by VOICE B's punch. Voice B stays intact.");
+    duckAAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        apvts_, pid::duckVoiceA, *duckAPill_);
+    addAndMakeVisible(*duckAPill_);
+
     // ── BPM display (replaces the old MNT pill slot) ───────────────
     bpmDisplay_ = std::make_unique<BpmDisplay>(
         apvts_, pid::bpm, std::move(hostBpmFn));
@@ -1108,12 +1119,39 @@ void FaceplatePanel::resized()
         const int balX = sections_[0].rectBounds.getX();
         const int balR = sections_[1].rectBounds.getRight();
         const int balY = sections_[0].rectBounds.getY() - kBalFaderH - 2;
-        // Reserve the right corner for the Voice B synth pill (kSynthPillW + gap)
-        // so the full-width fader doesn't render under it.
-        constexpr int kSynthReserve = 28;
-        const juce::Rectangle<int> balDefault(balX, balY,
-                                              balR - balX - kSynthReserve, kBalFaderH);
+        // Reserve a corner pill on each side — D (duck Voice A) on the left,
+        // Voice B synth on the right — and keep the fader compact + centred in
+        // the remaining span (full A+B width read too long — user feedback).
+        constexpr int kDuckReserve  = 26;   // left: "D" pill
+        constexpr int kSynthReserve = 28;   // right: synth pill
+        const int balLeft  = balX + kDuckReserve;
+        const int balAvail = balR - balLeft - kSynthReserve;
+        const int balW     = juce::jmin(balAvail, 56);
+        const juce::Rectangle<int> balDefault(balLeft + (balAvail - balW) / 2, balY,
+                                              balW, kBalFaderH);
         balanceFader_->setBounds(layout_.boundsOr("balanceFader", balDefault));
+    }
+
+    // "D" duck-Voice-A pill — pinned to the VOICE A corner of the balance
+    // strip, mirroring the Voice B synth pill on the right.
+    if (duckAPill_ && ! sections_.empty())
+    {
+        constexpr int kDuckPillW = 22;
+        const int pillH = kBalFaderH;
+        bool placed = false;
+        for (const auto& s : sections_)
+        {
+            if (s.mutePid != pid::voiceAMute) continue;
+            const int x = s.rectBounds.getX();
+            const int y = s.rectBounds.getY() - pillH - 2;
+            duckAPill_->setBounds(layout_.boundsOr("duckAPill",
+                                  juce::Rectangle<int>(x, y, kDuckPillW, pillH)));
+            duckAPill_->setVisible(true);
+            duckAPill_->toFront(false);
+            placed = true;
+            break;
+        }
+        if (! placed) duckAPill_->setVisible(false);
     }
 
     // Voice B synth-toggle pill - sits in the same horizontal strip as

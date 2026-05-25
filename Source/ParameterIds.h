@@ -132,6 +132,10 @@ namespace pid
     inline constexpr const char* reverbMute      = "reverb_mute";
     inline constexpr const char* filterMute      = "filter_mute";
     inline constexpr const char* duckMute        = "duck_mute";
+    // Reverse-bass toggle: when ON, the DUCK envelope ALSO ducks Voice A
+    // (the sub/synth tail), keyed by Voice B's punch — on top of the normal
+    // post-FX bus duck. OFF (default) is bit-identical to pre-feature.
+    inline constexpr const char* duckVoiceA      = "duck_voice_a";
 }
 
 // Params NOT to bake into presets. These are global mixer / transport /
