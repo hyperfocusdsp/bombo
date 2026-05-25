@@ -8,7 +8,7 @@
     "noise_amount": 0.20,
     "drive_amount": 0.20,
     "delay_time": 380.0, "delay_feedback": 0.65, "delay_mix": 0.45,
-    "delay_drift": 0.40, "delay_morph": 0.55,
+    "delay_morph": 0.55,
     "reverb_size": 0.85, "reverb_decay": 0.85, "reverb_mix": 0.55, "reverb_predelay": 80.0,
     "duck_depth": 0.40
   },

@@ -73,6 +73,25 @@ bool parseBlob(const char* data, int size, PresetBank::Preset& out)
     return true;
 }
 
+// Reset every non-excluded APVTS param to its default. Shared by
+// applyByIndex (so a sparse preset can't inherit the previous preset's
+// values) and applyDefaults (the Init path). Excluded ids — master out,
+// BPM, transport, section mutes — are left untouched in both cases.
+void resetNonExcludedToDefaults(juce::AudioProcessorValueTreeState& apvts)
+{
+    for (auto* p : apvts.processor.getParameters())
+    {
+        auto* rp = dynamic_cast<juce::RangedAudioParameter*>(p);
+        if (rp == nullptr) continue;
+        if (excludedIds().count(rp->getParameterID().toStdString()) != 0)
+            continue;
+        const float d = rp->getDefaultValue();
+        rp->beginChangeGesture();
+        rp->setValueNotifyingHost(d);
+        rp->endChangeGesture();
+    }
+}
+
 // Snapshot APVTS to a (id, plain-value) list, excluding the same ids that
 // applyByIndex skips. Plain (not normalized) — preset JSON stores plain so
 // it's human-readable and survives param-range tweaks gracefully.
@@ -123,8 +142,7 @@ bool writePresetJson(const juce::File& file,
 
 PresetBank::PresetBank()
 {
-    loadFactoryFromBinaryData();
-    refreshUserPresets();
+    rebuildAll();
 }
 
 void PresetBank::loadFactoryFromBinaryData()
@@ -176,12 +194,34 @@ void PresetBank::rebuildAll()
     presets_.clear();
     loadFactoryFromBinaryData();
     refreshUserPresets();   // appends user presets + re-anchors current_
+    applyFactoryDedup();    // hide factory presets shadowed by a user copy
 
     if (anchorName.isNotEmpty())
     {
         current_ = findByDisplayName(anchorName);
         if (current_ < 0) current_ = presets_.empty() ? -1 : 0;
     }
+}
+
+void PresetBank::applyFactoryDedup()
+{
+    // Canonical names of every user preset, lowercased for case-insensitive
+    // match. A factory preset is dropped when a user preset shadows it.
+    std::set<std::string> userNames;
+    for (const auto& p : presets_)
+        if (p.source == Source::User)
+            userNames.insert(juce::String(p.name).toLowerCase().toStdString());
+
+    if (userNames.empty()) return;
+
+    presets_.erase(std::remove_if(presets_.begin(), presets_.end(),
+                       [&](const Preset& p)
+                       {
+                           return p.source == Source::Factory
+                               && userNames.count(juce::String(p.name)
+                                                      .toLowerCase().toStdString()) != 0;
+                       }),
+                   presets_.end());
 }
 
 void PresetBank::refreshUserPresets()
@@ -248,6 +288,14 @@ void PresetBank::applyByIndex(int idx, juce::AudioProcessorValueTreeState& apvts
 {
     if (idx < 0 || idx >= (int) presets_.size()) return;
     const auto& preset = presets_[(size_t) idx];
+    // Factory presets are sparse (hand-authored, only the salient params).
+    // Without a reset first, any param a preset omits keeps the previously
+    // loaded preset's value — so the same preset sounds different depending
+    // on what was loaded before, and params added after a preset was
+    // authored (kbtrk, voice_b_synth_on, reverb_type, dec_routing) never
+    // return to their defaults. Reset, then overlay, makes every preset
+    // deterministic from any starting state.
+    resetNonExcludedToDefaults(apvts);
     for (const auto& kv : preset.params)
     {
         auto* p = apvts.getParameter(juce::String(kv.first));
@@ -277,18 +325,7 @@ void PresetBank::prev(juce::AudioProcessorValueTreeState& apvts)
 
 void PresetBank::applyDefaults(juce::AudioProcessorValueTreeState& apvts)
 {
-    for (auto* p : apvts.processor.getParameters())
-    {
-        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(p))
-        {
-            if (excludedIds().count(rp->getParameterID().toStdString()) != 0)
-                continue;
-            const float d = rp->getDefaultValue();
-            rp->beginChangeGesture();
-            rp->setValueNotifyingHost(d);
-            rp->endChangeGesture();
-        }
-    }
+    resetNonExcludedToDefaults(apvts);
 
     // No factory/user preset is "current" after init — the bar should
     // reflect that with its "N presets" empty state rather than keep
@@ -335,7 +372,7 @@ int PresetBank::saveAs(const juce::String& displayName,
                           snapshotApvts(apvts), fxOrderToSave))
         return -1;
 
-    refreshUserPresets();
+    rebuildAll();
     const int newIdx = findByDisplayName(displayName);
     if (newIdx >= 0) current_ = newIdx;
     return newIdx;
@@ -343,15 +380,41 @@ int PresetBank::saveAs(const juce::String& displayName,
 
 bool PresetBank::overwriteCurrent(juce::AudioProcessorValueTreeState& apvts)
 {
-    if (! isCurrentUserPreset()) return false;
+    if (current_ < 0 || current_ >= (int) presets_.size()) return false;
     const auto& cur = presets_[(size_t) current_];
-    if (cur.filePath == juce::File()) return false;
     const auto fxOrderToSave = fxOrderProvider ? fxOrderProvider() : std::nullopt;
-    if (! writePresetJson(cur.filePath, juce::String(cur.name),
-                          juce::String(cur.displayName), snapshotApvts(apvts),
-                          fxOrderToSave))
+
+    // User preset: overwrite its own file in place.
+    if (cur.source == Source::User)
+    {
+        if (cur.filePath == juce::File()) return false;
+        if (! writePresetJson(cur.filePath, juce::String(cur.name),
+                              juce::String(cur.displayName), snapshotApvts(apvts),
+                              fxOrderToSave))
+            return false;
+        rebuildAll();
+        return true;
+    }
+
+    // Factory preset: materialise a user copy carrying the factory's canonical
+    // name so applyFactoryDedup() shadows the compiled-in original. This is the
+    // pre-lock authoring path — edit a factory sound, Save, and the edit
+    // persists as a user preset that replaces the factory entry. Baking the
+    // final bank back into Resources/Presets/ re-locks it later.
+    const auto canonicalName = juce::String(cur.name);
+    const auto displayName   = juce::String(cur.displayName);
+    const auto safeStem      = sanitizeFilename(displayName);
+    if (safeStem.isEmpty()) return false;
+    const auto dir = userPresetsDir();
+    if (! dir.isDirectory() && dir.createDirectory().failed()) return false;
+    const auto file = dir.getChildFile(safeStem + ".json");
+    if (! writePresetJson(file, canonicalName, displayName,
+                          snapshotApvts(apvts), fxOrderToSave))
         return false;
-    refreshUserPresets();
+
+    rebuildAll();
+    current_ = findByDisplayName(displayName);
+    if (current_ < 0) current_ = presets_.empty() ? -1 : 0;
     return true;
 }
 
@@ -360,17 +423,23 @@ bool PresetBank::renameAt(int idx, const juce::String& newDisplayName)
     if (idx < 0 || idx >= (int) presets_.size()) return false;
     auto& p = presets_[(size_t) idx];
 
-    // Factory presets: session-only display-name override (keyed by canonical
-    // name), since there's no file to rename. Persisted bank edit = bake source.
+    // Factory presets: materialise a user copy under the new display name,
+    // carrying the factory's canonical `name` so applyFactoryDedup() hides the
+    // compiled-in original. Persists across reloads (unlike the old session-
+    // only override), so the bank can be re-titled while authoring before it's
+    // baked back into Resources/Presets/. Renames the SOUND verbatim — copies
+    // the factory's stored params + fxOrder, not a fresh APVTS snapshot.
     if (p.source == Source::Factory)
     {
         if (newDisplayName.trim().isEmpty()) return false;
-        const std::string key = p.name;
-        const std::string val = newDisplayName.toStdString();
-        bool found = false;
-        for (auto& r : renamedFactory_)
-            if (r.first == key) { r.second = val; found = true; break; }
-        if (! found) renamedFactory_.emplace_back(key, val);
+        const auto safeStem = sanitizeFilename(newDisplayName);
+        if (safeStem.isEmpty()) return false;
+        const auto dir = userPresetsDir();
+        if (! dir.isDirectory() && dir.createDirectory().failed()) return false;
+        const auto file = dir.getChildFile(safeStem + ".json");
+        if (! writePresetJson(file, juce::String(p.name), newDisplayName,
+                              p.params, p.fxOrder))
+            return false;
         rebuildAll();
         current_ = findByDisplayName(newDisplayName);
         if (current_ < 0) current_ = presets_.empty() ? -1 : 0;

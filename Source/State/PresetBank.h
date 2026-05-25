@@ -117,6 +117,13 @@ public:
 private:
     void loadFactoryFromBinaryData();
     void rebuildAll();   // factory (with session overrides) + user, re-anchored
+    // Pre-lock authoring: a factory preset is hidden whenever a USER preset
+    // carries the same canonical `name` (case-insensitive). Saving / renaming
+    // a factory preset materialises a user JSON carrying the factory's
+    // canonical name, so the user copy shadows the compiled-in original and
+    // there's no visible duplicate. Lets the whole bank be edited as user
+    // presets until it's baked back into Resources/Presets/ and re-locked.
+    void applyFactoryDedup();
     int  findByDisplayName(const juce::String& name) const;
 
     std::vector<Preset> presets_;

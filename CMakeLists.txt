@@ -230,6 +230,7 @@ if(BOMBO_BUILD_TESTS)
         tests/PaletteTests.cpp
         tests/VoiceStealingTests.cpp
         tests/StateRoundTripTests.cpp
+        tests/PresetDeterminismTests.cpp
         tests/BbsPersistenceTests.cpp
         tests/BBSProgressionTests.cpp
         tests/BombShapeTests.cpp
@@ -268,6 +269,7 @@ if(BOMBO_BUILD_TESTS)
         Source/GUI/Theme/ThemeProvider.cpp
         Source/GUI/Theme/ThemeLoader.cpp
         Source/State/PersistentState.cpp
+        Source/State/PresetBank.cpp
         Source/GUI/BombShape.cpp
         Source/DSP/VoiceManager.cpp)
     target_include_directories(Bombo_Tests PRIVATE Source tests)

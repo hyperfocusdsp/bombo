@@ -185,9 +185,11 @@ void PresetBarComponent::showMenu()
     if (edit_ != EditMode::None) return;
 
     juce::PopupMenu m;
-    const bool onUser = bank_.isCurrentUserPreset();
     const bool hasCurrent = bank_.currentIndex() >= 0;
-    m.addItem(1, "Save",       onUser);            // overwrite needs a user file
+    // Save overwrites in place for user presets, and materialises a user copy
+    // for factory presets (pre-lock authoring) — enabled whenever a preset is
+    // current. overwriteCurrent() routes factory vs user internally.
+    m.addItem(1, "Save",       hasCurrent);
     m.addItem(2, "Save As...");
     // Rename/Delete now work on factory presets too (session-only override —
     // used to design the final bank before baking into the source JSONs).

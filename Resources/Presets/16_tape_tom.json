@@ -10,7 +10,7 @@
     "drive_amount": 0.40, "drive_mode": 2,
     "fx_drive_amount": 0.20, "fx_drive_mode": 1,
     "filter_lp": 3000.0, "filter_color": 0.25,
-    "delay_time": 240.0, "delay_mix": 0.15, "delay_drift": 0.30
+    "delay_time": 240.0, "delay_mix": 0.15
   },
   "fxOrder": ["drive", "filter", "delay", "reverb"]
 }
