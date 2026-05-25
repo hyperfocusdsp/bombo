@@ -139,25 +139,21 @@ namespace pid
 }
 
 // Params NOT to bake into presets. These are global mixer / transport /
-// per-section mute toggles — a preset should restore the synth voicing,
-// not stomp on master out, host BPM, or whatever sections the user has
-// muted while auditioning.
+// truly global mixer / transport state. The per-section on/off toggles
+// (VOICE A/B + DRIVE/DELAY/REVERB/FILTER/DUCK mutes) are DELIBERATELY NOT
+// excluded — a preset is the complete sound, so its FX-section on/off layout
+// must be captured and restored (user-critical: e.g. the "Horror" non-kick
+// patch). Only master out, host BPM, loop transport, and the master limiter
+// stay global.
 //
 // Single source of truth: referenced by PresetBank::applyByIndex,
 // PresetBank::saveCurrentAs, and PresetBank::applyDefaults. Adding a new
 // excluded param means adding it here once.
-inline constexpr std::array<const char*, 11> kExcludedFromPresets = {
+inline constexpr std::array<const char*, 4> kExcludedFromPresets = {
     pid::masterOut,
     pid::bpm,
     pid::loopOn,
     pid::limiterOn,
-    pid::voiceAMute,
-    pid::voiceBMute,
-    pid::driveMute,
-    pid::delayMute,
-    pid::reverbMute,
-    pid::filterMute,
-    pid::duckMute,
 };
 
 } // namespace bombo

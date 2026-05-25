@@ -331,10 +331,10 @@ private:
     // (legacy behaviour, default); OFF = sample-only Voice B.
     std::unique_ptr<class SynthToggle>  voiceBSynthPill_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> voiceBSynthAtt_;
-    // "D" pill on VOICE A — reverse-bass duck toggle (pid::duckVoiceA). Mirrors
-    // the synth pill's placement, pinned to the VOICE A corner of the balance
-    // strip. ON = the DUCK envelope also ducks Voice A's sub, keyed by Voice B.
-    std::unique_ptr<juce::ToggleButton> duckAPill_;
+    // Reverse-bass duck toggle (pid::duckVoiceA) — a small triangle pinned to
+    // the bottom of the VOICE A column. ON = the DUCK envelope also ducks
+    // Voice A's sub, keyed by Voice B's punch.
+    std::unique_ptr<class DuckTriangleButton> duckAPill_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> duckAAtt_;
     // Routed DEC knob — DEC slider in Voice B section is NOT bound to a
     // single param via SliderAttachment. Instead, a binding routes its

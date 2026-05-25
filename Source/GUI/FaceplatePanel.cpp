@@ -14,6 +14,7 @@
 #include "RoutedDecayKnob.h"
 #include "SampleSlotWidget.h"
 #include "SynthToggle.h"
+#include "DuckTriangleButton.h"
 #include "WaveBuffer.h"
 #include "../ParameterIds.h"
 
@@ -391,9 +392,8 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         apvts_, pid::voiceBSynthOn, *voiceBSynthPill_);
     addAndMakeVisible(*voiceBSynthPill_);
 
-    // "D" reverse-bass duck toggle on VOICE A.
-    duckAPill_ = std::make_unique<juce::ToggleButton>();
-    duckAPill_->setButtonText("D");
+    // Reverse-bass duck toggle on VOICE A — small triangle under the column.
+    duckAPill_ = std::make_unique<DuckTriangleButton>();
     duckAPill_->setWantsKeyboardFocus(false);
     duckAPill_->setMouseClickGrabsKeyboardFocus(false);
     duckAPill_->setTooltip("Reverse-bass: also duck VOICE A (sub) with the DUCK "
@@ -911,6 +911,7 @@ std::vector<LayoutElem> FaceplatePanel::getEditableElements() const
     addPill("tailPill", tailPill_.get());
     addPill("loop",     loopBtn_.get());
     addPill("bpm",      bpmDisplay_.get());
+    addPill("duckTriangle", duckAPill_.get());
 
     for (size_t i = 0; i < sections_.size(); ++i)
     {
@@ -1119,33 +1120,31 @@ void FaceplatePanel::resized()
         const int balX = sections_[0].rectBounds.getX();
         const int balR = sections_[1].rectBounds.getRight();
         const int balY = sections_[0].rectBounds.getY() - kBalFaderH - 2;
-        // Reserve a corner pill on each side — D (duck Voice A) on the left,
-        // Voice B synth on the right — and keep the fader compact + centred in
-        // the remaining span (full A+B width read too long — user feedback).
-        constexpr int kDuckReserve  = 26;   // left: "D" pill
-        constexpr int kSynthReserve = 28;   // right: synth pill
-        const int balLeft  = balX + kDuckReserve;
-        const int balAvail = balR - balLeft - kSynthReserve;
+        // Reserve the right corner for the Voice B synth pill; keep the fader
+        // compact + centred in the remaining span (full A+B width read too
+        // long — user feedback). The duck toggle now lives under VOICE A, so
+        // no left reserve is needed.
+        constexpr int kSynthReserve = 28;
+        const int balAvail = balR - balX - kSynthReserve;
         const int balW     = juce::jmin(balAvail, 56);
-        const juce::Rectangle<int> balDefault(balLeft + (balAvail - balW) / 2, balY,
+        const juce::Rectangle<int> balDefault(balX + (balAvail - balW) / 2, balY,
                                               balW, kBalFaderH);
         balanceFader_->setBounds(layout_.boundsOr("balanceFader", balDefault));
     }
 
-    // "D" duck-Voice-A pill — pinned to the VOICE A corner of the balance
-    // strip, mirroring the Voice B synth pill on the right.
+    // Reverse-bass duck triangle — small, centred at the bottom of the VOICE A
+    // column (under SUB HP). Draggable for fine alignment.
     if (duckAPill_ && ! sections_.empty())
     {
-        constexpr int kDuckPillW = 22;
-        const int pillH = kBalFaderH;
+        constexpr int kTriW = 16, kTriH = 11;
         bool placed = false;
         for (const auto& s : sections_)
         {
             if (s.mutePid != pid::voiceAMute) continue;
-            const int x = s.rectBounds.getX();
-            const int y = s.rectBounds.getY() - pillH - 2;
-            duckAPill_->setBounds(layout_.boundsOr("duckAPill",
-                                  juce::Rectangle<int>(x, y, kDuckPillW, pillH)));
+            const int x = s.rectBounds.getCentreX() - kTriW / 2;
+            const int y = s.rectBounds.getBottom() - kTriH - 2;
+            duckAPill_->setBounds(layout_.boundsOr("duckTriangle",
+                                  juce::Rectangle<int>(x, y, kTriW, kTriH)));
             duckAPill_->setVisible(true);
             duckAPill_->toFront(false);
             placed = true;
