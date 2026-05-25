@@ -23,6 +23,6 @@
     "noseRed":     "#00AACC",
     "bandYellow":  "#00E5FF",
     "chassisOverlayOpacity": 0.38,
-    "bodyStyle": "grain"
+    "bodyStyle": "camo"
   }
 }

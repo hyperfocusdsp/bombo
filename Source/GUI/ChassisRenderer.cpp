@@ -22,47 +22,70 @@ namespace
                                                BinaryData::chassis_overlay_pngSize);
     }
 
-    // Procedural mottled-camo fill for BodyStyle::Camo. Soft overlapping
-    // blobs in three tones derived from the body palette plus a faint accent
-    // tint, clipped to the silhouette. Fixed RNG seed so the pattern is stable
-    // across repaints (no shimmer). A light grain pass on top breaks up the
-    // blob edges so it reads as material, not polka dots.
+    // Procedural multi-tone military camo for BodyStyle::Camo. A base coat plus
+    // three layers of opaque interlocking blotches (each blotch = a cluster of
+    // overlapping ellipses) in four theme-derived tones: three structural
+    // lightness steps off the body colour + one accent-tinted patch. Reads as a
+    // proper camo print, not soft polka dots. Tones spread further on near-black
+    // neon bodies so the pattern stays legible. Clipped to the silhouette; the
+    // nose cone is excluded so it stays a clean solid colour. Fixed RNG seed →
+    // stable pattern across repaints (no shimmer). Light grain on top for material.
     void drawCamo(juce::Graphics& g, const Ctx& ctx)
     {
         juce::Graphics::ScopedSaveState ss(g);
         g.reduceClipRegion(ctx.chassisPath);
-        // Keep the nose cone clean — camo only on the upper body. The nose
-        // (the noseRed region below redRegionTopY) stays a solid colour.
         g.excludeClipRegion(juce::Rectangle<int>(0, ctx.redRegionTopY,
                                                  ctx.panelWidth,
                                                  ctx.panelHeight - ctx.redRegionTopY));
         const auto b = ctx.chassisPath.getBounds();
         if (b.isEmpty()) return;
 
-        const juce::Colour tones[3] = {
-            col::bodyHi().brighter(0.10f),
-            col::bodyLo().darker(0.14f),
-            col::accentAmber().withSaturation(0.55f).darker(0.35f)
-        };
-        const float alphas[3] = { 0.45f, 0.50f, 0.22f };
+        const juce::Colour body = col::bodyHi();
+        const bool darkBody = body.getPerceivedBrightness() < 0.30f;
+        const juce::Colour t0 = body;                                   // base coat
+        const juce::Colour t1 = body.brighter(darkBody ? 0.22f : 0.15f);
+        const juce::Colour t2 = body.brighter(darkBody ? 0.50f : 0.38f);
+        const juce::Colour t3 = col::accentAmber()                      // colour patch
+                                  .withSaturation(0.55f)
+                                  .withMultipliedBrightness(darkBody ? 0.85f : 0.70f);
+
+        g.setColour(t0);
+        g.fillRect(b);
 
         juce::Random rng((juce::int64) 0xB0BB0);
-        constexpr int kBlobs = 46;
-        for (int i = 0; i < kBlobs; ++i)
+
+        // One blotch = a cluster of overlapping ellipses → an organic, hard-edged
+        // patch. Opaque so the layers interlock instead of washing out.
+        auto blotch = [&](juce::Colour c, float cx, float cy, float scale)
         {
-            const int   t = rng.nextInt(3);
-            const float w = b.getWidth() * (0.18f + rng.nextFloat() * 0.34f);
-            const float h = w * (0.55f + rng.nextFloat() * 0.95f);
-            const float x = b.getX() + rng.nextFloat() * b.getWidth()  - w * 0.5f;
-            const float y = b.getY() + rng.nextFloat() * b.getHeight() - h * 0.5f;
-            g.setColour(tones[t].withAlpha(alphas[t]));
-            g.fillEllipse(x, y, w, h);
-        }
+            g.setColour(c);
+            const int lobes = 4 + rng.nextInt(4);
+            for (int j = 0; j < lobes; ++j)
+            {
+                const float lw = scale * (0.55f + rng.nextFloat() * 0.90f);
+                const float lh = lw    * (0.60f + rng.nextFloat() * 0.70f);
+                const float ox = (rng.nextFloat() - 0.5f) * scale * 1.1f;
+                const float oy = (rng.nextFloat() - 0.5f) * scale * 1.1f;
+                g.fillEllipse(cx + ox - lw * 0.5f, cy + oy - lh * 0.5f, lw, lh);
+            }
+        };
+
+        struct Layer { juce::Colour c; int n; float sz; };
+        const Layer layers[3] = {
+            { t1, 26, b.getWidth() * 0.16f },
+            { t2, 18, b.getWidth() * 0.13f },
+            { t3, 13, b.getWidth() * 0.11f },
+        };
+        for (const auto& L : layers)
+            for (int i = 0; i < L.n; ++i)
+                blotch(L.c, b.getX() + rng.nextFloat() * b.getWidth(),
+                            b.getY() + rng.nextFloat() * b.getHeight(),
+                            L.sz * (0.70f + rng.nextFloat() * 0.70f));
 
         const auto overlay = loadOverlayImage();
         if (overlay.isValid())
         {
-            g.setOpacity(0.18f);
+            g.setOpacity(0.10f);
             g.drawImage(overlay, b, juce::RectanglePlacement::stretchToFit);
         }
     }

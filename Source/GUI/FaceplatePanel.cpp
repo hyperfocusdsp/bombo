@@ -45,7 +45,7 @@ constexpr int kScopeH       = 100;
 constexpr int kRackPadX     = 2;        // padding between chassis edge and column 0/N-1
 constexpr int kRackTopGap   = 30;      // accommodates the A↔B balance fader strip above VOICE A/B + keeps section title corners off the chassis curve
 constexpr int kRackBotGap   = 4;
-constexpr int kBalFaderH    = 16;      // horizontal balance fader height
+constexpr int kBalFaderH    = 16;      // A/B balance fader height (annotator spec)
 
 // FX columns.
 constexpr int kColGap       = 0;       // colors butt up; the per-FX accent IS the separator (2026-05-17)
@@ -1117,18 +1117,29 @@ void FaceplatePanel::resized()
     // bounds were hard-applied, so drag-edits never moved the actual knob.
     if (balanceFader_ && sections_.size() >= 2)
     {
-        const int balX = sections_[0].rectBounds.getX();
-        const int balR = sections_[1].rectBounds.getRight();
-        const int balY = sections_[0].rectBounds.getY() - kBalFaderH - 2;
-        // Reserve the right corner for the Voice B synth pill; keep the fader
-        // compact + centred in the remaining span (full A+B width read too
-        // long — user feedback). The duck toggle now lives under VOICE A, so
-        // no left reserve is needed.
-        constexpr int kSynthReserve = 28;
-        const int balAvail = balR - balX - kSynthReserve;
-        const int balW     = juce::jmin(balAvail, 56);
-        const juce::Rectangle<int> balDefault(balX + (balAvail - balW) / 2, balY,
-                                              balW, kBalFaderH);
+        // A/B fader: left end almost reaches the bomb body's left silhouette
+        // (a few px gap), right end stops a few px short of the VOICE B env/
+        // synth pill. Left edge sampled from the rasterised chassis mask (the
+        // real bezier edge, not the linear width approximation).
+        const auto& s0 = sections_[0].rectBounds;
+        const auto& s1 = sections_[1].rectBounds;
+        const int balY = s0.getY() - kBalFaderH - 2;  // identical to env pill's y
+        const int midY = balY + kBalFaderH / 2;
+        auto bodyLeftX = [&](int py) -> float {
+            const float cx = w * 0.5f;
+            if (! chassisMask_.isValid() || py < 0 || py >= chassisMask_.getHeight())
+                return cx;
+            juce::Image::BitmapData bd(chassisMask_, juce::Image::BitmapData::readOnly);
+            for (int x = 0; x < chassisMask_.getWidth(); ++x)
+                if (*bd.getPixelPointer(x, py) > 24) return static_cast<float>(x);
+            return cx;
+        };
+        constexpr int kSynthPillW = 26;  // keep in sync with voiceBSynthPill block
+        const int envPillLeft = s1.getRight() - kSynthPillW;
+        const int balX = juce::roundToInt(bodyLeftX(midY)) + 6;  // ~touch body, few px gap
+        const int balR = envPillLeft - 5;                         // few px before env pill
+        const juce::Rectangle<int> balDefault(balX, balY,
+                                              juce::jmax(24, balR - balX), kBalFaderH);
         balanceFader_->setBounds(layout_.boundsOr("balanceFader", balDefault));
     }
 
@@ -1136,18 +1147,47 @@ void FaceplatePanel::resized()
     // column (under SUB HP). Draggable for fine alignment.
     if (duckAPill_ && ! sections_.empty())
     {
-        constexpr int kTriW = 27, kTriH = 58;
+        // Duck wedge under VOICE A. The slanted edge (tl->apex) is made parallel
+        // to the bomb body's ACTUAL rendered left silhouette — we scan the
+        // rasterised chassis mask for the leftmost opaque pixel at the wedge's
+        // top and bottom y (the bezier edge, not the linear width approximation
+        // which was off and made it non-parallel). Flat top, vertical right
+        // edge, hypotenuse on the body slope, sat a few px inside. "DUCK" reads
+        // down the hypotenuse.
+        constexpr int   kTriH       = 58;   // wedge height (design px)
+        constexpr float kEdgeMargin = 4.0f; // inset from the silhouette
+        auto bodyLeftX = [&](int py) -> float {
+            const float cx = w * 0.5f;
+            if (! chassisMask_.isValid() || py < 0 || py >= chassisMask_.getHeight())
+                return cx;
+            juce::Image::BitmapData bd(chassisMask_, juce::Image::BitmapData::readOnly);
+            for (int x = 0; x < chassisMask_.getWidth(); ++x)
+                if (*bd.getPixelPointer(x, py) > 24) return static_cast<float>(x);
+            return cx;
+        };
         bool placed = false;
         for (const auto& s : sections_)
         {
             if (s.mutePid != pid::voiceAMute) continue;
-            // Below the rack (clear of the SUB HP label), tucked into the body
-            // wedge at the left of the VOICE A column. Tall + narrow so the
-            // hypotenuse follows the bomb body's steep angled side.
-            const int x = s.rectBounds.getX() + 23;  // shift onto the body edge
-            const int y = s.rectBounds.getBottom() + 2;
-            duckAPill_->setBounds(layout_.boundsOr("duckTriangle",
-                                  juce::Rectangle<int>(x, y, kTriW, kTriH)));
+            const int   topYi = s.rectBounds.getBottom() + 4;
+            const int   botYi = topYi + kTriH;
+            const float topY  = static_cast<float>(topYi);
+            const float botY  = static_cast<float>(botYi);
+            const float tlx   = bodyLeftX(topYi) + kEdgeMargin;  // top-left, on edge+margin
+            const float apexx = bodyLeftX(botYi) + kEdgeMargin;  // apex (=> slant ∥ rendered body)
+
+            const juce::Point<float> tl  (tlx,   topY);
+            const juce::Point<float> tr  (apexx, topY);          // flat top
+            const juce::Point<float> apex(apexx, botY);          // vertical right edge
+
+            juce::Rectangle<int> bb(juce::roundToInt(tlx), topYi,
+                                    juce::jmax(1, juce::roundToInt(apexx - tlx)), kTriH);
+            const auto bounds = layout_.boundsOr("duckTriangle", bb);
+            duckAPill_->setBounds(bounds);
+
+            const juce::Point<float> o(static_cast<float>(bounds.getX()),
+                                       static_cast<float>(bounds.getY()));
+            duckAPill_->setTriangle(tl - o, tr - o, apex - o);
             duckAPill_->setVisible(true);
             duckAPill_->toFront(false);
             placed = true;
@@ -1165,8 +1205,9 @@ void FaceplatePanel::resized()
     if (voiceBSynthPill_ && ! sections_.empty())
     {
         constexpr int kSynthPillW = 26;
-        // Match the fader strip height - visually subordinate but in line.
-        const int pillH = kBalFaderH;
+        // Own height — the balance fader is now a fine line (kBalFaderH=9), but
+        // the env/synth pill needs to stay legible.
+        constexpr int pillH = 16;
         bool placed = false;
         for (const auto& s : sections_)
         {
