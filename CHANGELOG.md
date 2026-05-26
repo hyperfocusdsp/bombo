@@ -6,6 +6,39 @@ and the project broadly follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Duck routing** — Reverse-bass duck triangle now cycles `Off → A → B → AB`
+  instead of being a binary toggle (`pid::duckRouting` replaces the legacy
+  `pid::duckVoiceA`). `A` is the original behaviour (Voice A sub ducked by
+  Voice B body, classic reverse-bass). `B` ducks Voice B body via a synthetic
+  25 ms trigger pulse — using subPart as the key fails because A's sub takes
+  too long to ramp up while B's body has already faded by then. `AB` runs
+  both legs simultaneously. `Off` is bit-identical to the pre-feature path
+  (both per-voice duckers skipped entirely). The chain-level DUCK column
+  (always-on tail duck on the wet bus) is unaffected by the routing — it
+  continues to duck the reverb/delay tails as before.
+- **Duck triangle UI** — The letter inside the triangle now rides the
+  hypotenuse (`tl→apex` diagonal) instead of being painted upright, with
+  contrast-aware colour (dark on bright accents, bright on dark accents)
+  so it's readable on every theme. Off state shows a faint `D` outline so
+  the affordance reads as the duck control even when disabled. Click cycles
+  the routing param via `juce::ParameterAttachment`, mirroring the
+  `DecRoutingPill` pattern (which has worked for the DEC knob since
+  `2026-05-24`).
+- **State migration** — Old DAW projects and user-saved presets containing
+  the legacy `duck_voice_a` bool are transparently translated to
+  `duck_routing=A` (true) or `duck_routing=Off` (false) on load. The
+  migration helper (`bombo::migrateDuckVoiceAToRouting` in
+  `Source/State/DuckMigration.h`) is a pure ValueTree transform run inside
+  `setStateInformation` before `apvts.replaceState`. No user action
+  required; no broken state.
+- **Factory preset Reverze 1** — User-saved reverse-bass kick added at slot
+  03 of the curated factory bank (existing 02–08 bumped to 03–09 then
+  swapped slot 02↔03 so Rez stays at 02 and Reverze 1 lands at 03). Pew is
+  now slot 09; game's shot-sound lookup is by displayName so the in-game
+  audio is unaffected. Pew's `reverb_mix=0` enforced so the in-game shot
+  stays dry (was 0.06 before).
+
 ### Fixed
 - **Loop cache** — Fixed the audible "every other hit cut" alternation in
   LOOP + TAIL ON mode where reverb tails alternated between full,
