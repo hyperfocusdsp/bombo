@@ -223,9 +223,9 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ── v2 Game build flag ────────────────────────────────────────────
-# Default OFF: v1 BombImpactGame remains the live path until Task 28.
-# Enable with -DBOMBO_GAME_V2=ON to test the v2 chunky-pixel game.
-option(BOMBO_GAME_V2 "Enable v2 chunky-pixel game (replaces BombImpactGame)" OFF)
+# Default ON: v2 chunky-pixel game is the shipping path (KVRDC).
+# Opt out with -DBOMBO_GAME_V2=OFF to fall back to v1 BombImpactGame (ASCII).
+option(BOMBO_GAME_V2 "Enable v2 chunky-pixel game (replaces BombImpactGame)" ON)
 if(BOMBO_GAME_V2)
     target_compile_definitions(Bombo PRIVATE BOMBO_GAME_V2=1)
 endif()
