@@ -72,13 +72,14 @@ juce_add_binary_data(BomboResources
         Resources/Themes/plasma.json
         Resources/Presets/00_void.json
         Resources/Presets/01_hammer.json
-        Resources/Presets/02_rez.json
-        Resources/Presets/03_hypno.json
-        Resources/Presets/04_druck.json
-        Resources/Presets/05_boomer.json
-        Resources/Presets/06_hardtech.json
-        Resources/Presets/07_plonk.json
-        Resources/Presets/08_pew.json
+        Resources/Presets/02_reverze_1.json
+        Resources/Presets/03_rez.json
+        Resources/Presets/04_hypno.json
+        Resources/Presets/05_druck.json
+        Resources/Presets/06_boomer.json
+        Resources/Presets/07_hardtech.json
+        Resources/Presets/08_plonk.json
+        Resources/Presets/09_pew.json
         Resources/Samples/kick_01.wav
         Resources/Samples/kick_02.wav
         Resources/Samples/kick_03.wav
