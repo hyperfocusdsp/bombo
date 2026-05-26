@@ -122,12 +122,13 @@ public:
         g.saveState();
         g.addTransform(juce::AffineTransform::rotation(angle, anchor.x, anchor.y));
         g.setFont(font);
-        // Contrast-aware text: dark on bright triangle, bright on dark triangle.
-        // For Off (outline-only) the visual background is the dark rack panel —
-        // use full-strength bone so the 'D' reads boldly in every theme (the
-        // old 0.35 alpha made it near-invisible).
+        // Contrast-aware text in BOTH states. When routed (A/B/AB) the wedge is
+        // filled, so contrast against the fill. When Off (outline-only) the
+        // wedge sits on the chassis BODY just below VOICE A, so contrast against
+        // the body colour: dark text on light bodies (VAULT olive), light text
+        // on the dark/neon bodies.
         const auto textColor = isOff
-            ? col::bone()
+            ? (col::bodyHi().getPerceivedBrightness() > 0.45f ? col::ink() : col::bone())
             : (fill.getBrightness() > 0.55f ? juce::Colours::black
                                             : juce::Colours::white);
         g.setColour(textColor);
