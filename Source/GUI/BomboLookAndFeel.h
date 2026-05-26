@@ -64,18 +64,31 @@ public:
     // control look (dark on orange background = good contrast).
     static constexpr float kPillCorner = 4.0f;
 
+    // Shared pill chrome. The LIM/TAIL toggle pills and any action TextButton
+    // tagged with the "finPill" property (e.g. BNC) render identically — same
+    // fill, amber border, font, and neon-theme handling — so the fin row reads
+    // as one consistent set. Plain TextButtons (preset-bar arrows) are NOT
+    // tagged and keep the default action-button chrome below.
+    static bool isFinPill(const juce::Button& btn)
+    {
+        return static_cast<bool>(btn.getProperties().getWithDefault("finPill", false));
+    }
+
     void drawButtonBackground(juce::Graphics& g, juce::Button& btn,
                               const juce::Colour& /*backgroundColour*/,
                               bool shouldDrawButtonAsHighlighted,
                               bool shouldDrawButtonAsDown) override
     {
-        const auto r = btn.getLocalBounds().toFloat();
+        const auto r     = btn.getLocalBounds().toFloat();
         const bool on    = shouldDrawButtonAsDown || btn.getToggleState();
         const bool hover = shouldDrawButtonAsHighlighted;
-        // Off: dark graphite fill so bone text is legible on the orange fin.
-        // On:  amber fill; text switches to ink (dark) for contrast.
-        // Hover brightens both fill and border so the affordance reads before
-        // the user commits the click (Day 5 polish).
+        if (isFinPill(btn))
+        {
+            bombo::pill::paintBackground(g, r, on, hover);
+            return;
+        }
+        // Default action-button chrome: dark graphite fill, bone border. Off:
+        // dark fill so bone text is legible on the orange fin. On: amber fill.
         const float hoverFill   = hover ? 0.10f : 0.0f;
         const float hoverBorder = hover ? 0.20f : 0.0f;
         g.setColour(on ? col::accentAmber().withAlpha(0.40f + hoverFill)
@@ -91,8 +104,10 @@ public:
                         bool shouldDrawButtonAsDown) override
     {
         const bool on = shouldDrawButtonAsDown || btn.getToggleState();
-        // Dark text on amber fill, light text on dark graphite.
-        g.setColour(on ? col::ink() : col::bone());
+        // Fin pills follow the shared neon-aware pill foreground; plain action
+        // buttons use dark-on-amber / light-on-graphite.
+        g.setColour(isFinPill(btn) ? bombo::pill::fg(on)
+                                   : (on ? col::ink() : col::bone()));
         g.setFont(fonts::value(16.0f));
         g.drawText(btn.getButtonText(), btn.getLocalBounds(),
                    juce::Justification::centred, false);
@@ -102,43 +117,11 @@ public:
                           bool shouldDrawButtonAsHighlighted,
                           bool /*shouldDrawButtonAsDown*/) override
     {
-        const auto r = btn.getLocalBounds().toFloat();
+        const auto r     = btn.getLocalBounds().toFloat();
         const bool on    = btn.getToggleState();
         const bool hover = shouldDrawButtonAsHighlighted;
-        const float hoverFill   = hover ? 0.10f : 0.0f;
-        const float hoverBorder = hover ? 0.20f : 0.0f;
-
-        if (col::isNeon())
-        {
-            // Neon themes (matrix/cyber/plasma): keep the bg dark in BOTH
-            // states so the saturated accentAmber-as-text stays readable.
-            // ON state signals itself via a thicker, full-opacity border
-            // and full-opacity text instead of flipping to a bright fill.
-            g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f + hoverFill * 0.5f));
-            g.fillRoundedRectangle(r, kPillCorner);
-            g.setColour(on ? col::accentAmber()
-                           : col::accentAmber().withAlpha(0.55f + hoverBorder));
-            g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, on ? 1.5f : 1.0f);
-            g.setColour(col::accentAmber().withAlpha(on ? 1.0f : 0.75f));
-        }
-        else
-        {
-            // Classic themes (bandw/vault/nightrun): industrial yellow pill
-            // when ON, dark pill when OFF. The yellow accentAmber against
-            // near-black ink reads cleanly here because the accent isn't
-            // also the bone foreground colour.
-            g.setColour(on ? col::accentAmber().withAlpha(0.40f + hoverFill)
-                           : col::graphite().withAlpha(0.88f));
-            g.fillRoundedRectangle(r, kPillCorner);
-            // Toggle buttons always have an amber border (dim when OFF,
-            // full when ON) so they're visually distinct from action
-            // TextButtons (bone border). Hover brightens the border so
-            // users feel the affordance before clicking.
-            g.setColour(on ? col::accentAmber()
-                           : col::accentAmber().withAlpha(0.50f + hoverBorder));
-            g.drawRoundedRectangle(r.reduced(0.5f), kPillCorner, 1.0f);
-            g.setColour(on ? col::ink() : col::bone());
-        }
+        bombo::pill::paintBackground(g, r, on, hover);
+        g.setColour(bombo::pill::fg(on));
         g.setFont(fonts::value(16.0f));
         g.drawText(btn.getButtonText(), r, juce::Justification::centred, false);
     }

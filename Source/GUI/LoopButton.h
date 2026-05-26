@@ -13,39 +13,17 @@ class LoopButton : public juce::ToggleButton
 public:
     LoopButton() : juce::ToggleButton(juce::String()) {}
 
-    void paintButton(juce::Graphics& g, bool, bool) override
+    void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool) override
     {
         const auto r = getLocalBounds().toFloat();
         const bool on = getToggleState();
-        const bool neon = col::isNeon();
 
-        // Pill bg + amber border (mirrors drawToggleButton in BomboLookAndFeel).
-        // Neon themes keep the bg dark in BOTH states; ON signals via a
-        // thicker, full-opacity border + full-opacity icon. Classic themes
-        // flip to a bright amber fill when ON (industrial-yellow look).
-        if (neon)
-        {
-            g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f));
-            g.fillRoundedRectangle(r, 4.0f);
-            g.setColour(on ? col::accentAmber()
-                           : col::accentAmber().withAlpha(0.55f));
-            g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, on ? 1.5f : 1.0f);
-        }
-        else
-        {
-            g.setColour(on ? col::accentAmber().withAlpha(0.40f)
-                           : col::graphite().withAlpha(0.88f));
-            g.fillRoundedRectangle(r, 4.0f);
-            g.setColour(on ? col::accentAmber()
-                           : col::accentAmber().withAlpha(0.50f));
-            g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
-        }
+        // Shared fin-pill chrome (dark fill, amber border, hover brighten) so
+        // LOOP matches LIM/TAIL exactly.
+        bombo::pill::paintBackground(g, r, on, shouldDrawButtonAsHighlighted);
 
         // Loop-arrow icon: ~300° arc + arrowhead at start, pointing clockwise.
-        // Neon: accent icon in both states (matches the pill text rule).
-        // Classic: ink when ON (sits on bright amber), bone when OFF (sits on dark).
-        g.setColour(neon ? col::accentAmber().withAlpha(on ? 1.0f : 0.75f)
-                         : (on ? col::ink() : col::bone()));
+        g.setColour(bombo::pill::fg(on));
         const float cx  = r.getCentreX();
         const float cy  = r.getCentreY();
         const float rad = juce::jmin(r.getWidth(), r.getHeight()) * 0.28f;

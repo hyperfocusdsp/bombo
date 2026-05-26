@@ -47,42 +47,18 @@ public:
     void paint(juce::Graphics& g) override
     {
         const auto r = getLocalBounds().toFloat();
-        // Same corner radius as the pill buttons in BomboLookAndFeel.
-        constexpr float kR = 4.0f;
         const bool hostLocked = hostBpmDisplayed_ > 0.5f;
         const bool on = hostLocked;
 
-        // Background + border — mirrors BomboLookAndFeel pill style.
-        // On neon themes keep the bg dark in BOTH states (host-locked vs
-        // standalone) so the saturated accentAmber text stays readable.
-        // Otherwise a host-locked BPM would draw amber-on-amber.
-        const bool neon = col::isNeon();
-        if (neon)
-        {
-            g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f));
-            g.fillRoundedRectangle(r, kR);
-            g.setColour(on ? col::accentAmber()
-                           : col::accentAmber().withAlpha(0.55f));
-            g.drawRoundedRectangle(r.reduced(0.5f), kR, on ? 1.5f : 1.0f);
-        }
-        else
-        {
-            g.setColour(on ? col::accentAmber().withAlpha(0.40f)
-                           : col::graphite().withAlpha(0.88f));
-            g.fillRoundedRectangle(r, kR);
-            // Amber border always (dim when unlocked) — same as LoopButton / toggle pills.
-            g.setColour(on ? col::accentAmber()
-                           : col::accentAmber().withAlpha(0.50f));
-            g.drawRoundedRectangle(r.reduced(0.5f), kR, 1.0f);
-        }
+        // Shared fin-pill chrome so the BPM readout matches LIM/TAIL exactly.
+        // host-locked maps to the pill "on" state (dark fill + accent fg on
+        // neon; bright amber fill + ink fg on classic).
+        bombo::pill::paintBackground(g, r, on, /*hover*/ false);
 
         // "149 BPM" centred — same monospaced font as the other fin pills.
         const int displayed = static_cast<int>(std::round(
             hostLocked ? hostBpmDisplayed_ : static_cast<float>(slider_.getValue())));
-        // Neon: accent text in both states. Classic: accent only when
-        // host-locked (otherwise bone, since the dark pill needs a light
-        // fg and bone is the cream-white).
-        g.setColour((hostLocked || neon) ? col::accentAmber() : col::bone());
+        g.setColour(bombo::pill::fg(on));
         g.setFont(fonts::value(16.0f));
         g.drawText(juce::String(displayed) + " BPM", r,
                    juce::Justification::centred, false);

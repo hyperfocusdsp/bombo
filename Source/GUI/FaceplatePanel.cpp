@@ -426,6 +426,9 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
 
     bncPill_ = std::make_unique<juce::TextButton>("BNC");
     bncPill_->setTooltip("Bounce to WAV or AIFF - click to choose format");
+    // Tag as a fin pill so it shares the LIM/TAIL toggle chrome (amber border,
+    // neon-theme text) instead of the default bone-border action-button look.
+    bncPill_->getProperties().set("finPill", true);
     bncPill_->setWantsKeyboardFocus(false);
     bncPill_->setMouseClickGrabsKeyboardFocus(false);
     bncPill_->onClick = [this]

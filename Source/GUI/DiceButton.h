@@ -44,12 +44,9 @@ public:
             side, side);
         const bool hot = isMouseOver(true);
 
-        // Body — rounded square. Amber when hovered, dark graphite at rest
-        // (action button: bone border, not amber, to distinguish from toggles).
-        g.setColour(hot ? col::accentAmber() : col::graphite().withAlpha(0.88f));
-        g.fillRoundedRectangle(bounds, 3.5f);
-        g.setColour(hot ? col::ink() : col::boneDim().withAlpha(0.45f));
-        g.drawRoundedRectangle(bounds.reduced(0.5f), 3.5f, 1.0f);
+        // Body — shares the fin-pill chrome (dark fill, amber border, hover
+        // brighten) so DICE matches LIM/TAIL/BNC. Momentary action → never "on".
+        bombo::pill::paintBackground(g, bounds, /*on*/ false, /*hover*/ hot);
 
         // Pips — die face pattern. Grid spacing 22% so pips never touch walls.
         const float cx = bounds.getCentreX();
@@ -63,7 +60,7 @@ public:
             g.fillEllipse(x - pipR, y - pipR, pipR * 2.0f, pipR * 2.0f);
         };
 
-        g.setColour(hot ? col::ink() : col::bone().withAlpha(0.92f));
+        g.setColour(bombo::pill::fg(false));
         switch (face_)
         {
             case 1:

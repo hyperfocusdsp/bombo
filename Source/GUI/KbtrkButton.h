@@ -26,35 +26,18 @@ public:
         juce::ToggleButton::mouseDown(e);
     }
 
-    void paintButton(juce::Graphics& g, bool, bool) override
+    void paintButton(juce::Graphics& g, bool shouldDrawButtonAsHighlighted, bool) override
     {
         const auto r = getLocalBounds().toFloat();
         const bool on = getToggleState();
-        const bool neon = col::isNeon();
 
-        // Pill bg + amber border (mirrors LoopButton).
-        if (neon)
-        {
-            g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f));
-            g.fillRoundedRectangle(r, 4.0f);
-            g.setColour(on ? col::accentAmber() : col::accentAmber().withAlpha(0.55f));
-            g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, on ? 1.5f : 1.0f);
-        }
-        else
-        {
-            g.setColour(on ? col::accentAmber().withAlpha(0.40f)
-                           : col::graphite().withAlpha(0.88f));
-            g.fillRoundedRectangle(r, 4.0f);
-            g.setColour(on ? col::accentAmber() : col::accentAmber().withAlpha(0.50f));
-            g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
-        }
+        // Shared fin-pill chrome (dark fill, amber border, hover brighten) so
+        // KBTRK matches LIM/TAIL exactly.
+        bombo::pill::paintBackground(g, r, on, shouldDrawButtonAsHighlighted);
 
         // Mini piano-keyboard icon: an outline box, 4 white-key dividers, and
-        // two black keys. Colour rule matches LoopButton (neon = accent both
-        // states; classic = ink on amber when ON, bone on dark when OFF).
-        const juce::Colour icon = neon ? col::accentAmber().withAlpha(on ? 1.0f : 0.75f)
-                                       : (on ? col::ink() : col::bone());
-        g.setColour(icon);
+        // two black keys.
+        g.setColour(bombo::pill::fg(on));
 
         const float kbW = r.getWidth()  * 0.56f;
         const float kbH = r.getHeight() * 0.40f;

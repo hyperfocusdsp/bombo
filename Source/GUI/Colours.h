@@ -52,3 +52,53 @@ inline bombo::BodyStyle bodyStyle() { return bombo::ThemeProvider::current().bod
 inline bool isNeon() noexcept { return ink().getPerceivedBrightness() > 0.5f; }
 
 } // namespace bombo::col
+
+// ── Fin-pill chrome ─────────────────────────────────────────────────────
+// Single source of truth for the LIM/TAIL pill look. EVERY fin control
+// (BNC, LIM, TAIL, LOOP, KBTRK, DICE, BPM) draws its background, border, and
+// foreground through these so they stay pixel-identical and can't drift.
+//   on    = active/toggled (or host-locked) state.
+//   hover = mouse-over highlight.
+// Neon themes (matrix/cyber/plasma) keep the fill dark in BOTH states and
+// signal ON via a brighter/thicker amber border + full-opacity accent fg;
+// classic themes flip to a bright amber fill when ON.
+namespace bombo::pill
+{
+inline constexpr float corner = 4.0f;
+
+inline juce::Colour fill(bool on, bool hover)
+{
+    const float hoverFill = hover ? 0.10f : 0.0f;
+    if (col::isNeon())
+        return col::graphite().withAlpha(on ? 0.95f : 0.88f + hoverFill * 0.5f);
+    return on ? col::accentAmber().withAlpha(0.40f + hoverFill)
+              : col::graphite().withAlpha(0.88f);
+}
+
+inline juce::Colour border(bool on, bool hover)
+{
+    const float hoverBorder = hover ? 0.20f : 0.0f;
+    if (col::isNeon())
+        return on ? col::accentAmber() : col::accentAmber().withAlpha(0.55f + hoverBorder);
+    return on ? col::accentAmber() : col::accentAmber().withAlpha(0.50f + hoverBorder);
+}
+
+inline float borderWidth(bool on) { return (col::isNeon() && on) ? 1.5f : 1.0f; }
+
+// Foreground (text or icon) colour.
+inline juce::Colour fg(bool on)
+{
+    if (col::isNeon())
+        return col::accentAmber().withAlpha(on ? 1.0f : 0.75f);
+    return on ? col::ink() : col::bone();
+}
+
+inline void paintBackground(juce::Graphics& g, juce::Rectangle<float> r,
+                            bool on, bool hover)
+{
+    g.setColour(fill(on, hover));
+    g.fillRoundedRectangle(r, corner);
+    g.setColour(border(on, hover));
+    g.drawRoundedRectangle(r.reduced(0.5f), corner, borderWidth(on));
+}
+} // namespace bombo::pill
