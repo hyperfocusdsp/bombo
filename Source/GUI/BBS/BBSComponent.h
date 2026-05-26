@@ -5,6 +5,7 @@
 #include "ProgressionManager.h"
 #include "BoomFeed.h"
 #include "SysopContent.h"
+#include "../../State/PreGamePresetStash.h"
 #include "../Theme/ThemedComponent.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <functional>
@@ -120,7 +121,7 @@ private:
     bombo::game::Game       gameV2_;
     bombo::game::Framebuffer gameV2Fb_;     // reused each frame — no alloc cost
     juce::Image             gameV2Image_;  // kFbW x kFbH ARGB, allocated in launchGame()
-    int                     prePresetIdx_ = -1;  // stashed preset index restored on exit
+    PreGamePresetStash      preGameStash_; // user's preset captured at launchGame, restored on exitGame
     bool                    fireKeyWasDown_ = false;  // charge-key release edge (T/F/Space)
 
     // --- Discovery (Task 23): drifting BBS invader + cabinet glyph ---

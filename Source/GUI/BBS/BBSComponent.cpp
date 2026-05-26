@@ -147,6 +147,16 @@ void BBSComponent::show()
 
 void BBSComponent::hide()
 {
+    // If a game is live, fully tear it down BEFORE dismissing the BBS.
+    // exitGame() restores the user's pre-game preset; without this call,
+    // any non-QUIT dismiss path (visibilityChanged in a host that toggles
+    // editor visibility, an external hide() caller, etc.) leaves Pew loaded
+    // and the BBS still flagged on the Game screen -- the next launchGame()
+    // would then idempotently rest on the original stash, but the user
+    // still hears Pew between dismiss and re-launch.
+    if (screens_.current() == BBSScreen::Game)
+        exitGame();
+
     // Defensive: ensure the loop is never left suppressed if the BBS is closed
     // while a game is live (otherwise SPACE only toggles the loop param with no
     // sound until relaunch, while T still triggers — the game-active flag stuck
@@ -918,16 +928,19 @@ void BBSComponent::mouseDown(const juce::MouseEvent& e)
 
 void BBSComponent::launchGame()
 {
-    // Re-entrancy guard: never re-stash the preset while a game is already live,
-    // or we'd clobber prePresetIdx_ with the in-game Pew index and lose the
-    // user's real preset. (The keyboard path already can't re-enter, but Task 14
-    // and any future HeaderBar launch button add new callers.)
+    // Re-entrancy guard: never re-launch into a live game. The stash itself
+    // is now idempotent (it preserves the FIRST capture even if a bypass
+    // path lets us re-enter with Pew "current") -- this guard remains for
+    // game-state hygiene (don't restart the run, reset konami, etc.).
     if (screens_.current() == BBSScreen::Game)
         return;
 
 #if BOMBO_GAME_V2
-    // Stash current preset so we can restore it on exit.
-    prePresetIdx_ = (presetBank_ != nullptr) ? presetBank_->currentIndex() : -1;
+    // Stash current preset so we can restore it on exit. Idempotent: if a
+    // non-exitGame dismiss path stranded a previous stash, this call leaves
+    // it intact instead of overwriting it with Pew.
+    if (presetBank_ != nullptr)
+        preGameStash_.capture(*presetBank_);
 
     // Force preset "Pew" as the in-game shot sound, if the bank is wired and
     // the preset exists. We search by displayName since "Pew" is a user preset
@@ -1028,12 +1041,10 @@ void BBSComponent::exitGame()
     if (apvts_ != nullptr)
         static_cast<BomboProcessor&>(apvts_->processor).setGameActive(false);
 
-    // Restore the preset the user had before the game launched.
-    if (presetBank_ != nullptr && apvts_ != nullptr && prePresetIdx_ >= 0)
-    {
-        presetBank_->applyByIndex(prePresetIdx_, *apvts_);
-        prePresetIdx_ = -1;
-    }
+    // Restore the preset the user had before the game launched. No-op if
+    // nothing was stashed (the BBS was opened with no preset selected).
+    if (presetBank_ != nullptr && apvts_ != nullptr)
+        preGameStash_.restore(*presetBank_, *apvts_);
 
     // Restore the 25 Hz BBS cadence (launchGame bumped it to ~60 Hz for the sim).
     startTimer(40);

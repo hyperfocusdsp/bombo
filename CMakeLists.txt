@@ -245,6 +245,7 @@ if(BOMBO_BUILD_TESTS)
         tests/VoiceStealingTests.cpp
         tests/StateRoundTripTests.cpp
         tests/PresetDeterminismTests.cpp
+        tests/PreGamePresetStashTests.cpp
         tests/BbsPersistenceTests.cpp
         tests/BBSProgressionTests.cpp
         tests/BombShapeTests.cpp
