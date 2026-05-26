@@ -20,8 +20,8 @@ and the project broadly follows [Semantic Versioning](https://semver.org/).
 - **Duck triangle UI** — The letter inside the triangle now rides the
   hypotenuse (`tl→apex` diagonal) instead of being painted upright, with
   contrast-aware colour (dark on bright accents, bright on dark accents)
-  so it's readable on every theme. Off state shows a faint `D` outline so
-  the affordance reads as the duck control even when disabled. Click cycles
+  so it's readable on every theme. Off state shows the full word `DUCK`
+  (auto-fit to the hypotenuse); active routing shows `A`/`B`/`AB`. Click cycles
   the routing param via `juce::ParameterAttachment`, mirroring the
   `DecRoutingPill` pattern (which has worked for the DEC knob since
   `2026-05-24`).
@@ -40,6 +40,30 @@ and the project broadly follows [Semantic Versioning](https://semver.org/).
   stays dry (was 0.06 before).
 
 ### Fixed
+- **BBS game speed (slow motion)** — The v2 game ran in slow motion wherever
+  the host can't sustain a true 60 Hz repaint — most visibly under WSLg
+  software rendering, but any heavy-paint frame did it. The sim integrates on
+  a **fixed `1/60` timestep with no catch-up** (`tick()` advances exactly
+  `kTickDt` per call, driven by `startTimer(16)`), so a starved timer slows
+  wall-clock time directly. `BBSComponent::timerCallback` now steps the sim by
+  **real elapsed time** (a wall-clock accumulator, capped at 4 steps/callback
+  to avoid a spiral after a hitch), so the game runs at the intended speed
+  regardless of frame rate. `tick()` itself is unchanged — only how often it's
+  called — so game logic and tests are unaffected. Regressed in the v2 rewrite
+  (`0e8ec2d` scaffold → `cb21815` "60 Hz fix"); v1 ran at 50 Hz.
+- **Duck triangle label** — Resting (Off) state shows the full word `DUCK`
+  again instead of a lone `D`; active routing still shows `A`/`B`/`AB`. Text is
+  full-strength bone (was 0.35 alpha → near-invisible) and auto-fits the
+  hypotenuse so the longer labels don't overflow the wedge. Bold on every theme.
+- **OUT hero knob indicator** — The focus-ring (logo) knob's pointer was a thin
+  bone stem that vanished into bright accent rings (magenta / neon themes). It's
+  now contrast-aware: a wider dark-grey stem with a thin bone keyline over a
+  bright accent, bone stem over a dark accent — legible on every theme.
+- **Editor crop / scope flush** — Lifted the editor so the scope's green
+  U-frame sits flush under the host/title bar (crop top moved to the
+  scope-strip boundary at design-y 50), removing the empty band above the
+  scope while keeping the 3 px U-frame border from clipping to sub-pixel.
+  Window aspect ≈ 0.586 (was ≈ 0.578).
 - **Loop cache** — Fixed the audible "every other hit cut" alternation in
   LOOP + TAIL ON mode where reverb tails alternated between full,
   truncated, and tonally altered every beat. Root cause: the loop cache

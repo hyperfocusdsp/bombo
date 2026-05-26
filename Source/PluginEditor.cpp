@@ -218,10 +218,16 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // sprint plan at internal notes).
     constexpr double kDesignW    = 600.0;
     constexpr double kDesignH    = 1066.0;
-    // Visible window = bomb bounding box (fin outer tips → nose tip, R4B-CLASSIC)
-    constexpr double kBombW      = (347.0 - 13.0) / 360.0 * kDesignW; // ≈ 556.67
-    constexpr double kBombH      = (600.0 - 22.0) / 640.0 * kDesignH; // ≈ 962.73
-    constexpr double kAspect     = kBombW / kBombH;                    // ≈ 0.578
+    // Visible window: fin outer tips horizontally; vertically just above the
+    // scope's green U-frame → nose tip. Crop top at design-y 50 (= chassisT 0 +
+    // kHeaderH 50, the scope-strip boundary) lifts the plugin flush under the
+    // title bar while keeping a ~5 px margin so the 3 px green U-frame border at
+    // design-y 55 isn't clipped to sub-pixel and dropped at the window edge.
+    constexpr double kNoseTipY   = 600.0 / 640.0 * kDesignH;           // ≈ 999.38
+    constexpr double kBombTop    = 50.0;                               // scope-strip top
+    constexpr double kBombW      = (347.0 - 13.0) / 360.0 * kDesignW;  // ≈ 556.67
+    constexpr double kBombH      = kNoseTipY - kBombTop;               // ≈ 949.38
+    constexpr double kAspect     = kBombW / kBombH;                    // ≈ 0.586
     constexpr int    kMinWidth   = 360;
     constexpr int    kMaxWidth   = 900;
 
@@ -577,9 +583,9 @@ void BomboEditor::resized()
     // Bomb bounding box in design coords (R4B-CLASSIC, fin outer=13 ref,
     // cap top=22 ref, fin outer right=347 ref, nose tip=600 ref)
     constexpr float kBombL = 13.0f / 360.0f * kDesignW;    // ≈ 21.67
-    constexpr float kBombT = 22.0f / 640.0f * kDesignH;    // ≈ 36.64
+    constexpr float kBombT = 50.0f;                                // scope-strip top; ~5px above green U-frame so it isn't clipped
     constexpr float kBombW = (347.0f - 13.0f) / 360.0f * kDesignW; // ≈ 556.67
-    constexpr float kBombH = (600.0f - 22.0f) / 640.0f * kDesignH; // ≈ 962.73
+    constexpr float kBombH = 600.0f / 640.0f * kDesignH - kBombT;  // nose tip − crop top ≈ 949.38
     const float scale = juce::jmin(static_cast<float>(getWidth())  / kBombW,
                                    static_cast<float>(getHeight()) / kBombH);
     if (scale <= 0.0f) return;

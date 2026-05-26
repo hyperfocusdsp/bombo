@@ -243,9 +243,14 @@ public:
         const float ang = a - juce::MathConstants<float>::halfPi;
         const float ic = std::cos(ang);
         const float is = std::sin(ang);
+        const bool  logoKnobForStem = static_cast<bool>(
+            slider.getProperties().getWithDefault("logoKnob", false));
         const float stemInR  = coreR;
         const float stemOutR = radius;
-        const float stemW    = 2.6f;
+        // Wider stem on the logo knob so a dark fill stays visible: a thin
+        // keyline outline on a 2.6 px stem covers most of the fill and reads as
+        // the outline colour (white). 4.2 px keeps the fill dominant.
+        const float stemW    = logoKnobForStem ? 4.2f : 2.6f;
         juce::Path stem;
         const float perpC = -is;
         const float perpS =  ic;
@@ -260,12 +265,20 @@ public:
         stem.closeSubPath();
         if (logoKnob)
         {
-            // Bone pointer + thin ink outline so it reads over BOTH the bright
-            // accent rings and the dark gaps between them.
-            g.setColour(col::bone());
+            // Contrast-aware pointer. The cap face is the theme accent (magenta,
+            // amber, neon hue…), so a fixed bone pointer vanishes on bright
+            // accents. Pick a dark-grey stem over a bright ring (e.g. magenta)
+            // and a bone stem over a dark ring; the opposite-tone outline keeps
+            // it legible over the dark gaps between rings too.
+            const bool  ringIsBright = col::accentAmber().getPerceivedBrightness() > 0.5f;
+            const auto  stemFill     = ringIsBright ? juce::Colour(0xFF2A'2A'2Eu) // dark grey
+                                                    : col::bone();
+            const auto  stemOutline  = ringIsBright ? col::bone().withAlpha(0.85f)
+                                                    : col::ink().withAlpha(0.85f);
+            g.setColour(stemFill);
             g.fillPath(stem);
-            g.setColour(col::ink().withAlpha(0.85f));
-            g.strokePath(stem, juce::PathStrokeType(0.8f));
+            g.setColour(stemOutline);
+            g.strokePath(stem, juce::PathStrokeType(0.7f));
         }
         else
         {

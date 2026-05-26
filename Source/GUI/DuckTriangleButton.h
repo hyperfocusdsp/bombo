@@ -89,9 +89,10 @@ public:
         g.setColour(stroke.withAlpha(isOff ? (hot ? 0.85f : 0.55f) : 1.0f));
         g.strokePath(tri, juce::PathStrokeType(1.4f));
 
-        // Letter: 'D' faint when Off, "A"/"B"/"AB" when on. Rotate to ride
-        // the tl→apex diagonal hypotenuse.
-        const juce::String label = isOff ? juce::String("D")
+        // Off shows the full word "DUCK" (the resting state); when actively
+        // routed it shows which voice is ducked: "A"/"B"/"AB". Text rides the
+        // tl→apex diagonal hypotenuse.
+        const juce::String label = isOff ? juce::String("DUCK")
                                  : idx == 1 ? juce::String("A")
                                  : idx == 2 ? juce::String("B")
                                  :            juce::String("AB");
@@ -104,16 +105,29 @@ public:
 
         const float angle = std::atan2(apex.y - tl.y, apex.x - tl.x);
         const float side  = std::min(r.getWidth(), r.getHeight());
-        const float fontH = juce::jmax(8.0f, side * 0.32f);
+        float fontH = juce::jmax(8.0f, side * 0.32f);
+
+        // Shrink to fit the hypotenuse so the longer labels ("DUCK", "AB")
+        // don't overflow the wedge while a single glyph still fills it.
+        juce::Font font(fontH, juce::Font::bold);
+        const float hypLen  = tl.getDistanceFrom(apex);
+        const float textW   = font.getStringWidthFloat(label);
+        if (textW > hypLen * 0.82f && textW > 0.0f)
+        {
+            fontH *= (hypLen * 0.82f) / textW;
+            fontH  = juce::jmax(7.0f, fontH);
+            font.setHeight(fontH);
+        }
 
         g.saveState();
         g.addTransform(juce::AffineTransform::rotation(angle, anchor.x, anchor.y));
-        g.setFont(juce::Font(fontH, juce::Font::bold));
+        g.setFont(font);
         // Contrast-aware text: dark on bright triangle, bright on dark triangle.
-        // For Off (outline-only) the visual background is the panel — fall back
-        // to bone with low alpha so the affordance reads as "disabled D".
+        // For Off (outline-only) the visual background is the dark rack panel —
+        // use full-strength bone so the 'D' reads boldly in every theme (the
+        // old 0.35 alpha made it near-invisible).
         const auto textColor = isOff
-            ? col::bone().withAlpha(0.35f)
+            ? col::bone()
             : (fill.getBrightness() > 0.55f ? juce::Colours::black
                                             : juce::Colours::white);
         g.setColour(textColor);

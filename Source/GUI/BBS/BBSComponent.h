@@ -123,6 +123,12 @@ private:
     juce::Image             gameV2Image_;  // kFbW x kFbH ARGB, allocated in launchGame()
     PreGamePresetStash      preGameStash_; // user's preset captured at launchGame, restored on exitGame
     bool                    fireKeyWasDown_ = false;  // charge-key release edge (T/F/Space)
+    // Frame-rate-independent stepping: the sim uses a fixed 1/60 step with no
+    // catch-up, so a timer that can't sustain 60 Hz (WSLg software render) ran
+    // the whole game in slow motion. Accumulate real elapsed ms and step the
+    // fixed sim as many times as wall-clock demands. Reset in launchGame().
+    double                  lastGameTickMs_  = 0.0;   // 0 = (re)initialise on next callback
+    double                  gameTickAccumMs_ = 0.0;
 
     // --- Discovery (Task 23): drifting BBS invader + cabinet glyph ---
     std::mt19937            discoveryRng_ { std::random_device{}() };

@@ -243,8 +243,32 @@ void BBSComponent::timerCallback()
             fireKeyWasDown_ = fireDown;
         }
 
-        gameV2_.tick();
-        if (gameV2_.wantsExit()) exitGame();
+        // Frame-rate-independent stepping. The timer nominally fires at 60 Hz
+        // (startTimer(16)), but under WSLg software rendering the repaint can't
+        // keep up, so the fixed-1/60-step sim would crawl. Step it by real
+        // elapsed wall-clock time instead, capped so a long stall (window drag,
+        // first frame) doesn't fast-forward the game.
+        {
+            const double nowMs = juce::Time::getMillisecondCounterHiRes();
+            if (lastGameTickMs_ <= 0.0) lastGameTickMs_ = nowMs;   // first frame: no jump
+            gameTickAccumMs_ += nowMs - lastGameTickMs_;
+            lastGameTickMs_ = nowMs;
+
+            constexpr double kStepMs    = 1000.0 / static_cast<double>(bombo::game::kTickHz);
+            constexpr int    kMaxCatchUp = 4;   // ≤4 sim steps per callback
+            int steps = 0;
+            bool exited = false;
+            while (gameTickAccumMs_ >= kStepMs && steps < kMaxCatchUp)
+            {
+                gameV2_.tick();
+                gameTickAccumMs_ -= kStepMs;
+                ++steps;
+                if (gameV2_.wantsExit()) { exitGame(); exited = true; break; }
+            }
+            // Hit the cap → drop the backlog so we don't bank an ever-growing
+            // debt that spirals. Also clears stale time after a hard hitch.
+            if (! exited && steps >= kMaxCatchUp) gameTickAccumMs_ = 0.0;
+        }
 #else
         game_.tick();
         if (game_.wantsExit()) exitGame();
@@ -1020,7 +1044,11 @@ void BBSComponent::launchGame()
     // The game integrates with a fixed 60 Hz step (kTickDt = 1/60). The BBS
     // timer otherwise runs at 25 Hz (40 ms, tuned for the intro/scroller), which
     // would run the whole sim at ~42% speed. Bump to ~60 Hz while the game is
-    // live; exitGame() restores the 25 Hz BBS cadence.
+    // live; exitGame() restores the 25 Hz BBS cadence. The timerCallback steps
+    // the sim by real elapsed time (accumulator), so even if 60 Hz isn't met
+    // the game runs at correct wall-clock speed. Reset the clock here.
+    lastGameTickMs_  = 0.0;
+    gameTickAccumMs_ = 0.0;
     startTimer(16);
 #else
     game_.onKick = triggerCb_;
