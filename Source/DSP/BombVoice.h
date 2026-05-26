@@ -148,6 +148,7 @@ public:
         midAmpEnv_.setSampleRate(sr);
         noise_.setSampleRate(sr);
         voiceADucker_.setSampleRate(sr);
+        voiceBDucker_.setSampleRate(sr);
         // Force click buffer regen on next trigger at the new rate.
         lastClickCenterHz_ = -1.0f;
     }
@@ -177,6 +178,11 @@ public:
         voiceADucker_.setShape(t.duckShape);
         voiceADucker_.setGrowl(t.duckGrowl);
         voiceADucker_.reset();
+        voiceBDucker_.setTimesMs(t.duckAtkMs, t.duckRelMs);
+        voiceBDucker_.setHoldMs(t.duckHoldMs);
+        voiceBDucker_.setShape(t.duckShape);
+        voiceBDucker_.setGrowl(t.duckGrowl);
+        voiceBDucker_.reset();
         // Sub HPF coefficient — cached at trigger time. One-pole HPF:
         //   y[n] = a * (y[n-1] + x[n] - x[n-1])
         // where a = 1 / (1 + (2π fc) / sr) approximated. Below 22 Hz we
@@ -354,14 +360,23 @@ public:
         const float bal = trig_.voiceBalance;
         const float aGain = bal <= 0.5f ? 1.0f : 1.0f - (bal - 0.5f) * 2.0f;
         const float bGain = bal >= 0.5f ? 1.0f : bal * 2.0f;
-        float       subPart  = trig_.voiceAMute ? 0.0f : (sub * aGain);
-        const float bodyPart = trig_.voiceBMute
+        float subPart  = trig_.voiceAMute ? 0.0f : (sub * aGain);
+        float bodyPart = trig_.voiceBMute
             ? 0.0f
             : (bodyColorZ_ * bGain);
-        // Reverse-bass: pull Voice A (sub) down keyed by Voice B's punch.
-        // Off (default) leaves subPart untouched — bit-identical to before.
-        if (trig_.duckVoiceA)
-            subPart = voiceADucker_.process(bodyPart, subPart, trig_.duckDepth);
+        // Per-voice duck routing (snapshot int): 0=Off, 1=A, 2=B, 3=AB.
+        // A: Voice A sub ducked keyed by Voice B body (classic reverse-bass).
+        // B: Voice B body ducked keyed by Voice A sub (symmetric inverse).
+        // AB: both, each keyed by the OTHER voice's pre-duck signal so the
+        // key remains the un-attenuated punch from its partner.
+        // Off is bit-identical to the pre-feature path.
+        const int r = trig_.duckRouting;
+        const bool dA = (r == 1) || (r == 3);
+        const bool dB = (r == 2) || (r == 3);
+        const float keyForA = bodyPart;  // snapshot before either duck runs
+        const float keyForB = subPart;
+        if (dA) subPart  = voiceADucker_.process(keyForA, subPart,  trig_.duckDepth);
+        if (dB) bodyPart = voiceBDucker_.process(keyForB, bodyPart, trig_.duckDepth);
         const float raw = subPart + bodyPart;
 
         // DRIVE column mute bypasses the per-voice clipper as well as the
@@ -417,6 +432,7 @@ private:
     ClickGen       click_{};
     NoiseGen       noise_{};
     Ducker         voiceADucker_{};   // reverse-bass duck on Voice A (sub)
+    Ducker         voiceBDucker_{};   // Symmetric per-voice ducker: dampens Voice B keyed by Voice A sub.
 
     VoiceTrigger   trig_{};
     int            samplePos_ = 0;

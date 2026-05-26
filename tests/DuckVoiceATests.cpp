@@ -83,7 +83,7 @@ public:
             bombo::VoiceTrigger base;
             base.voiceBalance = 0.5f;            // both A (sub) and B (body) present
             bombo::VoiceTrigger ducked = base;
-            ducked.duckVoiceA = true;  ducked.duckDepth = 0.9f;
+            ducked.duckRouting = 1;  ducked.duckDepth = 0.9f;
             ducked.duckAtkMs = 1.0f;   ducked.duckRelMs = 200.0f;  ducked.duckGrowl = 0.0f;
 
             const auto off = renderVoice(base, N);
@@ -96,6 +96,71 @@ public:
             }
             expect(eOn < eOff, "ducking Voice A reduces total energy");
             expect(eOn > 0.0,  "Voice B punch is untouched, so output is non-silent");
+        }
+
+        beginTest("duckRouting=B (2) ducks Voice B body keyed by Voice A sub");
+        {
+            constexpr int N = 3000;
+            // driveMute=true linearises the post-voice path so the energy
+            // delta from body-only ducking is observable (otherwise the
+            // diode clipper saturates and absorbs the change).
+            bombo::VoiceTrigger off;   off.duckRouting = 0;  off.duckDepth = 0.0f; off.driveMute = true;
+            bombo::VoiceTrigger bMode; bMode.driveMute = true;
+            bMode.duckRouting = 2;
+            bMode.duckDepth   = 0.9f;
+            bMode.duckAtkMs   = 2.0f;
+            bMode.duckRelMs   = 200.0f;
+
+            const auto baseline = renderVoice(off,   N);
+            const auto ducked   = renderVoice(bMode, N);
+
+            double eBase = 0.0, eDuck = 0.0;
+            for (int i = 200; i < N; ++i)
+            {
+                eBase += baseline[(size_t) i] * baseline[(size_t) i];
+                eDuck += ducked  [(size_t) i] * ducked  [(size_t) i];
+            }
+            expect(eDuck < eBase,
+                   "B-mode duck must reduce total energy vs Off baseline (linear path)");
+        }
+
+        beginTest("duckRouting=AB (3) ducks both voices");
+        {
+            constexpr int N = 3000;
+            bombo::VoiceTrigger off;    off.duckRouting = 0;  off.duckDepth = 0.0f; off.driveMute = true;
+            bombo::VoiceTrigger aMode;  aMode.driveMute = true;
+            aMode.duckRouting = 1;  aMode.duckDepth = 0.9f; aMode.duckAtkMs = 2.0f; aMode.duckRelMs = 200.0f;
+            bombo::VoiceTrigger abMode; abMode.driveMute = true;
+            abMode.duckRouting = 3;
+            abMode.duckDepth   = 0.9f;
+            abMode.duckAtkMs   = 2.0f;
+            abMode.duckRelMs   = 200.0f;
+
+            const auto baseline = renderVoice(off,    N);
+            const auto aDucked  = renderVoice(aMode,  N);
+            const auto abDucked = renderVoice(abMode, N);
+
+            double eBase = 0.0, eA = 0.0, eAB = 0.0;
+            for (int i = 200; i < N; ++i)
+            {
+                eBase += baseline[(size_t) i] * baseline[(size_t) i];
+                eA    += aDucked [(size_t) i] * aDucked [(size_t) i];
+                eAB   += abDucked[(size_t) i] * abDucked[(size_t) i];
+            }
+            expect(eAB < eBase, "AB-mode must reduce energy vs Off baseline");
+            expect(eAB < eA,    "AB-mode must reduce energy more than A-only (B-mode adds on top)");
+        }
+
+        beginTest("duckRouting=Off (0) is bit-identical to legacy duckVoiceA=false");
+        {
+            constexpr int N = 3000;
+            bombo::VoiceTrigger legacy;  legacy.duckVoiceA = false;  legacy.duckRouting = 0;
+            bombo::VoiceTrigger newOff;  newOff.duckRouting = 0;
+            const auto a = renderVoice(legacy, N);
+            const auto b = renderVoice(newOff, N);
+            int mism = 0;
+            for (int i = 0; i < N; ++i) if (a[(size_t) i] != b[(size_t) i]) ++mism;
+            expectEquals(mism, 0, "Off path must be bit-exact to legacy false");
         }
     }
 };
