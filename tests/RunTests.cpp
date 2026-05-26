@@ -1660,6 +1660,15 @@ int main()
         if (r == nullptr) continue;
         total += r->passes + r->failures;
         failures += r->failures;
+        // Name every failing test (and its failure messages) so CI pinpoints
+        // the culprit instead of just reporting a bare failure count.
+        if (r->failures > 0)
+        {
+            std::cout << "FAIL: [" << r->unitTestName << "] "
+                      << r->subcategoryName << " (" << r->failures << ")\n";
+            for (const auto& m : r->messages)
+                std::cout << "    " << m << "\n";
+        }
     }
     juce::Logger::writeToLog(juce::String::formatted(
         "Total: %d, failures: %d", total, failures));

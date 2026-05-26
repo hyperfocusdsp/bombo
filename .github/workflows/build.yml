@@ -57,7 +57,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure -C Release
 
       - name: Stage artefacts (Linux)
-        if: runner.os == 'Linux'
+        if: ${{ always() && runner.os == 'Linux' }}
         shell: bash
         run: |
           A=build/Bombo_artefacts/Release
@@ -68,7 +68,7 @@ jobs:
           strip pkg/Bombo pkg/Bombo.clap pkg/Bombo.vst3/Contents/x86_64-linux/Bombo.so || true
 
       - name: Stage artefacts (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ always() && runner.os == 'Windows' }}
         shell: bash
         run: |
           A=build/Bombo_artefacts/Release
@@ -78,7 +78,7 @@ jobs:
           cp    "$A/Standalone/Bombo.exe"   pkg/Bombo.exe
 
       - name: Stage artefacts (macOS, universal + ad-hoc sign)
-        if: runner.os == 'macOS'
+        if: ${{ always() && runner.os == 'macOS' }}
         shell: bash
         run: |
           A=build/Bombo_artefacts/Release
@@ -96,6 +96,7 @@ jobs:
           lipo -info "pkg/Bombo.vst3/Contents/MacOS/Bombo" || true
 
       - name: Upload artefacts
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: bombo-${{ matrix.name }}
