@@ -186,6 +186,9 @@ public:
         voiceBDucker_.setShape(t.duckShape);
         voiceBDucker_.setGrowl(t.duckGrowl);
         voiceBDucker_.reset();
+        // Synthetic 25 ms trigger pulse — drives voiceBDucker_'s key in B/AB mode.
+        // Predictable transient sidechain regardless of voice signal levels.
+        trigPulseRemaining_ = static_cast<int>(0.025f * sampleRate_);
         // Sub HPF coefficient — cached at trigger time. One-pole HPF:
         //   y[n] = a * (y[n-1] + x[n] - x[n-1])
         // where a = 1 / (1 + (2π fc) / sr) approximated. Below 22 Hz we
@@ -368,18 +371,25 @@ public:
             ? 0.0f
             : (bodyColorZ_ * bGain);
         // Per-voice duck routing (snapshot int): 0=Off, 1=A, 2=B, 3=AB.
-        // A: Voice A sub ducked keyed by Voice B body (classic reverse-bass).
-        // B: Voice B body ducked keyed by Voice A sub (symmetric inverse).
-        // AB: both, each keyed by the OTHER voice's pre-duck signal so the
-        // key remains the un-attenuated punch from its partner.
+        // A: Voice A sub ducked keyed by Voice B body (reverse-bass — works
+        //    because B's body fires fast enough to drive the env follower
+        //    before A's sub ramps up).
+        // B: Voice B body ducked keyed by a synthetic 25 ms trigger pulse.
+        //    Using subPart as the key fails because A's sub takes too long
+        //    to ramp — by the time the env follower charges, B has faded.
+        //    The pulse decouples B-mode duck from voice signal timing.
+        // AB: A leg uses bodyPart key (reverse-bass on A); B leg uses the
+        //    synthetic pulse (predictable transient on B). Each leg keys
+        //    off its appropriate driver.
         // Off is bit-identical to the pre-feature path.
         const int r = trig_.duckRouting;
         const bool dA = (r == 1) || (r == 3);
         const bool dB = (r == 2) || (r == 3);
-        const float keyForA = bodyPart;  // snapshot before either duck runs
-        const float keyForB = subPart;
+        const float keyForA = bodyPart;
+        const float pulseKey = (trigPulseRemaining_ > 0) ? 1.0f : 0.0f;
+        if (trigPulseRemaining_ > 0) --trigPulseRemaining_;
         if (dA) subPart  = voiceADucker_.process(keyForA, subPart,  trig_.duckDepth);
-        if (dB) bodyPart = voiceBDucker_.process(keyForB, bodyPart, trig_.duckDepth);
+        if (dB) bodyPart = voiceBDucker_.process(pulseKey, bodyPart, trig_.duckDepth);
         const float raw = subPart + bodyPart;
 
         // DRIVE column mute bypasses the per-voice clipper as well as the
@@ -439,6 +449,7 @@ private:
 
     VoiceTrigger   trig_{};
     int            samplePos_ = 0;
+    int            trigPulseRemaining_ = 0;  // Synthetic key pulse for B/AB-mode duck.
     float          sampleRate_ = 48000.0f;
     float          lastClickCenterHz_ = -1.0f;
     float          fadeoutGain_ = 1.0f;

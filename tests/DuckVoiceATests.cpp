@@ -100,7 +100,7 @@ public:
             expect(eOn > 0.0,  "Voice B punch is untouched, so output is non-silent");
         }
 
-        beginTest("duckRouting=B (2) ducks Voice B body keyed by Voice A sub");
+        beginTest("duckRouting=B (2) ducks Voice B body via synthetic trigger pulse");
         {
             constexpr int N = 3000;
             // driveMute=true linearises the post-voice path so the energy
