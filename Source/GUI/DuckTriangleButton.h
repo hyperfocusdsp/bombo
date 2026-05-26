@@ -110,7 +110,14 @@ public:
         g.saveState();
         g.addTransform(juce::AffineTransform::rotation(angle, anchor.x, anchor.y));
         g.setFont(juce::Font(fontH, juce::Font::bold));
-        g.setColour(isOff ? col::bone().withAlpha(0.35f) : col::bone());
+        // Contrast-aware text: dark on bright triangle, bright on dark triangle.
+        // For Off (outline-only) the visual background is the panel — fall back
+        // to bone with low alpha so the affordance reads as "disabled D".
+        const auto textColor = isOff
+            ? col::bone().withAlpha(0.35f)
+            : (fill.getBrightness() > 0.55f ? juce::Colours::black
+                                            : juce::Colours::white);
+        g.setColour(textColor);
         const juce::Rectangle<float> textBox(anchor.x - 40.0f, anchor.y - fontH * 0.5f,
                                              80.0f, fontH);
         g.drawText(label, textBox, juce::Justification::centred, false);
