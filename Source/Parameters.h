@@ -285,8 +285,6 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::ParameterID{pid::filterMute, 1}, "Filter Mute", false));
     p.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{pid::duckMute,   1}, "Duck Mute",   false));
-    p.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID{pid::duckVoiceA, 1}, "Duck Voice A", false));
     p.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{pid::duckRouting, 1}, "Duck Routing",
         juce::StringArray{"Off", "A", "B", "AB"}, 0));

@@ -93,7 +93,6 @@ void BomboProcessor::cacheParameterPointers()
     pReverbMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(reverbMute));
     pFilterMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(filterMute));
     pDuckMute        = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(duckMute));
-    pDuckVoiceA      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(duckVoiceA));
     pDuckRouting     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(duckRouting));
 
     jassert(pMasterOut != nullptr && pWaveform != nullptr && pDriveMode != nullptr);
@@ -186,7 +185,6 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     // Reverse-bass duck on Voice A — snapshot the DUCK envelope so the
     // per-voice ducker matches the DUCK column. Only applied when the toggle
     // is on (off path is bit-identical to pre-feature).
-    t.duckVoiceA      = pDuckVoiceA->get();
     t.duckRouting     = (pDuckRouting != nullptr) ? pDuckRouting->getIndex() : 0;
     t.duckAtkMs       = pDuckAtk->get();
     t.duckHoldMs      = pDuckHold->get();

@@ -70,7 +70,7 @@ public:
         {
             bombo::VoiceTrigger off;
             bombo::VoiceTrigger on = off;
-            on.duckVoiceA = true;  on.duckDepth = 0.0f;  on.duckGrowl = 0.0f;
+            on.duckRouting = 1;  on.duckDepth = 0.0f;  on.duckGrowl = 0.0f;
 
             const auto a = renderVoice(off, N);
             const auto b = renderVoice(on, N);
@@ -153,16 +153,17 @@ public:
             expect(eAB < eA,    "AB-mode must reduce energy more than A-only (B-mode adds on top)");
         }
 
-        beginTest("duckRouting=Off (0) is bit-identical to legacy duckVoiceA=false");
+        beginTest("duckRouting=Off (0) keeps duck params inert regardless of values");
         {
             constexpr int N = 3000;
-            bombo::VoiceTrigger legacy;  legacy.duckVoiceA = false;  legacy.duckRouting = 0;
-            bombo::VoiceTrigger newOff;  newOff.duckRouting = 0;
-            const auto a = renderVoice(legacy, N);
-            const auto b = renderVoice(newOff, N);
+            bombo::VoiceTrigger a;   // default — duckRouting=0
+            bombo::VoiceTrigger b;   // also Off, but with duck params dialled
+            b.duckDepth = 0.9f;  b.duckGrowl = 0.7f;  b.duckShape = -0.5f;
+            const auto va = renderVoice(a, N);
+            const auto vb = renderVoice(b, N);
             int mism = 0;
-            for (int i = 0; i < N; ++i) if (a[(size_t) i] != b[(size_t) i]) ++mism;
-            expectEquals(mism, 0, "Off path must be bit-exact to legacy false");
+            for (int i = 0; i < N; ++i) if (va[(size_t) i] != vb[(size_t) i]) ++mism;
+            expectEquals(mism, 0, "Off must skip both per-voice duckers entirely");
         }
 
         beginTest("legacy duck_voice_a=true migrates to duck_routing=A on state load");

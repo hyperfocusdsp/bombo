@@ -75,7 +75,6 @@ struct VoiceTrigger
     // Off is bit-identical to the pre-feature path (both per-voice
     // duckers skipped entirely). Kept as int (not enum) so VoiceTrigger
     // stays trivially-copyable for the loop-cache memcmp comparator.
-    bool  duckVoiceA      = false;  // DEPRECATED — removed after migration lands (Task 8)
     int   duckRouting     = 0;      // 0=Off, 1=A, 2=B, 3=AB
     float duckAtkMs       = 2.0f;
     float duckHoldMs      = 0.0f;
@@ -116,7 +115,6 @@ struct VoiceTrigger
             && voiceBSynthOn   == o.voiceBSynthOn
             && driveMute       == o.driveMute
             && voiceBalance    == o.voiceBalance
-            && duckVoiceA      == o.duckVoiceA
             && duckRouting     == o.duckRouting
             && duckAtkMs       == o.duckAtkMs
             && duckHoldMs      == o.duckHoldMs
@@ -175,7 +173,7 @@ public:
         samplePos_   = 0;
         // Reverse-bass duck (Voice A): configure the per-voice ducker from the
         // DUCK-envelope snapshot and clear its state so each hit starts fresh.
-        // Only applied in render when trig_.duckVoiceA is true.
+        // Only applied in render when trig_.duckRouting selects A/AB.
         voiceADucker_.setTimesMs(t.duckAtkMs, t.duckRelMs);
         voiceADucker_.setHoldMs(t.duckHoldMs);
         voiceADucker_.setShape(t.duckShape);

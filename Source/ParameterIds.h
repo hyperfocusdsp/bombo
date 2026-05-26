@@ -132,10 +132,11 @@ namespace pid
     inline constexpr const char* reverbMute      = "reverb_mute";
     inline constexpr const char* filterMute      = "filter_mute";
     inline constexpr const char* duckMute        = "duck_mute";
-    // Reverse-bass toggle: when ON, the DUCK envelope ALSO ducks Voice A
-    // (the sub/synth tail), keyed by Voice B's punch — on top of the normal
-    // post-FX bus duck. OFF (default) is bit-identical to pre-feature.
-    inline constexpr const char* duckVoiceA      = "duck_voice_a";
+    // Reverse-bass per-voice duck routing. Cycles Off / A / B / AB. Drives
+    // both voiceADucker_ (sub keyed by body) and voiceBDucker_ (body keyed
+    // by a synthetic trigger pulse) in BombVoice. The legacy `duck_voice_a`
+    // bool was replaced 2026-05-26 — old state-trees are migrated on load
+    // by bombo::migrateDuckVoiceAToRouting (Source/State/DuckMigration.h).
     inline constexpr const char* duckRouting     = "duck_routing";
 }
 
