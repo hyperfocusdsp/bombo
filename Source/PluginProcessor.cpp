@@ -94,6 +94,7 @@ void BomboProcessor::cacheParameterPointers()
     pFilterMute      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(filterMute));
     pDuckMute        = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(duckMute));
     pDuckVoiceA      = dynamic_cast<juce::AudioParameterBool*>  (apvts.getParameter(duckVoiceA));
+    pDuckRouting     = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(duckRouting));
 
     jassert(pMasterOut != nullptr && pWaveform != nullptr && pDriveMode != nullptr);
     jassert(pLimiterOn != nullptr && pReverbMix != nullptr);

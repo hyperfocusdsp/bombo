@@ -136,6 +136,7 @@ namespace pid
     // (the sub/synth tail), keyed by Voice B's punch — on top of the normal
     // post-FX bus duck. OFF (default) is bit-identical to pre-feature.
     inline constexpr const char* duckVoiceA      = "duck_voice_a";
+    inline constexpr const char* duckRouting     = "duck_routing";
 }
 
 // Params NOT to bake into presets. These are global mixer / transport /
