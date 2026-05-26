@@ -1,11 +1,12 @@
-// tests/DuckVoiceATests.cpp -- reverse-bass duck on Voice A (BombVoice).
+// tests/DuckRoutingTests.cpp -- reverse-bass duck routing matrix (Off/A/B/AB).
 //
-// The "D" toggle routes the DUCK envelope onto Voice A (sub), keyed by Voice
-// B's punch, on top of the normal post-FX bus duck. The load-bearing safety
-// property: with the toggle OFF the sub path is untouched no matter what the
-// duck params hold -- so enabling the feature can never regress existing
-// presets. Also pins depth-0 passthrough and that ducking actually lowers
-// Voice A energy.
+// The duck triangle cycles through 4 routings: Off (post-FX bus duck only), A
+// (duck Voice A sub, keyed by Voice B punch), B (duck Voice B), and AB (duck
+// both). The load-bearing safety property: with routing Off the per-voice
+// paths are untouched no matter what the duck params hold -- so enabling the
+// feature can never regress existing presets. Also pins depth-0 passthrough,
+// the legacy duckVoiceA bool -> duckRouting migration, and that the selected
+// routing actually lowers the targeted voice's energy.
 
 #include <juce_core/juce_core.h>
 #include <juce_data_structures/juce_data_structures.h>
@@ -28,10 +29,10 @@ std::vector<float> renderVoice(const bombo::VoiceTrigger& t, int n)
     return out;
 }
 
-class DuckVoiceATests : public juce::UnitTest
+class DuckRoutingTests : public juce::UnitTest
 {
 public:
-    DuckVoiceATests() : juce::UnitTest("Duck Voice A (reverse-bass)") {}
+    DuckRoutingTests() : juce::UnitTest("Duck Routing (A/B/AB)") {}
 
     void runTest() override
     {
@@ -218,6 +219,6 @@ public:
     }
 };
 
-static DuckVoiceATests duckVoiceATests;
+static DuckRoutingTests duckRoutingTests;
 
 } // namespace
