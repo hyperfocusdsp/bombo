@@ -1,0 +1,32 @@
+BOMBO v1.0 - macOS (Universal: Apple Silicon + Intel) - INSTALLATION
+Hyperfocus DSP - https://hyperfocusdsp.com
+
+This build is code-signed with a Developer ID and notarized by Apple, so it
+installs without Gatekeeper warnings. Install the format(s) your host loads.
+
+  VST3        Bombo.vst3        ->   ~/Library/Audio/Plug-Ins/VST3/
+  AU          Bombo.component   ->   ~/Library/Audio/Plug-Ins/Components/
+  CLAP        Bombo.clap        ->   ~/Library/Audio/Plug-Ins/CLAP/
+  Standalone  Bombo.app         ->   /Applications/ (or run in place)
+
+QUICK INSTALL (copy/paste in Terminal):
+
+  mkdir -p ~/Library/Audio/Plug-Ins/{VST3,Components,CLAP}
+  cp -R Bombo.vst3      ~/Library/Audio/Plug-Ins/VST3/
+  cp -R Bombo.component ~/Library/Audio/Plug-Ins/Components/
+  cp -R Bombo.clap      ~/Library/Audio/Plug-Ins/CLAP/
+
+Then rescan plugins in your DAW. Bombo appears as an instrument
+(manufacturer: Hyperfocus DSP). Logic Pro / GarageBand use the AU (Components).
+
+STANDALONE:
+  Move Bombo.app to /Applications and open it.
+
+REQUIREMENTS:
+  - macOS 11 (Big Sur) or later, Apple Silicon or Intel
+  - A VST3-, AU-, or CLAP-capable host
+
+UNINSTALL:
+  Remove Bombo.vst3, Bombo.component, and Bombo.clap from the folders above.
+
+Support: hello@hyperfocusdsp.com
