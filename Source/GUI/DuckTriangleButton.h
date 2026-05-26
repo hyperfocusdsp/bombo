@@ -23,6 +23,7 @@ class DuckTriangleButton : public juce::Button
 public:
     DuckTriangleButton(juce::AudioProcessorValueTreeState& apvts)
         : juce::Button({}),
+          apvts_(apvts),
           choice_(dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(pid::duckRouting))),
           attachment_(*apvts.getParameter(pid::duckRouting),
                       [this](float) { repaint(); })
@@ -49,11 +50,17 @@ public:
     void clicked() override
     {
         // Cycle Off(0) → A(1) → B(2) → AB(3) → Off(0).
-        if (choice_ == nullptr) return;
-        const int n = choice_->choices.size();    // expected: 4
-        if (n <= 1) return;
-        const int next = (choice_->getIndex() + 1) % n;
-        attachment_.setValueAsCompleteGesture(static_cast<float>(next) / static_cast<float>(n - 1));
+        // Mirrors DecRoutingPill's direct-gesture flow (works reliably);
+        // setValueAsCompleteGesture via ParameterAttachment did not propagate.
+        auto* p = apvts_.getParameter(pid::duckRouting);
+        if (p == nullptr) return;
+        const int cur  = juce::jlimit(0, 3, (int) std::round(p->convertFrom0to1(p->getValue())));
+        const int next = (cur + 1) % 4;
+        DBG("DuckTriangleButton::clicked cur=" << cur << " next=" << next);
+        const float norm = p->convertTo0to1((float) next);
+        p->beginChangeGesture();
+        p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, norm));
+        p->endChangeGesture();
     }
 
     void paintButton(juce::Graphics& g, bool, bool) override
@@ -111,6 +118,7 @@ public:
     }
 
 private:
+    juce::AudioProcessorValueTreeState& apvts_;
     juce::AudioParameterChoice* choice_ = nullptr;
     juce::ParameterAttachment   attachment_;
     juce::Point<float>          tl_, tr_, apex_;
