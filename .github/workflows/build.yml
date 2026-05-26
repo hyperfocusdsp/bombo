@@ -7,12 +7,15 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14]
+        include:
+          - { os: ubuntu-22.04, name: linux-x86_64 }
+          - { os: windows-2022, name: win64 }
+          - { os: macos-14,     name: macos-universal }
 
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +41,8 @@ jobs:
         run: |
           EXTRA=""
           if [ "$RUNNER_OS" = "Linux" ]; then EXTRA="-DBOMBO_LTO=OFF"; fi
+          # macOS: one universal binary covers both Apple Silicon and Intel.
+          if [ "$RUNNER_OS" = "macOS" ]; then EXTRA='-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'; fi
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release $EXTRA
 
       - name: Build
@@ -51,36 +56,48 @@ jobs:
         shell: bash
         run: ctest --test-dir build --output-on-failure -C Release
 
-      - name: Stage Linux artefacts
+      - name: Stage artefacts (Linux)
         if: runner.os == 'Linux'
+        shell: bash
         run: |
-          mkdir -p dist
-          cp -r build/Bombo_artefacts/Release/VST3/Bombo.vst3 dist/
-          cp build/Bombo_artefacts/Release/Standalone/Bombo dist/Bombo-standalone
+          A=build/Bombo_artefacts/Release
+          mkdir -p pkg
+          cp -r "$A/VST3/Bombo.vst3"   pkg/
+          cp    "$A/CLAP/Bombo.clap"   pkg/
+          cp    "$A/Standalone/Bombo"  pkg/Bombo
+          strip pkg/Bombo pkg/Bombo.clap pkg/Bombo.vst3/Contents/x86_64-linux/Bombo.so || true
 
-      - name: Stage macOS artefacts
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p dist
-          cp -R build/Bombo_artefacts/Release/VST3/Bombo.vst3 dist/
-          if [ -d build/Bombo_artefacts/Release/AU/Bombo.component ]; then
-            cp -R build/Bombo_artefacts/Release/AU/Bombo.component dist/
-          fi
-          codesign --force --deep --sign - dist/Bombo.vst3 || true
-          if [ -d dist/Bombo.component ]; then
-            codesign --force --deep --sign - dist/Bombo.component || true
-          fi
-
-      - name: Stage Windows artefacts
+      - name: Stage artefacts (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          mkdir -p dist
-          cp -r build/Bombo_artefacts/Release/VST3/Bombo.vst3 dist/
+          A=build/Bombo_artefacts/Release
+          mkdir -p pkg
+          cp -r "$A/VST3/Bombo.vst3"        pkg/
+          cp    "$A/CLAP/Bombo.clap"        pkg/
+          cp    "$A/Standalone/Bombo.exe"   pkg/Bombo.exe
+
+      - name: Stage artefacts (macOS, universal + ad-hoc sign)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          A=build/Bombo_artefacts/Release
+          mkdir -p pkg
+          cp -R "$A/VST3/Bombo.vst3"        pkg/
+          cp -R "$A/CLAP/Bombo.clap"        pkg/
+          cp -R "$A/Standalone/Bombo.app"   pkg/
+          [ -d "$A/AU/Bombo.component" ] && cp -R "$A/AU/Bombo.component" pkg/ || true
+          # Ad-hoc sign so Gatekeeper loads it locally; real Developer ID
+          # signing + notarization is the separate macos-signing-runbook step.
+          for b in pkg/Bombo.vst3 pkg/Bombo.clap pkg/Bombo.app pkg/Bombo.component; do
+            [ -e "$b" ] && codesign --force --deep --sign - "$b" || true
+          done
+          # Confirm the binary is genuinely universal (arm64 + x86_64).
+          lipo -info "pkg/Bombo.vst3/Contents/MacOS/Bombo" || true
 
       - name: Upload artefacts
         uses: actions/upload-artifact@v4
         with:
-          name: Bombo-${{ matrix.os }}
-          path: dist/
+          name: bombo-${{ matrix.name }}
+          path: pkg/
           if-no-files-found: error
