@@ -72,8 +72,8 @@ juce_add_binary_data(BomboResources
         Resources/Themes/plasma.json
         Resources/Presets/00_void.json
         Resources/Presets/01_hammer.json
-        Resources/Presets/02_reverze_1.json
-        Resources/Presets/03_rez.json
+        Resources/Presets/02_rez.json
+        Resources/Presets/03_reverze_1.json
         Resources/Presets/04_hypno.json
         Resources/Presets/05_druck.json
         Resources/Presets/06_boomer.json
