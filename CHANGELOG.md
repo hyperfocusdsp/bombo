@@ -7,6 +7,27 @@ and the project broadly follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Loop cache** — Fixed the audible "every other hit cut" alternation in
+  LOOP + TAIL ON mode where reverb tails alternated between full,
+  truncated, and tonally altered every beat. Root cause: the loop cache
+  invalidation check uses `std::memcmp` on `ChainParams`, but the struct
+  mixes `float`/`int`/`bool` and the compiler inserts padding bytes
+  between fields. Default construction (`bombo::ChainParams p;`) left
+  padding uninitialized (stack garbage), so two structurally-equal
+  instances built in different stack frames could fail `memcmp` on
+  padding alone. The cache invalidated every block, forcing per-beat
+  re-capture with a `chain_.reset()` between each — different live FX
+  state per beat = audible alternation. Fix: `std::memset(&p, 0, sizeof(p))`
+  at the top of `BomboProcessor::buildChainParamsFromApvts()` zeroes
+  padding deterministically; named-field assignments below override the
+  zeroed bytes for actual values. Symptom went latent before because the
+  exact padding pattern depended on what was on the stack, which is
+  build/optimizer/runtime sensitive — recent commits shifted call stacks
+  enough to expose it consistently. Bombo's existing audio-regression
+  test ("AUDIO VALIDATION: reverb-on 8-beat loop") doesn't catch this
+  because it constructs the processor once and runs straight through; the
+  bug needs a steady stream of `processBlock` calls that each rebuild
+  `ChainParams` from a fresh stack frame.
 - **UI** — Eliminated the thin diagonal AA seam at the upper-left/right
   corners of the orange nose region. The chassis is now filled in a single
   `fillPath` with a sharp body→nose gradient stop at `redRegionTopY`, so

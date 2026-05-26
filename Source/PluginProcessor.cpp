@@ -103,6 +103,15 @@ void BomboProcessor::cacheParameterPointers()
 bombo::ChainParams BomboProcessor::buildChainParamsFromApvts() const noexcept
 {
     bombo::ChainParams p;
+    // Zero padding bytes deterministically — the loop cache compares two
+    // ChainParams via std::memcmp (PluginProcessor.cpp ~line 549) and
+    // ChainParams mixes float/int/bool, so the compiler inserts padding
+    // between fields. Default construction leaves padding indeterminate
+    // (stack garbage), so two structurally-equal instances built in
+    // different stack frames can fail memcmp on padding alone. That
+    // invalidates the loop cache every block, causing per-beat re-capture
+    // and the audible "every other hit cut" alternation. Set fields after.
+    std::memset(&p, 0, sizeof(p));
     p.driveAmount     = pFxDriveAmount->get();
     p.driveMode       = pFxDriveMode->getIndex();
     p.driveMix        = pFxDriveMix->get();
