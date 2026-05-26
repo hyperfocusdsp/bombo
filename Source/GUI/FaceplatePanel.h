@@ -335,7 +335,6 @@ private:
     // the bottom of the VOICE A column. ON = the DUCK envelope also ducks
     // Voice A's sub, keyed by Voice B's punch.
     std::unique_ptr<class DuckTriangleButton> duckAPill_;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> duckAAtt_;
     // Routed DEC knob — DEC slider in Voice B section is NOT bound to a
     // single param via SliderAttachment. Instead, a binding routes its
     // writes to ampDecay / midDecay / both per the pid::decRouting

@@ -397,14 +397,11 @@ FaceplatePanel::FaceplatePanel(juce::AudioProcessorValueTreeState& apvts,
         apvts_, pid::voiceBSynthOn, *voiceBSynthPill_);
     addAndMakeVisible(*voiceBSynthPill_);
 
-    // Reverse-bass duck toggle on VOICE A — small triangle under the column.
-    duckAPill_ = std::make_unique<DuckTriangleButton>();
+    // Reverse-bass duck routing pill on VOICE A — triangle wedge that cycles
+    // Off → A → B → AB. Owns its own ParameterAttachment internally.
+    duckAPill_ = std::make_unique<DuckTriangleButton>(apvts_);
     duckAPill_->setWantsKeyboardFocus(false);
     duckAPill_->setMouseClickGrabsKeyboardFocus(false);
-    duckAPill_->setTooltip("Reverse-bass: also duck VOICE A (sub) with the DUCK "
-                           "envelope, keyed by VOICE B's punch. Voice B stays intact.");
-    duckAAtt_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        apvts_, pid::duckVoiceA, *duckAPill_);
     addAndMakeVisible(*duckAPill_);
 
     // ── BPM display (replaces the old MNT pill slot) ───────────────

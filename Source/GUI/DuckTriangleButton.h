@@ -1,42 +1,67 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 
 #include <cmath>
 
+#include "../ParameterIds.h"
 #include "Colours.h"
-#include "Fonts.h"
 
 namespace bombo
 {
 
-// Reverse-bass duck toggle for Voice A — a wedge tucked into the bomb body's
-// angled left side under the VOICE A column. Horizontal top edge, vertical
-// right edge, and a left edge that hugs the body silhouette: FaceplatePanel
-// feeds it the body edge as a local-space polyline (setLeftEdge) so the wedge
-// stays parallel to — and a couple px inside — the real curved outline.
-// "DUCK" reads down that angled edge. Filled accent when ON, faint outline
-// when OFF; brightens on hover.
-class DuckTriangleButton : public juce::ToggleButton
+// Reverse-bass duck routing pill, shaped like a right-triangle wedge that
+// hugs the bomb's body edge. Cycles pid::duckRouting on click:
+//   Off → A → B → AB → Off
+// Off paints faint outline + low-alpha 'D' so the affordance is still
+// readable when the feature is disabled. A/B/AB paint the triangle filled
+// with the theme accent, with the letter rotated to ride the hypotenuse
+// (tl→apex diagonal) so it reads down the angled edge of the wedge.
+class DuckTriangleButton : public juce::Button
 {
 public:
-    DuckTriangleButton() : juce::ToggleButton(juce::String()) {}
+    DuckTriangleButton(juce::AudioProcessorValueTreeState& apvts)
+        : juce::Button({}),
+          choice_(dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(pid::duckRouting))),
+          attachment_(*apvts.getParameter(pid::duckRouting),
+                      [this](float) { repaint(); })
+    {
+        setClickingTogglesState(false);
+        setWantsKeyboardFocus(false);
+        setMouseClickGrabsKeyboardFocus(false);
+        setTooltip("Reverse-bass duck routing. Off: chain-tail duck only. "
+                   "A: also duck Voice A sub keyed by Voice B body. "
+                   "B: also duck Voice B body keyed by Voice A sub. "
+                   "AB: both per-voice ducks active. Click to cycle.");
+        attachment_.sendInitialUpdate();
+    }
 
     // Explicit triangle in LOCAL coords. tl = top-left (on body edge),
     // tr = top-right (flat top), apex = bottom point (on body edge, lower).
-    // tl -> apex is the angled edge that parallels the bomb body side; "DUCK"
-    // reads down it. Call after setBounds().
+    // tl -> apex is the angled hypotenuse the letter rides along.
     void setTriangle(juce::Point<float> tl, juce::Point<float> tr, juce::Point<float> apex)
     {
         tl_ = tl; tr_ = tr; apex_ = apex; haveTri_ = true;
         repaint();
     }
 
+    void clicked() override
+    {
+        // Cycle Off(0) → A(1) → B(2) → AB(3) → Off(0).
+        if (choice_ == nullptr) return;
+        const int n = choice_->choices.size();    // expected: 4
+        if (n <= 1) return;
+        const int next = (choice_->getIndex() + 1) % n;
+        attachment_.setValueAsCompleteGesture(static_cast<float>(next) / static_cast<float>(n - 1));
+    }
+
     void paintButton(juce::Graphics& g, bool, bool) override
     {
         const auto r   = getLocalBounds().toFloat();
-        const bool on  = getToggleState();
         const bool hot = isMouseOverOrDragging();
+        const int   idx   = choice_ != nullptr ? choice_->getIndex() : 0;
+        const bool  isOff = (idx == 0);
 
         const juce::Point<float> tl   = haveTri_ ? tl_   : r.getTopLeft();
         const juce::Point<float> tr   = haveTri_ ? tr_   : juce::Point<float>(r.getRight(), r.getY());
@@ -44,61 +69,52 @@ public:
 
         juce::Path tri;
         tri.addTriangle(tl, tr, apex);
-        tri = tri.createPathWithRoundedCorners(3.5f);  // rounded corners like the pills
+        tri = tri.createPathWithRoundedCorners(3.5f);
 
-        // Match how the DUCK rack column reads in each theme. Classic/VAULT
-        // give every section a distinct body fill, so use col::duck() (the tan
-        // DUCK fill). Neon themes fill ALL sections with the same near-black and
-        // distinguish them with the neon accent border — using col::duck() there
-        // makes the wedge body-coloured (invisible), so use the neon accent.
         const auto accent = col::isNeon() ? col::accentAmber() : col::duck();
-        if (on)
+        const auto stroke = accent;
+        const auto fill   = isOff ? juce::Colour() : accent.withAlpha(hot ? 1.0f : 0.92f);
+
+        if (! isOff)
         {
-            g.setColour(accent.withAlpha(hot ? 1.0f : 0.92f));
+            g.setColour(fill);
             g.fillPath(tri);
         }
-        else
-        {
-            g.setColour(accent.withAlpha(hot ? 0.75f : 0.45f));
-            g.strokePath(tri, juce::PathStrokeType(1.2f));
-        }
+        g.setColour(stroke.withAlpha(isOff ? (hot ? 0.85f : 0.55f) : 1.0f));
+        g.strokePath(tri, juce::PathStrokeType(1.4f));
 
-        // "DUCK" centered along the triangle's LONGEST edge (tr -> apex, the
-        // diagonal hypotenuse), at the same size as the rack knob labels.
-        const float dx  = apex.x - tr.x;
-        const float dy  = apex.y - tr.y;
-        const float len = std::sqrt(dx * dx + dy * dy);
-        if (len > 20.0f)
-        {
-            float ang = std::atan2(dy, dx);
-            if (std::cos(ang) < 0.0f)                      // keep the text upright
-                ang += juce::MathConstants<float>::pi;
+        // Letter: 'D' faint when Off, "A"/"B"/"AB" when on. Rotate to ride
+        // the tl→apex diagonal hypotenuse.
+        const juce::String label = isOff ? juce::String("D")
+                                 : idx == 1 ? juce::String("A")
+                                 : idx == 2 ? juce::String("B")
+                                 :            juce::String("AB");
 
-            const juce::Point<float> mid = (tr + apex) * 0.5f;
-            // Inset toward the interior (third vertex tl) so the glyphs sit on
-            // the wedge fill rather than straddling the edge line.
-            juce::Point<float> nIn(dy / len, -dx / len);
-            if ((tl - mid).getDotProduct(nIn) < 0.0f) nIn = -nIn;
+        // Anchor at midpoint of tl↔apex, nudged slightly toward tr so the
+        // text sits INSIDE the triangle rather than on the edge.
+        const juce::Point<float> mid = (tl + apex) * 0.5f;
+        const juce::Point<float> nudge = (tr - mid) * 0.20f;
+        const juce::Point<float> anchor = mid + nudge;
 
-            constexpr float fh = 10.0f;                    // == rack knob label size
-            const juce::Point<float> c = mid + nIn * (fh * 0.70f);
-            const float w = len * 0.9f, h = fh * 1.4f;
+        const float angle = std::atan2(apex.y - tl.y, apex.x - tl.x);
+        const float side  = std::min(r.getWidth(), r.getHeight());
+        const float fontH = juce::jmax(8.0f, side * 0.32f);
 
-            g.saveState();
-            g.addTransform(juce::AffineTransform::rotation(ang, c.x, c.y));
-            g.setFont(fonts::label(fh));                   // match the rack column labels
-            g.setColour(on ? juce::Colours::black.withAlpha(0.85f)
-                           : accent.withAlpha(hot ? 0.95f : 0.65f));
-            g.drawText("DUCK",
-                       juce::Rectangle<float>(c.x - w * 0.5f, c.y - h * 0.5f, w, h),
-                       juce::Justification::centred, false);
-            g.restoreState();
-        }
+        g.saveState();
+        g.addTransform(juce::AffineTransform::rotation(angle, anchor.x, anchor.y));
+        g.setFont(juce::Font(fontH, juce::Font::bold));
+        g.setColour(isOff ? col::bone().withAlpha(0.35f) : col::bone());
+        const juce::Rectangle<float> textBox(anchor.x - 40.0f, anchor.y - fontH * 0.5f,
+                                             80.0f, fontH);
+        g.drawText(label, textBox, juce::Justification::centred, false);
+        g.restoreState();
     }
 
 private:
-    juce::Point<float> tl_, tr_, apex_;
-    bool haveTri_ = false;
+    juce::AudioParameterChoice* choice_ = nullptr;
+    juce::ParameterAttachment   attachment_;
+    juce::Point<float>          tl_, tr_, apex_;
+    bool                        haveTri_ = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DuckTriangleButton)
 };
