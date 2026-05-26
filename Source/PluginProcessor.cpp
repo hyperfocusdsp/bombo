@@ -187,6 +187,7 @@ bombo::VoiceTrigger BomboProcessor::buildTriggerFromParams() const noexcept
     // per-voice ducker matches the DUCK column. Only applied when the toggle
     // is on (off path is bit-identical to pre-feature).
     t.duckVoiceA      = pDuckVoiceA->get();
+    t.duckRouting     = (pDuckRouting != nullptr) ? pDuckRouting->getIndex() : 0;
     t.duckAtkMs       = pDuckAtk->get();
     t.duckHoldMs      = pDuckHold->get();
     t.duckRelMs       = pDuckRel->get();
