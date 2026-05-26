@@ -35,6 +35,21 @@ public:
     {
         constexpr int N = 3000;
 
+        beginTest("VoiceTrigger has duckRouting field, defaults to 0 (Off)");
+        {
+            bombo::VoiceTrigger t;
+            expectEquals(t.duckRouting, 0, "default duckRouting must be Off (0)");
+        }
+
+        beginTest("operator== respects duckRouting field");
+        {
+            bombo::VoiceTrigger a, b;
+            a.duckRouting = 0;  b.duckRouting = 0;
+            expect(a == b, "identical Off triggers must compare equal");
+            b.duckRouting = 1;
+            expect(a != b, "differing duckRouting must compare unequal");
+        }
+
         beginTest("toggle OFF is bit-identical regardless of duck-param values");
         {
             bombo::VoiceTrigger off1;            // toggle off, default duck params

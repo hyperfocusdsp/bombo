@@ -67,11 +67,15 @@ struct VoiceTrigger
     // 1 = B only.
     float voiceBalance    = 0.5f;
 
-    // Reverse-bass duck on Voice A. When duckVoiceA is true a per-voice ducker
-    // pulls the sub (Voice A) down keyed by Voice B's punch, using the DUCK
-    // envelope params below (snapshot of the DUCK column). false (default)
-    // leaves the sub path untouched — bit-identical to pre-feature.
-    bool  duckVoiceA      = false;
+    // Reverse-bass duck routing. 0=Off, 1=Voice A only, 2=Voice B only,
+    // 3=Both A and B. When A is set, Voice A's sub is ducked keyed by
+    // Voice B's body. When B is set, Voice B's body is ducked keyed by
+    // Voice A's sub. Both modes use the snapshot DUCK envelope below.
+    // Off is bit-identical to the pre-feature path (both per-voice
+    // duckers skipped entirely). Kept as int (not enum) so VoiceTrigger
+    // stays trivially-copyable for the loop-cache memcmp comparator.
+    bool  duckVoiceA      = false;  // DEPRECATED — removed after migration lands (Task 8)
+    int   duckRouting     = 0;      // 0=Off, 1=A, 2=B, 3=AB
     float duckAtkMs       = 2.0f;
     float duckHoldMs      = 0.0f;
     float duckRelMs       = 250.0f;
@@ -112,6 +116,7 @@ struct VoiceTrigger
             && driveMute       == o.driveMute
             && voiceBalance    == o.voiceBalance
             && duckVoiceA      == o.duckVoiceA
+            && duckRouting     == o.duckRouting
             && duckAtkMs       == o.duckAtkMs
             && duckHoldMs      == o.duckHoldMs
             && duckRelMs       == o.duckRelMs
