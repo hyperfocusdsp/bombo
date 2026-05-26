@@ -1126,6 +1126,9 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
     {
         auto tree = juce::ValueTree::fromXml(*xml);
         if (! tree.isValid()) return;
+        // Migrate any pre-duckRouting state (legacy duck_voice_a bool →
+        // new duck_routing Choice). No-op when state is already migrated.
+        tree = bombo::migrateDuckVoiceAToRouting(tree);
         apvts.replaceState(tree);
 
         // Restore FX chain order if present. Legacy state (pre-feature) has

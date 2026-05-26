@@ -15,6 +15,7 @@
 #include "State/PresetBank.h"
 #include "State/PersistentState.h"
 #include "State/MidiLearn.h"
+#include "State/DuckMigration.h"
 #include "GUI/BBS/ProgressionManager.h"
 #include "GUI/BBS/Game/Audio.h"
 

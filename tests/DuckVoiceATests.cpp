@@ -8,8 +8,10 @@
 // Voice A energy.
 
 #include <juce_core/juce_core.h>
+#include <juce_data_structures/juce_data_structures.h>
 
 #include "../Source/DSP/BombVoice.h"
+#include "../Source/State/DuckMigration.h"
 
 #include <cmath>
 #include <vector>
@@ -161,6 +163,56 @@ public:
             int mism = 0;
             for (int i = 0; i < N; ++i) if (a[(size_t) i] != b[(size_t) i]) ++mism;
             expectEquals(mism, 0, "Off path must be bit-exact to legacy false");
+        }
+
+        beginTest("legacy duck_voice_a=true migrates to duck_routing=A on state load");
+        {
+            juce::ValueTree state("PARAMETERS");
+            juce::ValueTree p1("PARAM");
+            p1.setProperty("id", "duck_voice_a", nullptr);
+            p1.setProperty("value", 1.0f, nullptr);
+            state.appendChild(p1, nullptr);
+
+            auto migrated = bombo::migrateDuckVoiceAToRouting(state);
+
+            auto routing = migrated.getChildWithProperty("id", "duck_routing");
+            expect(routing.isValid(), "migration must insert duck_routing PARAM");
+            expectWithinAbsoluteError((float) routing.getProperty("value"), 1.0f / 3.0f, 1.0e-4f,
+                "duck_routing value should be index 1 (A) normalized to 1/3");
+
+            auto legacy = migrated.getChildWithProperty("id", "duck_voice_a");
+            expect(! legacy.isValid(),
+                "legacy duck_voice_a PARAM must be removed after migration");
+        }
+
+        beginTest("legacy duck_voice_a=false migrates to duck_routing=Off");
+        {
+            juce::ValueTree state("PARAMETERS");
+            juce::ValueTree p1("PARAM");
+            p1.setProperty("id", "duck_voice_a", nullptr);
+            p1.setProperty("value", 0.0f, nullptr);
+            state.appendChild(p1, nullptr);
+
+            auto migrated = bombo::migrateDuckVoiceAToRouting(state);
+            auto routing = migrated.getChildWithProperty("id", "duck_routing");
+            expect(routing.isValid(), "migration must insert duck_routing PARAM");
+            expectWithinAbsoluteError((float) routing.getProperty("value"), 0.0f, 1.0e-4f,
+                "duck_routing value should be index 0 (Off)");
+        }
+
+        beginTest("migration is no-op when duck_voice_a absent");
+        {
+            juce::ValueTree state("PARAMETERS");
+            juce::ValueTree p1("PARAM");
+            p1.setProperty("id", "duck_routing", nullptr);
+            p1.setProperty("value", 0.6667f, nullptr);   // pre-set to AB-ish
+            state.appendChild(p1, nullptr);
+
+            auto migrated = bombo::migrateDuckVoiceAToRouting(state);
+            auto routing = migrated.getChildWithProperty("id", "duck_routing");
+            expect(routing.isValid(), "duck_routing must still be present");
+            expectWithinAbsoluteError((float) routing.getProperty("value"), 0.6667f, 1.0e-4f,
+                "duck_routing value must be preserved when no legacy field exists");
         }
     }
 };
