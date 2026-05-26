@@ -4,6 +4,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <cmath>
+#include <cstdio>
 
 #include "../ParameterIds.h"
 #include "Colours.h"
@@ -56,7 +57,7 @@ public:
         if (p == nullptr) return;
         const int cur  = juce::jlimit(0, 3, (int) std::round(p->convertFrom0to1(p->getValue())));
         const int next = (cur + 1) % 4;
-        DBG("DuckTriangleButton::clicked cur=" << cur << " next=" << next);
+        std::fprintf(stderr, "[DIAG:duck-click] cur=%d next=%d\n", cur, next);
         const float norm = p->convertTo0to1((float) next);
         p->beginChangeGesture();
         p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, norm));

@@ -2,6 +2,7 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <memory>
+#include <cstdio>
 
 #include "Oscillators.h"
 #include "Envelopes.h"
@@ -166,6 +167,8 @@ public:
 
     void trigger(const VoiceTrigger& t) noexcept
     {
+        std::fprintf(stderr, "[DIAG:voice-trigger] duckRouting=%d duckDepth=%.3f\n",
+                     t.duckRouting, t.duckDepth);
         trig_ = t;
         fadeoutGain_ = 1.0f;
         fadeoutStep_ = 0.0f;
