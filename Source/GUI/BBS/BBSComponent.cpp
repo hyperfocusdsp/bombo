@@ -5,6 +5,7 @@
 #include "../../PluginProcessor.h"
 #include <juce_core/juce_core.h>
 #include <juce_audio_formats/juce_audio_formats.h>
+#include <algorithm>
 
 namespace
 {
@@ -24,7 +25,7 @@ namespace
         if (r == nullptr || r->lengthInSamples <= 0 || r->numChannels == 0) return {};
 
         // Cap at 2 minutes to bound memory; longer files just loop the first 2 min.
-        const int srcLen = (int) juce::jmin<juce::int64>(
+        const int srcLen = (int) std::min<juce::int64>(
             r->lengthInSamples, (juce::int64) (r->sampleRate * 120.0));
         juce::AudioBuffer<float> src((int) r->numChannels, srcLen);
         r->read(&src, 0, srcLen, 0, true, true);
