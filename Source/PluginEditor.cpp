@@ -68,11 +68,18 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         });
 
    #if JUCE_LINUX
-    // Run exactly once per process. Inside a DAW host, the host's own X
-    // window may not benefit, but the claim itself is harmless (idempotent
-    // and only fires when no other owner exists).
-    static const bool compositorClaimed = bombo::claimCompositorSelectionOnce();
-    (void) compositorClaimed;
+    // Claim the X11 _NET_WM_CM_S0 (compositor-manager) selection ONLY in the
+    // standalone app, where the shaped window is transparent and JUCE's
+    // canUseSemiTransparentWindows() must pass. In a plugin we force opaque
+    // (transparent ARGB windows fail to embed under XWayland), so the claim is
+    // unnecessary — and hijacking that global selection from inside a host
+    // process breaks host embedding: the editor pops out as a floating
+    // toplevel and re-shows as a black square after a host screen switch.
+    if (juce::JUCEApplicationBase::isStandaloneApp())
+    {
+        static const bool compositorClaimed = bombo::claimCompositorSelectionOnce();
+        (void) compositorClaimed;
+    }
    #endif
 
     // On Linux, a plugin (non-standalone) editor must be opaque: transparent
