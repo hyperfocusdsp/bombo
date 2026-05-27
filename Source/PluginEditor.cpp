@@ -213,9 +213,7 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // Design-size coordinates the faceplate paints in. Resizing applies
     // an AffineTransform::scale so every knob, label, column, fin, and
     // band scales together — no per-child re-layout, no overflow.
-    // Locked 2026-05-17: 9:16 (= 0.5625) for IG-Reels native screenshotting
-    // (see memory project_bombo_ig_reels_aspect_constraint.md and the
-    // sprint plan at internal notes).
+    // Locked 2026-05-17: 9:16 (= 0.5625) for native vertical-video screenshotting.
     constexpr double kDesignW    = 600.0;
     constexpr double kDesignH    = 1066.0;
     // Visible window: fin outer tips horizontally; vertically just above the

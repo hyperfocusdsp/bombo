@@ -1,6 +1,6 @@
 # Testing Bombo (JUCE port)
 
-This is the hand-off checklist for sanity-checking the JUCE rewrite against the Rust archive at `the archived Rust build/`.
+This is the checklist for sanity-checking the JUCE build against the original nih-plug (Rust) prototype it was rewritten from.
 
 ## Build & install
 
@@ -64,22 +64,9 @@ Load `Bombo.vst3` (or `Bombo.component` on macOS) on an instrument track in Bitw
 | State round-trip | Save DAW project → close → reopen. All 42 params restore. |
 | Editor renders | 1320×950 chassis, 8 mil-rice sections, AllertaStencil title, bomb-tail fin band visible at the bottom. |
 
-## A/B against the Rust archive
+## DSP fidelity to the original
 
-The original nih-plug build still exists read-only at `the archived Rust build/`. Build it the old way for side-by-side:
-
-```bash
-cd the archived Rust build
-cargo xtask bundle bombo --release
-# install to a different name so they don't collide:
-rm -rf ~/.vst3/Bombo-Rust.vst3
-cp -r target/bundled/Bombo.vst3 ~/.vst3/Bombo-Rust.vst3
-# Renoise/Bitwig should now see both Bombo and Bombo-Rust.
-```
-
-Load both on identical tracks, send the same MIDI, A/B by ear. The DSP was ported as JUCE-idiomatic where it fit (juce::dsp where applicable) and verbatim where the sound character matters — most notably the **FDN reverb's Hadamard matrix, FDN lengths `[743, 1093, 1361, 1697]`, irrational LFO rates `[0.39, 0.51, 0.73, 1.07] Hz`, and `0.18` in-loop LP damping coefficient** are bit-identical to the Rust source. The voice itself (polyBLEP osc + pitch/amp envelopes + click + body + voice-clip) is mathematically identical.
-
-Expected drift: tiny — within ear-test tolerance on transients, possibly a few cents of micro-pitch wobble on the reverb tail due to LFO phase init differences. Sub fundamental, click character, and overall punch should read as the same instrument.
+Bombo is a JUCE/C++ rewrite of an earlier nih-plug (Rust) prototype. The DSP was ported JUCE-idiomatically where it fit (`juce::dsp` where applicable) and verbatim where the sound character matters — most notably the **FDN reverb's Hadamard matrix, FDN lengths `[743, 1093, 1361, 1697]`, irrational LFO rates `[0.39, 0.51, 0.73, 1.07] Hz`, and `0.18` in-loop LP damping coefficient**. The voice itself (polyBLEP osc + pitch/amp envelopes + click + body + voice-clip) is mathematically identical to the original.
 
 ## Phase status
 
