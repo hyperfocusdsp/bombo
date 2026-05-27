@@ -26,7 +26,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>   // std::srand — seed the boss's std::rand() charge trigger per run
+#include <cstdlib>
 #include <map>
 #include <string>
 #include <vector>
@@ -216,12 +216,12 @@ namespace
     // Play one full run with a forced seed; return the outcome.
     RunResult playRun(uint32_t seed)
     {
-        // tickRumblr() uses the GLOBAL std::rand() for its phase-2 charge
+        // tickRumblr() uses a portable mt19937 (seedBossRng) for its phase-2 charge
         // trigger (a deliberate per-run flourish in the game). Seed it from the
         // run seed so the boss fight is reproducible too — otherwise the boss's
         // charge cadence (and thus shockwave exposure) drifts between processes
-        // and tuning becomes immeasurable.
-        std::srand(seed);
+        // and tuning becomes immeasurable. (Was std::srand, which diverged per libc.)
+        seedBossRng(seed);
 
         Game game;
         // Keep high scores entirely in memory: empty File => no disk I/O, and the

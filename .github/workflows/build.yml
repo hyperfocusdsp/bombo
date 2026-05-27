@@ -9,6 +9,9 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # Fail fast instead of burning hours: a healthy build is well under 30 min.
+    # (A runaway universal+LTO macOS build once ran ~3h before this cap existed.)
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -40,9 +43,13 @@ jobs:
         shell: bash
         run: |
           EXTRA=""
-          if [ "$RUNNER_OS" = "Linux" ]; then EXTRA="-DBOMBO_LTO=OFF"; fi
+          # LTO buys a JUCE plugin negligible runtime benefit but is a huge
+          # build-time cost. On the universal (2-arch) macOS build it turned a
+          # ~24min build into a ~3h one. Disable it everywhere but Windows
+          # (which links fine with it in ~20min).
+          if [ "$RUNNER_OS" != "Windows" ]; then EXTRA="-DBOMBO_LTO=OFF"; fi
           # macOS: one universal binary covers both Apple Silicon and Intel.
-          if [ "$RUNNER_OS" = "macOS" ]; then EXTRA='-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then EXTRA="$EXTRA -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"; fi
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release $EXTRA
 
       - name: Build
@@ -50,6 +57,9 @@ jobs:
         run: |
           JOBS="-j"
           if [ "$RUNNER_OS" = "Linux" ]; then JOBS="-j 2"; fi
+          # macos-14 has 3 cores; a bare -j lets make spawn an unbounded number of
+          # heavy (universal = 2x) compiles at once and thrash into swap. Pin it.
+          if [ "$RUNNER_OS" = "macOS" ]; then JOBS="-j 3"; fi
           cmake --build build --config Release $JOBS
 
       - name: Test

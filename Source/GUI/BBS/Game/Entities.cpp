@@ -2,8 +2,14 @@
 #include "Entities.h"
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>   // std::rand — used by tickRumblr phase-2 charge trigger (non-deterministic
-                     // flourish; charge timing jitters per run, which is intentional for v1.0.x)
+#include <cstdint>
+#include <random>    // std::mt19937 backs the boss phase-2 charge-trigger jitter.
+                     // std::rand() is NOT portable — its sequence differs per libc
+                     // (glibc vs MSVC vs Apple), so the charge fired within the test
+                     // window on Linux but not on Windows/macOS, silently failing CI.
+                     // mt19937 yields an identical sequence on every platform for a
+                     // given seed, so the jitter stays a per-run flourish AND is
+                     // reproducible across processes and platforms.
 
 namespace
 {
@@ -201,6 +207,18 @@ namespace
 
 namespace bombo::game
 {
+    // Portable PRNG for boss charge-trigger jitter (see the <random> note above).
+    // Single-threaded use only: the game ticks on the message thread, tests are
+    // single-threaded — same global-state semantics std::rand() had, minus the
+    // per-libc sequence divergence.
+    static std::mt19937& bossRng() noexcept
+    {
+        static std::mt19937 rng{ 0xB0FFu };   // BOFF; arbitrary fixed default seed
+        return rng;
+    }
+
+    void seedBossRng(std::uint32_t seed) noexcept { bossRng().seed(seed); }
+
     int rumblrPhase(const Enemy& r) noexcept
     {
         if (r.hp <= 10) return 3;       // v1.1 territory; tickRumblr clamps to phase-2 behaviour
@@ -236,7 +254,7 @@ namespace bombo::game
                     {
                         r.phase = 0.0f;
                         fireShockwave();
-                        if ((std::rand() % 3) == 0) { r.subState = 1; r.phase = 0.0f; }
+                        if ((bossRng()() % 3u) == 0u) { r.subState = 1; r.phase = 0.0f; }
                     }
                     break;
                 case 1:  // telegraph 1s (visual cue that a charge is coming)
@@ -321,7 +339,7 @@ namespace bombo::game
                     b.fireTimer = 0.0f;
                     bossFireRadial(b, enemyShots, 5 + ph, 30.0f);
                     bossFireAimed (b, player, enemyShots, 34.0f);
-                    if (ph >= 2 && (std::rand() % 3) == 0) { b.subState = 1; b.phase = 0.0f; }
+                    if (ph >= 2 && (bossRng()() % 3u) == 0u) { b.subState = 1; b.phase = 0.0f; }
                 }
                 break;
             case 1:  // telegraph

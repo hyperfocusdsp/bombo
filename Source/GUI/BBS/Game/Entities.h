@@ -84,6 +84,11 @@ namespace bombo::game
     // Centralised default HP per enemy kind.
     int defaultHp(EnemyKind k) noexcept;
 
+    // Seed the portable PRNG behind the boss phase-2 charge-trigger jitter.
+    // Replaces std::srand() — mt19937 keeps the charge cadence reproducible across
+    // processes and platforms (std::rand() diverged per libc and broke CI).
+    void seedBossRng(std::uint32_t seed) noexcept;
+
     // Boss helpers — exposed for unit tests.
     int  rumblrPhase(const Enemy& r) noexcept;
     void tickRumblr(Enemy& r, BulletPool* enemyShots) noexcept;

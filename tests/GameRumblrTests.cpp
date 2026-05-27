@@ -59,9 +59,10 @@ public:
         r->hp = 20;   // phase 2
         const float homeX = r->x;
         bool movedLeft = false;
-        // Seed std::rand so the charge branch triggers quickly in tests.
-        // Use srand(1) — with rand()%3==0 probability ~1/3, expected ~3 fire cycles before charge.
-        std::srand(1);
+        // Seed the portable boss PRNG so the charge branch triggers deterministically.
+        // mt19937 gives the same sequence on every platform, so this loop behaves
+        // identically on Linux/Windows/macOS (std::rand() did not — see Entities.cpp).
+        seedBossRng(1);
         for (int i = 0; i < kTickHz * 12; ++i)   // up to 12s — enough for a telegraph+charge cycle
         {
             pool.tick(nullptr, &enemyShots);
