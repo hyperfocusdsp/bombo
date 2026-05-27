@@ -142,6 +142,7 @@ bool writePresetJson(const juce::File& file,
 
 PresetBank::PresetBank()
 {
+    migrateLegacyUserPresets();
     rebuildAll();
 }
 
@@ -499,11 +500,32 @@ int PresetBank::findByDisplayName(const juce::String& name) const
 
 juce::File PresetBank::userPresetsDir()
 {
+    // userApplicationDataDirectory already resolves to the per-user config root
+    // on every platform — Linux: XDG_CONFIG_HOME / ~/.config; macOS: ~/Library;
+    // Windows: %APPDATA%. The previous Linux branch prepended an EXTRA ".config",
+    // yielding ~/.config/.config/Bombo/Presets. migrateLegacyUserPresets() moves
+    // anything left at that old path here.
     auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-   #if JUCE_LINUX || JUCE_BSD || JUCE_ANDROID
-    return base.getChildFile(".config/Bombo/Presets");
-   #else
     return base.getChildFile("Bombo/Presets");
+}
+
+void PresetBank::migrateLegacyUserPresets()
+{
+   #if JUCE_LINUX || JUCE_BSD
+    auto base   = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+    auto legacy = base.getChildFile(".config/Bombo/Presets");   // the old doubled path
+    auto dest   = userPresetsDir();
+    if (legacy == dest || ! legacy.isDirectory()) return;
+
+    dest.createDirectory();
+    juce::Array<juce::File> files;
+    legacy.findChildFiles(files, juce::File::findFiles, false, "*.json");
+    for (const auto& f : files)
+    {
+        auto target = dest.getChildFile(f.getFileName());
+        if (! target.existsAsFile())   // never clobber a preset already at the new path
+            f.moveFileTo(target);
+    }
    #endif
 }
 

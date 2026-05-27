@@ -114,6 +114,10 @@ public:
     static juce::File userPresetsDir();
     static juce::String sanitizeFilename(const juce::String& displayName);
 
+    // One-shot: relocate presets saved by pre-fix Linux builds to the old
+    // doubled-".config" path into userPresetsDir(). No-op elsewhere / once done.
+    static void migrateLegacyUserPresets();
+
 private:
     void loadFactoryFromBinaryData();
     void rebuildAll();   // factory (with session overrides) + user, re-anchored
