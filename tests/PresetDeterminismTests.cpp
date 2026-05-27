@@ -16,8 +16,10 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <algorithm>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "../Source/ParameterIds.h"
 #include "../Source/Parameters.h"
@@ -84,13 +86,19 @@ public:
         expect(n >= 2, "need at least two factory presets");
         if (n < 2) return;
 
-        // Pick two presets whose param sets differ. PULSE (0) sets reverb /
-        // drive_mode / click_center; SUB-RUMBLE is sparse and omits them.
-        const int a = 0;
-        int b = -1;
-        for (int i = 1; i < n; ++i)
-            if (juce::String(bank.at(i).displayName).containsIgnoreCase("rumble")) { b = i; break; }
-        if (b < 0) b = (n > 5 ? 5 : n - 1);
+        // Determinism is a property of the FACTORY bank. A dev box may have
+        // user presets saved on disk (the ctor loads them via userPresetsDir),
+        // and those must not perturb this check or its preset selection -- so
+        // we only ever consider Source::Factory entries here.
+        std::vector<int> factory;
+        for (int i = 0; i < n; ++i)
+            if (bank.at(i).source == bombo::PresetBank::Source::Factory)
+                factory.push_back(i);
+        expect(factory.size() >= 2, "need at least two factory presets");
+        if (factory.size() < 2) return;
+
+        const int a = factory[0];
+        const int b = factory[1];
 
         beginTest("preset B after preset A == preset B from defaults");
         {
@@ -125,23 +133,55 @@ public:
             bank.applyDefaults(apvts);
             const auto defaults = snapshot(apvts);
 
-            // Dirty a param that the sparse preset B does not list, then load
-            // B and confirm the param snapped back to its default.
-            auto* kbtrk = apvts.getParameter(bombo::pid::kbtrk);
-            expect(kbtrk != nullptr, "kbtrk param exists");
-            if (kbtrk != nullptr)
+            auto isExcluded = [](const std::string& id)
             {
-                kbtrk->beginChangeGesture();
-                kbtrk->setValueNotifyingHost(1.0f);  // force ON
-                kbtrk->endChangeGesture();
+                for (const char* e : bombo::kExcludedFromPresets)
+                    if (id == e) return true;
+                return false;
+            };
 
-                bank.applyByIndex(b, apvts);
+            // Find a factory preset together with a non-excluded param it omits,
+            // so we genuinely exercise applyByIndex's "reset omitted params to
+            // default" contract. The curated bank is near-exhaustive and no
+            // longer has a single canonical sparse preset, so we DISCOVER an
+            // omission rather than assume a specific param/preset.
+            int useIdx = -1;
+            std::string omitted;
+            for (int idx : factory)
+            {
+                const auto& pp = bank.at(idx).params;
+                for (const auto& kv : defaults)
+                {
+                    if (isExcluded(kv.first)) continue;
+                    const bool listed = std::any_of(pp.begin(), pp.end(),
+                        [&](const auto& q) { return q.first == kv.first; });
+                    if (! listed) { useIdx = idx; omitted = kv.first; break; }
+                }
+                if (useIdx >= 0) break;
+            }
+            expect(useIdx >= 0, "a factory preset omits at least one non-excluded param");
+            if (useIdx >= 0)
+            {
+                auto* p = apvts.getParameter(juce::String(omitted));
+                expect(p != nullptr, "omitted param resolves in the APVTS");
+                if (p != nullptr)
+                {
+                    // Dirty the omitted param away from its default, load the
+                    // preset that omits it, and confirm it snapped back.
+                    const float dflt  = p->getDefaultValue();
+                    const float dirty = dflt < 0.5f ? 1.0f : 0.0f;
+                    p->beginChangeGesture();
+                    p->setValueNotifyingHost(dirty);
+                    p->endChangeGesture();
 
-                auto* rp = dynamic_cast<juce::RangedAudioParameter*>(kbtrk);
-                const float now = rp->convertFrom0to1(rp->getValue());
-                expectWithinAbsoluteError(now, defaults.at(bombo::pid::kbtrk),
-                                          1.0e-6f,
-                                          "kbtrk returned to default after load");
+                    bank.applyByIndex(useIdx, apvts);
+
+                    auto* rp = dynamic_cast<juce::RangedAudioParameter*>(p);
+                    const float now = rp->convertFrom0to1(rp->getValue());
+                    expectWithinAbsoluteError(now, defaults.at(omitted), 1.0e-6f,
+                        "omitted param '" + juce::String(omitted)
+                            + "' returned to default after load");
+                }
             }
         }
     }
