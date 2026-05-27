@@ -39,7 +39,22 @@ and the project broadly follows [Semantic Versioning](https://semver.org/).
   audio is unaffected. Pew's `reverb_mix=0` enforced so the in-game shot
   stays dry (was 0.06 before).
 
+### Build & CI
+- **macOS CI build time** — The universal (Apple Silicon + Intel) macOS CI
+  build linked with LTO and ran an unbounded parallel build on a 3-core
+  runner, so a single translation unit could take hours and a whole job ran
+  for ~3 hours. CI now disables LTO on macOS/Linux, pins the macOS build to
+  `-j 3`, and caps each job at 45 minutes so a runaway fails fast.
+
 ### Fixed
+- **Linux user-preset location** — User presets were written to
+  `~/.config/.config/Bombo/Presets` (an accidental doubled `.config`). They
+  now live at the correct `~/.config/Bombo/Presets`, and any presets left at
+  the old path are migrated automatically on first launch.
+- **Cross-platform boss behaviour** — The RUMBLR boss's phase-2 charge used
+  the C library `rand()`, whose sequence differs per platform, making the
+  charge cadence (and its unit test) non-portable. It now uses a seeded
+  `std::mt19937`, for identical, reproducible behaviour on every platform.
 - **BBS game speed (slow motion)** — The v2 game ran in slow motion wherever
   the host can't sustain a true 60 Hz repaint — most visibly under WSLg
   software rendering, but any heavy-paint frame did it. The sim integrates on
@@ -113,12 +128,6 @@ and the project broadly follows [Semantic Versioning](https://semver.org/).
   (Linux) / `Bombo/Presets` (macOS/Windows app-data) before writing.
   The BBS panel also surfaces actual save failures instead of always
   reporting success.
-
-### Repo hygiene
-- Pseudonymity audit — WSL local master had drifted onto pre-scrub
-  history with 11 commits authored as `30924992+Hornfisk@users.noreply.github.com`.
-  Hard-reset to clean `origin/master`; per-repo `user.email` was already
-  the Hornfisk noreply.
 
 ## [v1.0-rc0] — 2026-05-18
 
