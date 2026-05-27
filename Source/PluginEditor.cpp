@@ -75,10 +75,18 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     (void) compositorClaimed;
    #endif
 
-    // Marketing-screenshot mode keeps the editor opaque so the WM doesn't
-    // alpha-clip the corner wedges (Hyprland shows whatever's behind when
-    // alpha=0). Normal use stays transparent for the shaped-bomb silhouette.
-    setOpaque(std::getenv("BOMBO_SOLID_BG") != nullptr);
+    // On Linux, a plugin (non-standalone) editor must be opaque: transparent
+    // ARGB windows fail to embed under X11/XWayland — they detach as floating
+    // toplevels and the host slot renders black. macOS/Windows composite
+    // transparent plugin windows fine, so they keep the shaped silhouette and
+    // their already-built/signed binaries are unaffected. Standalone (any OS)
+    // stays transparent unless BOMBO_SOLID_BG=1 (marketing screenshots).
+   #if JUCE_LINUX
+    const bool forceOpaque = ! juce::JUCEApplicationBase::isStandaloneApp();
+   #else
+    const bool forceOpaque = false;
+   #endif
+    setOpaque(forceOpaque || std::getenv("BOMBO_SOLID_BG") != nullptr);
     setLookAndFeel(&lnf);
     // Wire the factory preset bank BEFORE addAndMakeVisible so the panel's
     // first resized() lays the preset bar out alongside the macros/rack.

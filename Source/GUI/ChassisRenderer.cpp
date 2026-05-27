@@ -5,6 +5,7 @@
 #include <BinaryData.h>
 
 #include <juce_graphics/juce_graphics.h>
+#include <juce_gui_basics/juce_gui_basics.h>  // JUCEApplicationBase::isStandaloneApp()
 
 namespace bombo::chassisRenderer
 {
@@ -93,12 +94,17 @@ namespace
 
 void drawBackground(juce::Graphics& g)
 {
-    // Normal use: keep the corners transparent so the bomb silhouette reads
-    // as a shaped window against any DAW background. Marketing-screenshot
-    // mode (BOMBO_SOLID_BG=1) fills with a brand-dark backdrop so grim
-    // captures clean corners instead of bleeding through to the host
-    // workspace behind the standalone window.
-    if (std::getenv("BOMBO_SOLID_BG") != nullptr)
+    // On Linux a plugin editor is forced opaque (XWayland can't embed
+    // transparent ARGB windows) so the corners must be filled solid too.
+    // macOS/Windows + standalone keep the transparent silhouette unless
+    // BOMBO_SOLID_BG=1. Keeping this in lockstep with PluginEditor's setOpaque.
+   #if JUCE_LINUX
+    const bool forceOpaque = ! juce::JUCEApplicationBase::isStandaloneApp();
+   #else
+    const bool forceOpaque = false;
+   #endif
+    const bool solidBg = forceOpaque || std::getenv("BOMBO_SOLID_BG") != nullptr;
+    if (solidBg)
         g.fillAll(juce::Colour(0xFF14161B));
     else
         g.fillAll(juce::Colours::transparentBlack);
