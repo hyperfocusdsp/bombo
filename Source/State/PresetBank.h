@@ -64,6 +64,9 @@ public:
     const Preset& at(int idx) const        { return presets_[(size_t) idx]; }
 
     int  currentIndex() const noexcept     { return current_; }
+    // Mark the selection as "not a known preset" (e.g. after a host state
+    // restore — the restored params don't correspond to any preset entry).
+    void markCustom() noexcept             { current_ = -1; }
     bool isCurrentUserPreset() const noexcept;
     const std::string& currentName() const;
     const std::string& currentDisplayName() const;

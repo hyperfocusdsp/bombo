@@ -13,6 +13,15 @@ BomboProcessor::BomboProcessor()
       apvts(*this, &undoManager, "BomboState", bombo::createParameterLayout())
 {
     cacheParameterPointers();
+
+    // Fresh-launch default: apply the first factory preset so the very first
+    // trigger has a real, full sound instead of bare parameter defaults (which
+    // are thin/near-silent). This only sets parameters — it does NOT auto-play;
+    // triggers still come from MIDI / keyboard / the loop. A hosted or
+    // standalone session restore calls setStateInformation() AFTER construction
+    // and overwrites these via apvts.replaceState(), so saved sessions win.
+    if (presetBank_.size() > 0)
+        presetBank_.applyByIndex(0, apvts);
 }
 
 void BomboProcessor::cacheParameterPointers()
@@ -1128,6 +1137,10 @@ void BomboProcessor::setStateInformation(const void* data, int sizeInBytes)
         // new duck_routing Choice). No-op when state is already migrated.
         tree = bombo::migrateDuckVoiceAToRouting(tree);
         apvts.replaceState(tree);
+        // The restored tree is a saved session, not a known preset — clear the
+        // preset selection so the bar reads "custom" and the constructor's
+        // fresh-launch default (preset 0) doesn't mislabel a restored state.
+        presetBank_.markCustom();
 
         // Restore FX chain order if present. Legacy state (pre-feature) has
         // no FxOrder child — chain_ keeps its default order in that case.
