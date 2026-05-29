@@ -23,6 +23,19 @@ namespace
                                                BinaryData::chassis_overlay_pngSize);
     }
 
+    // Baked photoreal chassis composite (body + nose + fins) for a named
+    // image theme. Co-registered on the full window canvas, so it maps
+    // full-image -> full-panel and lands under the live widgets. Returns an
+    // invalid Image for any name without a bundled asset (the caller then
+    // falls back to the procedural surface). ONLY the FALLOUT theme opts in.
+    juce::Image loadChassisArt(const juce::String& name)
+    {
+        if (name == "fallout")
+            return juce::ImageCache::getFromMemory(BinaryData::fallout_chassis_png,
+                                                   BinaryData::fallout_chassis_pngSize);
+        return {};
+    }
+
     // Procedural multi-tone military camo for BodyStyle::Camo. A base coat plus
     // three layers of opaque interlocking blotches (each blotch = a cluster of
     // overlapping ellipses) in four theme-derived tones: three structural
@@ -112,6 +125,11 @@ void drawBackground(juce::Graphics& g)
 
 void drawCapAndFins(juce::Graphics& g, const Ctx& ctx)
 {
+    // Image themes (FALLOUT) carry the cap + fins inside the baked composite,
+    // drawn in drawChassis(). Skip the procedural cap/fin fills so they don't
+    // peek out from under the art.
+    if (col::chassisArt().isNotEmpty()) return;
+
     if (ctx.capPath.isEmpty()) return;
     g.setColour(col::cap());
     g.fillPath(ctx.capPath);
@@ -160,6 +178,48 @@ void drawChassis(juce::Graphics& g, const Ctx& ctx)
 
     g.setGradientFill(grad);
     g.fillPath(ctx.chassisPath);
+
+    // ── Image-backed chassis (FALLOUT only) ─────────────────────────────
+    // When the active theme names a chassis art asset, paint the baked
+    // composite (body + nose + fins) over the gradient base, clipped to the
+    // full silhouette UNION (body + cap + fins) so the fins/nose get the
+    // photoreal surface too. The gradient fill underneath shows through any
+    // transparent holes in the art. Stretch full-image -> full-panel so the
+    // art's canvas framing aligns with the live widget layout. Early-out
+    // skips the procedural grain/camo + outline — the art IS the surface.
+    // Every other theme has an empty chassisArt and falls through to the
+    // procedural path below, so the flat/neon themes are untouched.
+    {
+        const auto artName = col::chassisArt();
+        if (artName.isNotEmpty())
+        {
+            const auto art = loadChassisArt(artName);
+            if (art.isValid())
+            {
+                const auto panelRect = juce::Rectangle<float>(0.0f, 0.0f,
+                    static_cast<float>(ctx.panelWidth),
+                    static_cast<float>(ctx.panelHeight));
+
+                // Body + nose composite, mapped full-image -> full-panel and
+                // CLIPPED to the body silhouette. The clip keeps the nose +
+                // macros aligned with the procedural layout (the AI redrew the
+                // bomb taller, so an unclipped full-stretch dropped the nose and
+                // lifted everything). The gradient fill above shows through any
+                // transparent holes.
+                {
+                    juce::Graphics::ScopedSaveState ss(g);
+                    g.reduceClipRegion(ctx.chassisPath);
+                    g.drawImage(art, panelRect, juce::RectanglePlacement::stretchToFit);
+                }
+
+                // No procedural fins on FALLOUT — the display bezel's chamfered
+                // orange shoulders ARE the top fins (drawn later in
+                // FaceplatePanel::paint, on top of this). Drawing procedural fins
+                // here left rust wedges poking out from under the bezel.
+                return;
+            }
+        }
+    }
 
     // Chassis interior treatment (per-theme bodyStyle):
     //   Grain — baked scratches/AO/grain overlay at chassisOverlayOpacity.

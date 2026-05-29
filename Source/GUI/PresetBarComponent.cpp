@@ -95,7 +95,16 @@ void PresetBarComponent::paint(juce::Graphics& g)
     // fill becomes a coloured-on-coloured wash with no contrast against
     // the text. Dark fill + bright accent text is the consistent rule.
     const auto r = getLocalBounds().toFloat().reduced(1.5f);
-    if (col::isNeon())
+    if (col::chassisArt().isNotEmpty())
+    {
+        // FALLOUT: recessed readout in the bezel's centre gap — dark fill with
+        // a toned-down amber keyline (the bright rust ring read as "on top").
+        g.setColour(col::ink().withAlpha(0.55f));
+        g.fillRoundedRectangle(r, 4.0f);
+        g.setColour(col::accentAmber().withAlpha(0.40f));
+        g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+    }
+    else if (col::isNeon())
     {
         g.setColour(col::graphite().withAlpha(0.92f));
         g.fillRoundedRectangle(r, 4.0f);

@@ -57,6 +57,12 @@ struct Palette
     // Chassis interior treatment (see BodyStyle). Defaults to Grain so legacy
     // themes keep their baked-overlay look.
     BodyStyle bodyStyle = BodyStyle::Grain;
+
+    // Optional named chassis art. When non-empty, ChassisRenderer paints the
+    // matching baked composite (body + nose + fins, co-registered on the full
+    // window canvas) stretched onto the procedural silhouette INSTEAD of the
+    // grain/camo surface. Empty = fully procedural (the other six themes).
+    juce::String chassisArt;
 };
 
 // Hard-coded BANDW palette = exact values from pre-refactor Colours.h.

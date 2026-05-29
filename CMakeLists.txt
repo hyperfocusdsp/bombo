@@ -70,6 +70,7 @@ juce_add_binary_data(BomboResources
         Resources/Themes/matrix.json
         Resources/Themes/cyber.json
         Resources/Themes/plasma.json
+        Resources/Themes/fallout.json
         Resources/Presets/00_hardtech.json
         Resources/Presets/01_reverze.json
         Resources/Presets/02_juicy.json
@@ -86,7 +87,9 @@ juce_add_binary_data(BomboResources
         Resources/Samples/kick_04.wav
         Resources/Samples/kick_05.wav
         Resources/Samples/kick_06.wav
-        Resources/Textures/chassis_overlay.png)
+        Resources/Textures/chassis_overlay.png
+        Resources/Textures/fallout_chassis.png
+        Resources/Textures/fallout_header.png)
 
 target_sources(Bombo
     PRIVATE

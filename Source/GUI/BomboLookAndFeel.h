@@ -140,19 +140,37 @@ public:
         const float radius = diameter * 0.5f - 4.0f;
         if (radius < 6.0f) return;
 
-        // Cap colour: dark by default, amber for the OUT macro.
-        const auto core = slider.findColour(juce::Slider::rotarySliderOutlineColourId);
+        // Cap colour: dark by default, amber for the OUT macro — EXCEPT on
+        // FALLOUT, where the OUT macro drops the amber/logo hero face and renders
+        // as a normal dark-graphite knob (graphite core + bevel ring + bone
+        // indicator). The red nose already carries the weight; the amber bullseye
+        // clashed and let the red show through.
+        const bool logoKnobProp = static_cast<bool>(
+            slider.getProperties().getWithDefault("logoKnob", false));
+        const bool falloutTheme = (col::chassisArt() == "fallout");
+        auto core = slider.findColour(juce::Slider::rotarySliderOutlineColourId);
+        if (falloutTheme && logoKnobProp)
+            core = col::knobCap();               // dark graphite OUT on FALLOUT
         const bool capIsDark = core.getPerceivedBrightness() < 0.5f;
         const auto indicatorColour = capIsDark ? col::bone() : col::ink();
         const auto valueColour     = capIsDark ? col::bone() : col::ink();
 
-        // 1. Mounting recess (offset drop shadow).
-        g.setColour(juce::Colour(0xFF000000).withAlpha(0.35f));
-        g.fillEllipse(cx - radius - 1.0f, cy - radius + 1.5f,
-                      (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
-        g.setColour(juce::Colour(0xFF050507));
-        g.fillEllipse(cx - radius - 2.0f, cy - radius - 2.0f,
-                      (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
+        // 1. Mounting recess — SOFT drop shadow. A radial gradient that is dark
+        //    at the knob rim and fades to transparent a few px beyond, offset
+        //    slightly downward so it reads as a soft cast shadow instead of the
+        //    old hard black ring. The knob body (rubber, or the logo rings) is
+        //    drawn on top, covering the dark centre.
+        {
+            const float shOuter = radius + 7.0f;
+            const float shCy    = cy + 3.0f;   // cast downward
+            juce::ColourGradient halo(
+                juce::Colour(0xFF000000).withAlpha(0.72f), cx, shCy,
+                juce::Colours::transparentBlack,           cx, shCy - shOuter, true);
+            halo.addColour(juce::jlimit(0.05, 0.90, static_cast<double>(radius / shOuter)),
+                           juce::Colour(0xFF000000).withAlpha(0.72f));
+            g.setGradientFill(halo);
+            g.fillEllipse(cx - shOuter, shCy - shOuter, shOuter * 2.0f, shOuter * 2.0f);
+        }
 
         // Cap geometry — needed by the indicator + readout regardless of face style.
         const float coreOuterR = radius * 0.80f;
@@ -160,8 +178,10 @@ public:
         const bool  isHover    = slider.isMouseOverOrDragging();
         // Hero OUT knob opts into the Hyperfocus logo face via this property
         // (set in FaceplatePanel where macro_[6] is built).
-        const bool  logoKnob   = static_cast<bool>(
-            slider.getProperties().getWithDefault("logoKnob", false));
+        // Logo (Hyperfocus mark) face only shows OFF FALLOUT; on FALLOUT the OUT
+        // macro renders via the normal dark-graphite knob path above.
+        const bool  logoKnob       = logoKnobProp && ! falloutTheme;
+        const auto  logoRingColour = col::accentAmber();
 
         if (logoKnob)
         {
@@ -253,7 +273,7 @@ public:
             // accents. Pick a dark-grey stem over a bright ring (e.g. magenta)
             // and a bone stem over a dark ring; the opposite-tone outline keeps
             // it legible over the dark gaps between rings too.
-            const bool  ringIsBright = col::accentAmber().getPerceivedBrightness() > 0.5f;
+            const bool  ringIsBright = logoRingColour.getPerceivedBrightness() > 0.5f;
             const auto  stemFill     = ringIsBright ? juce::Colour(0xFF2A'2A'2Eu) // dark grey
                                                     : col::bone();
             const auto  stemOutline  = ringIsBright ? col::bone().withAlpha(0.85f)

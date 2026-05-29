@@ -100,6 +100,12 @@ bool fillPalette(const juce::var& pal, Palette& out, std::string& err)
         else if (s == "camo") out.bodyStyle = BodyStyle::Camo;
         else                  out.bodyStyle = BodyStyle::Grain;
     }
+
+    // Optional named chassis art (e.g. "fallout"). Only the FALLOUT theme
+    // ships it; every other theme leaves this empty and stays procedural.
+    if (pal.hasProperty("chassisArt"))
+        out.chassisArt = pal["chassisArt"].toString();
+
     return true;
 }
 } // anonymous namespace

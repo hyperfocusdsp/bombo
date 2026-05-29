@@ -1,0 +1,29 @@
+{
+  "name": "fallout",
+  "displayName": "FALLOUT",
+  "palette": {
+    "graphite":    "#1A0E08",
+    "graphiteHi":  "#281808",
+    "ink":         "#E8D4B4",
+    "bone":        "#E0C898",
+    "boneDim":     "#806844",
+    "voice":       "#241810",
+    "drive":       "#2A180C",
+    "delayC":      "#221A10",
+    "reverb":      "#1E2010",
+    "filterC":     "#1E1C0E",
+    "duck":        "#261608",
+    "knobCap":     "#222814",
+    "knobBevel":   "#4A5028",
+    "knobRubber":  "#161A0C",
+    "accentAmber": "#C84010",
+    "bodyHi":      "#736F4F",
+    "bodyLo":      "#555131",
+    "cap":         "#18100A",
+    "noseRed":     "#A02C0E",
+    "bandYellow":  "#B88C18",
+    "chassisOverlayOpacity": 0.70,
+    "bodyStyle": "grain",
+    "chassisArt": "fallout"
+  }
+}

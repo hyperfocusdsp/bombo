@@ -11,13 +11,55 @@ namespace bombo
 ScopeComponent::ScopeComponent()
 {
     setOpaque(false);
-    setInterceptsMouseClicks(false, false);
+    // Was (false, false) — now the scope eats clicks so it can toggle the
+    // VGA/CRT filter. Pointing-hand cursor + tooltip make it discoverable.
+    setInterceptsMouseClicks(true, false);
+    setMouseCursor(juce::MouseCursor::PointingHandCursor);
     startTimerHz(30);
 }
 
 ScopeComponent::~ScopeComponent()
 {
     stopTimer();
+}
+
+void ScopeComponent::mouseDown(const juce::MouseEvent&)
+{
+    crtUserState_ = ! crtActive();
+    crtManual_    = true;
+    repaint();
+}
+
+juce::String ScopeComponent::getTooltip()
+{
+    return crtActive() ? "VGA filter ON  -  click to disable (saves CPU)"
+                       : "Click to enable VGA / CRT filter";
+}
+
+bool ScopeComponent::crtActive() const
+{
+    if (crtManual_) return crtUserState_;
+    return col::chassisArt() == "fallout";   // theme default: FALLOUT only
+}
+
+void ScopeComponent::buildCrtScreen(int w, int h)
+{
+    crtScreen_ = juce::Image(juce::Image::ARGB, juce::jmax(1, w), juce::jmax(1, h), true);
+    juce::Graphics ig(crtScreen_);
+    // Scanlines — a 1px dark line every 3px.
+    ig.setColour(juce::Colours::black.withAlpha(0.16f));
+    for (int y = 0; y < h; y += 3)
+        ig.fillRect(0, y, w, 1);
+    // Vignette — radial, transparent centre darkening to the corners.
+    juce::ColourGradient vig(juce::Colours::transparentBlack,
+                             static_cast<float>(w) * 0.5f, static_cast<float>(h) * 0.5f,
+                             juce::Colours::black.withAlpha(0.55f),
+                             0.0f, 0.0f, true);
+    vig.addColour(0.65, juce::Colours::transparentBlack);
+    ig.setGradientFill(vig);
+    ig.fillRect(0, 0, w, h);
+    crtScreenW_ = w;
+    crtScreenH_ = h;
 }
 
 void ScopeComponent::showTapWarning(int tapNumber)
@@ -90,19 +132,40 @@ void ScopeComponent::paint(juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
 
+    // VGA/CRT filter active? (FALLOUT default, or manual override.) When on,
+    // the trace goes green-phosphor and a scanline/vignette/aberration pass
+    // is layered on top. When off, NONE of it is painted — zero extra cost.
+    const bool crt = crtActive();
+    const juce::Colour phosphor(0xFF7DFF7A);
+    const juce::Colour waveCol = crt ? phosphor : col::bone();
+
     // Recessed dark panel. On classic themes `ink` is the dark drawing
     // colour and reads as a proper recess. On neon themes (matrix/cyber/
     // plasma) `ink` is repurposed as a light secondary foreground, so we
     // pick a darkened graphite instead — keeps the scope readable across
-    // the whole theme set.
-    g.setColour(col::isNeon() ? col::graphite().darker(0.5f) : col::ink());
-    g.fillRoundedRectangle(bounds, 3.0f);
+    // the whole theme set. CRT mode uses a dark green-black phosphor screen.
+    if (crt)
+    {
+        g.setColour(juce::Colour(0xFF09140C));
+        g.fillRoundedRectangle(bounds, 3.0f);
+        juce::ColourGradient glow(juce::Colour(0x2233FF55),
+                                  bounds.getCentreX(), bounds.getCentreY(),
+                                  juce::Colours::transparentBlack,
+                                  bounds.getX(), bounds.getY(), true);
+        g.setGradientFill(glow);
+        g.fillRoundedRectangle(bounds, 3.0f);
+    }
+    else
+    {
+        g.setColour(col::isNeon() ? col::graphite().darker(0.5f) : col::ink());
+        g.fillRoundedRectangle(bounds, 3.0f);
+    }
     // No inner border here — the U-frame in FaceplatePanel::paintScopeFrame is
     // the scope's frame. A second rounded-rect stroke produced a doubled edge
     // (square U-frame + rounded inner stroke) that read as uneven thickness.
 
     // Label
-    g.setColour(col::boneDim());
+    g.setColour(crt ? phosphor.withAlpha(0.65f) : col::boneDim());
     g.setFont(fonts::label(9.0f));
     g.drawText("SCOPE  *  POST",
                bounds.reduced(10.0f, 6.0f).removeFromTop(14.0f),
@@ -127,7 +190,7 @@ void ScopeComponent::paint(juce::Graphics& g)
     }
 
     // Centerline hairline so an empty scope still reads as "an oscilloscope".
-    g.setColour(col::bone().withAlpha(0.06f));
+    g.setColour(waveCol.withAlpha(crt ? 0.10f : 0.06f));
     g.drawHorizontalLine(static_cast<int>(bounds.getCentreY()),
                          bounds.getX() + 8.0f, bounds.getRight() - 8.0f);
 
@@ -158,7 +221,7 @@ void ScopeComponent::paint(juce::Graphics& g)
             if (i == 0) ghost.startNewSubPath(x, y);
             else        ghost.lineTo(x, y);
         }
-        g.setColour(col::bone().withAlpha(0.22f));
+        g.setColour(waveCol.withAlpha(0.22f));
         g.strokePath(ghost, thinStroke);
     }
 
@@ -178,7 +241,19 @@ void ScopeComponent::paint(juce::Graphics& g)
             if (i == 0) live.startNewSubPath(x, y);
             else        live.lineTo(x, y);
         }
-        g.setColour(col::bone().withAlpha(0.88f));
+        if (crt)
+        {
+            // Chromatic aberration: red/blue ghosts offset off the trace.
+            g.setColour(juce::Colour(0xFFFF3030).withAlpha(0.30f));
+            g.strokePath(live, thinStroke, juce::AffineTransform::translation(1.4f, 0.0f));
+            g.setColour(juce::Colour(0xFF3060FF).withAlpha(0.30f));
+            g.strokePath(live, thinStroke, juce::AffineTransform::translation(-1.4f, 0.0f));
+            // Phosphor bloom under the main trace.
+            g.setColour(waveCol.withAlpha(0.16f));
+            g.strokePath(live, juce::PathStrokeType(3.6f, juce::PathStrokeType::curved,
+                                                    juce::PathStrokeType::rounded));
+        }
+        g.setColour(waveCol.withAlpha(0.90f));
         g.strokePath(live, thickStroke);
 
         // --- Layer 3: playhead hairline (only while actively capturing) ---
@@ -192,6 +267,29 @@ void ScopeComponent::paint(juce::Graphics& g)
                                plotArea.getY(),
                                plotArea.getBottom());
         }
+    }
+
+    // ── CRT overlay: baked scanlines + vignette, plus a small VGA tag. ───
+    // Drawn last so it sits over the trace. The scanline/vignette layer is
+    // cached in crtScreen_ (rebuilt only on resize); per frame this is one
+    // clipped blit + a tiny text draw.
+    if (crt)
+    {
+        const int wI = getWidth();
+        const int hI = getHeight();
+        if (! crtScreen_.isValid() || crtScreenW_ != wI || crtScreenH_ != hI)
+            buildCrtScreen(wI, hI);
+
+        juce::Graphics::ScopedSaveState ss(g);
+        juce::Path clip;
+        clip.addRoundedRectangle(bounds, 3.0f);
+        g.reduceClipRegion(clip);
+        g.drawImageAt(crtScreen_, 0, 0);
+
+        g.setColour(phosphor.withAlpha(0.55f));
+        g.setFont(fonts::label(8.0f));
+        g.drawText("VGA", bounds.reduced(8.0f, 5.0f),
+                   juce::Justification::bottomRight);
     }
 }
 

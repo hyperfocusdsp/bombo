@@ -649,7 +649,12 @@ void BomboEditor::resized()
     // consistent visual weight at any window size.
     if (themeStrip_)
     {
-        constexpr int kTileN = 6;
+        // Size to the ACTUAL number of registered themes, not a hardcoded 6.
+        // FALLOUT was the 7th theme and got clipped past the strip's right edge
+        // — invisible AND unclickable, so the picker could only ever select the
+        // 6 procedural themes. Derive from the registry so new themes appear too.
+        const int kTileN = juce::jmax(1,
+            static_cast<int>(bombo::ThemeProvider::get().registeredNames().size()));
         const int stripW = kTileN * bombo::ThemeTileStrip::kTileSize
                          + (kTileN - 1) * bombo::ThemeTileStrip::kTileGap;
         const int stripH = bombo::ThemeTileStrip::kTileSize;

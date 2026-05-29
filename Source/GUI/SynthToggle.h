@@ -27,9 +27,22 @@ public:
         const auto r = getLocalBounds().toFloat();
         const bool on = getToggleState();
         const bool neon = col::isNeon();
+        const bool fallout = (col::chassisArt() == "fallout");
 
         // Pill bg + amber border — mirrors drawToggleButton (LIM/TAIL/LOOP).
-        if (neon)
+        if (fallout)
+        {
+            // Recessed-in-slot look (matches bombo::pill on FALLOUT): dark fill,
+            // no bright border off; subtle amber keyline when ON.
+            g.setColour(col::ink().withAlpha(on ? 0.30f : 0.55f));
+            g.fillRoundedRectangle(r, 4.0f);
+            if (on)
+            {
+                g.setColour(col::accentAmber().withAlpha(0.45f));
+                g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+            }
+        }
+        else if (neon)
         {
             g.setColour(col::graphite().withAlpha(on ? 0.95f : 0.88f));
             g.fillRoundedRectangle(r, 4.0f);
@@ -71,9 +84,11 @@ public:
         ramp.quadraticTo(kneeX + inner.getWidth() * 0.08f, bottom,
                          right, bottom);
 
-        g.setColour(neon
-                    ? col::accentAmber().withAlpha(on ? 1.0f : 0.75f)
-                    : (on ? col::ink() : col::bone()));
+        g.setColour(fallout
+                    ? (on ? col::accentAmber() : col::bone().withAlpha(0.85f))
+                    : neon
+                        ? col::accentAmber().withAlpha(on ? 1.0f : 0.75f)
+                        : (on ? col::ink() : col::bone()));
         g.strokePath(ramp, juce::PathStrokeType(1.5f,
                             juce::PathStrokeType::curved,
                             juce::PathStrokeType::rounded));

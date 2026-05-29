@@ -40,12 +40,25 @@ public:
         const auto  accent = col::accentAmber();
         constexpr float kRad = 4.0f;  // match the Voice B env pill (SynthToggle)
 
-        // Housing — identical pill chrome to the env pill: graphite fill +
-        // amber rounded-rect border, 4px corners.
-        g.setColour(col::graphite().withAlpha(0.88f));
-        g.fillRoundedRectangle(r, kRad);
-        g.setColour(accent.withAlpha(hot ? 0.85f : 0.50f));
-        g.drawRoundedRectangle(r.reduced(0.5f), kRad, hot ? 1.5f : 1.0f);
+        // Housing — pill chrome. On FALLOUT it's recessed-in-slot (dark fill,
+        // no rust border) to match the other pills; elsewhere graphite + amber.
+        if (col::chassisArt().isNotEmpty())
+        {
+            g.setColour(col::ink().withAlpha(0.55f));
+            g.fillRoundedRectangle(r, kRad);
+            if (hot)
+            {
+                g.setColour(accent.withAlpha(0.45f));
+                g.drawRoundedRectangle(r.reduced(0.5f), kRad, 1.0f);
+            }
+        }
+        else
+        {
+            g.setColour(col::graphite().withAlpha(0.88f));
+            g.fillRoundedRectangle(r, kRad);
+            g.setColour(accent.withAlpha(hot ? 0.85f : 0.50f));
+            g.drawRoundedRectangle(r.reduced(0.5f), kRad, hot ? 1.5f : 1.0f);
+        }
 
         const auto track = trackRect();
 

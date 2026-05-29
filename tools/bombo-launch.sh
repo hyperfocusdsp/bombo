@@ -25,4 +25,10 @@ if [[ "${BOMBO_NO_KILL:-0}" != "1" ]]; then
     sleep 0.1
 fi
 
+# Default the rofi/.desktop launch to the FALLOUT theme so it opens in the
+# genai design instead of the saved default. Overridable: set BOMBO_FORCE_THEME
+# yourself (or empty it: BOMBO_FORCE_THEME= bombo-launch) to use the persisted
+# theme / pick another. Clicking a theme tile in-app still persists normally.
+export BOMBO_FORCE_THEME="${BOMBO_FORCE_THEME:-fallout}"
+
 exec "${BIN}" "$@"

@@ -82,7 +82,8 @@ void ThemeProvider::loadBundledThemes()
     registerFromBlob(*this, BinaryData::vault_json,    BinaryData::vault_jsonSize,    "vault");
     registerFromBlob(*this, BinaryData::matrix_json,   BinaryData::matrix_jsonSize,   "matrix");
     registerFromBlob(*this, BinaryData::cyber_json,    BinaryData::cyber_jsonSize,    "cyber");
-    registerFromBlob(*this, BinaryData::plasma_json,   BinaryData::plasma_jsonSize,   "plasma");
+    registerFromBlob(*this, BinaryData::plasma_json,    BinaryData::plasma_jsonSize,   "plasma");
+    registerFromBlob(*this, BinaryData::fallout_json,  BinaryData::fallout_jsonSize,  "fallout");
 
     // Refresh active_ from the (now possibly newly-registered) registry so the
     // JSON-loaded BANDW replaces the hard-coded ctor default. No broadcast.

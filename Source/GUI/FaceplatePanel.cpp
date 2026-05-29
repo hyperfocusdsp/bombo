@@ -18,6 +18,8 @@
 #include "WaveBuffer.h"
 #include "../ParameterIds.h"
 
+#include <BinaryData.h>
+
 namespace bombo
 {
 namespace
@@ -37,6 +39,16 @@ constexpr int kChassisMarginTop = 0;
 constexpr int kChassisMarginBot = 4;
 constexpr int kChassisCornerR   = 0;
 constexpr int kTailH            = 160;
+
+// FALLOUT display-bezel green-screen rect as fractions of fallout_header.png
+// (auto-detected by tools/fallout_chassis_compose.py). The renderer anchors
+// this rect onto the live scope so the rusty frame wraps the scope and the
+// button cutouts land around BNC / LIM / TAIL / BPM. Re-run the tool + update
+// these if the bezel art changes.
+constexpr float kBezScreenX0 = 0.0141f;
+constexpr float kBezScreenY0 = 0.0269f;
+constexpr float kBezScreenX1 = 0.9831f;
+constexpr float kBezScreenY1 = 0.5577f;
 
 // Bands inside the chassis rect portion. The macro-row strip is gone
 // 2026-05-17 - macros live in the bomb's nose (see layoutMacrosInNose).
@@ -682,8 +694,36 @@ void FaceplatePanel::paint(juce::Graphics& g)
     // Yellow BOMBO-TEC cartouche band removed 2026-05-17 - the strip is
     // now the preset bar's home (PresetBarComponent paints itself there).
 
-    headerRenderer::draw(g, headerBounds_, chassisPath_);
-    paintScopeFrame(g);    // red U-border around scope, drawn under scope component
+    if (col::chassisArt().isNotEmpty())
+    {
+        // FALLOUT: the baked display bezel replaces the procedural header strip
+        // and scope U-frame. Anchor the bezel's green-screen rect onto the live
+        // scope so the rusty frame wraps the scope and the cutouts land around
+        // BNC / LIM / TAIL / BPM. The live scope + buttons draw on top.
+        const auto bez = juce::ImageCache::getFromMemory(BinaryData::fallout_header_png,
+                                                         BinaryData::fallout_header_pngSize);
+        if (bez.isValid())
+        {
+            const float iw = static_cast<float>(bez.getWidth());
+            const float ih = static_cast<float>(bez.getHeight());
+            const float scrX = kBezScreenX0 * iw;
+            const float scrY = kBezScreenY0 * ih;
+            const float scrW = (kBezScreenX1 - kBezScreenX0) * iw;
+            const float scrH = (kBezScreenY1 - kBezScreenY0) * ih;
+            const auto sb = scopeBounds_.toFloat();
+            const float sxScale = sb.getWidth()  / juce::jmax(1.0f, scrW);
+            const float syScale = sb.getHeight() / juce::jmax(1.0f, scrH);
+            const juce::Rectangle<float> dest(sb.getX() - scrX * sxScale,
+                                              sb.getY() - scrY * syScale,
+                                              iw * sxScale, ih * syScale);
+            g.drawImage(bez, dest, juce::RectanglePlacement::stretchToFit);
+        }
+    }
+    else
+    {
+        headerRenderer::draw(g, headerBounds_, chassisPath_);
+        paintScopeFrame(g);    // red U-border around scope, drawn under scope component
+    }
 
     // Rack painting is hard-clipped to the chassis silhouette via an
     // alpha-image mask (pre-rasterised in resized()). Path-based clips
@@ -697,10 +737,16 @@ void FaceplatePanel::paint(juce::Graphics& g)
     else
         g.reduceClipRegion(chassisPath_);
     const int lastCol = static_cast<int>(visualOrder_.size()) - 1;
+    // On FALLOUT the rack's outer corners are NOT rounded — the silhouette mask
+    // clip shapes them to the body curve instead. The rounded-corner notches
+    // were exposing the dark area outside the silhouette as black diagonal
+    // wedges at the top-left / bottom-right where the egg curve cut through the
+    // notch; square corners + the clip remove the notch entirely.
+    const bool squareRackCorners = col::chassisArt().isNotEmpty();
     for (int col = 0; col < static_cast<int>(visualOrder_.size()); ++col)
     {
-        const bool roundLeft  = (col == 0);
-        const bool roundRight = (col == lastCol);
+        const bool roundLeft  = (col == 0)       && ! squareRackCorners;
+        const bool roundRight = (col == lastCol) && ! squareRackCorners;
         const int  sIdx       = visualOrder_[(std::size_t) col];
         if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
         paintSection(g, sections_[(std::size_t) sIdx], roundLeft, roundRight);

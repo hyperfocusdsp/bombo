@@ -42,6 +42,8 @@ inline float chassisOverlayOpacity() { return bombo::ThemeProvider::current().ch
 
 inline bombo::BodyStyle bodyStyle() { return bombo::ThemeProvider::current().bodyStyle; }
 
+inline juce::String chassisArt() { return bombo::ThemeProvider::current().chassisArt; }
+
 // True on themes where `ink` is a LIGHT secondary foreground instead of
 // a dark recess colour (MATRIX/CYBER/PLASMA). These themes need
 // dark-bg + accent-text styling for toggle pills, the OUT macro cap,
@@ -88,6 +90,8 @@ inline float borderWidth(bool on) { return (col::isNeon() && on) ? 1.5f : 1.0f; 
 // Foreground (text or icon) colour.
 inline juce::Colour fg(bool on)
 {
+    if (col::chassisArt() == "fallout")
+        return on ? col::accentAmber() : col::bone().withAlpha(0.85f);
     if (col::isNeon())
         return col::accentAmber().withAlpha(on ? 1.0f : 0.75f);
     return on ? col::ink() : col::bone();
@@ -96,6 +100,25 @@ inline juce::Colour fg(bool on)
 inline void paintBackground(juce::Graphics& g, juce::Rectangle<float> r,
                             bool on, bool hover)
 {
+    // FALLOUT: the pills sit in the display bezel's dark cutout SLOTS, so they
+    // read as recessed — a dark translucent fill, NO bright/red border. ON adds
+    // a subtle amber keyline instead of the rust ring that looked "on top".
+    if (col::chassisArt() == "fallout")
+    {
+        g.setColour(col::ink().withAlpha(on ? 0.30f : 0.55f));
+        g.fillRoundedRectangle(r, corner);
+        if (hover)
+        {
+            g.setColour(col::bone().withAlpha(0.08f));
+            g.fillRoundedRectangle(r, corner);
+        }
+        if (on)
+        {
+            g.setColour(col::accentAmber().withAlpha(0.45f));
+            g.drawRoundedRectangle(r.reduced(0.5f), corner, 1.0f);
+        }
+        return;
+    }
     g.setColour(fill(on, hover));
     g.fillRoundedRectangle(r, corner);
     g.setColour(border(on, hover));
