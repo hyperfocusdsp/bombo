@@ -94,7 +94,13 @@ inline juce::Colour fg(bool on)
         return on ? col::accentAmber() : col::bone().withAlpha(0.85f);
     if (col::isNeon())
         return col::accentAmber().withAlpha(on ? 1.0f : 0.75f);
-    return on ? col::ink() : col::bone();
+    // Classic themes: pick the label colour to CONTRAST the pill's own fill so
+    // it stays legible in every palette — dark ink on the light (amber) ON
+    // fill, light bone on the dark (graphite) OFF fill. ("dark on light,
+    // light on dark.") Keying off fill() brightness means it can never end up
+    // dark-on-dark or light-on-light regardless of a theme's graphite/amber.
+    return fill(on, false).getPerceivedBrightness() > 0.5f ? col::ink()
+                                                           : col::bone();
 }
 
 inline void paintBackground(juce::Graphics& g, juce::Rectangle<float> r,
