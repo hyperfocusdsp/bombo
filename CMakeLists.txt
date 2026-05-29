@@ -89,7 +89,15 @@ juce_add_binary_data(BomboResources
         Resources/Samples/kick_06.wav
         Resources/Textures/chassis_overlay.png
         Resources/Textures/fallout_chassis.png
-        Resources/Textures/fallout_header.png)
+        Resources/Textures/fallout_header.png
+        Resources/Textures/fallout_rack_1.png
+        Resources/Textures/fallout_rack_2.png
+        Resources/Textures/fallout_rack_3.png
+        Resources/Textures/fallout_rack_4.png
+        Resources/Textures/fallout_rack_5.png
+        Resources/Textures/fallout_rack_6.png
+        Resources/Textures/fallout_rack_7.png
+        Resources/Audio/game_propulsion.wav)
 
 target_sources(Bombo
     PRIVATE

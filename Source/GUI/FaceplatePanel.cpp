@@ -499,6 +499,7 @@ FaceplatePanel::addKnob(Section& s, const juce::String& paramId,
     c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap());
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
+    c->slider->setPaintingIsUnclipped(true);  // soft mounting-recess halo casts past the knob's square bounds (else hard-clip reads as the label "chopping" the shadow)
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
@@ -546,6 +547,7 @@ FaceplatePanel::addChoice(Section& s, const juce::String& paramId,
     c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, col::knobCap());
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
+    c->slider->setPaintingIsUnclipped(true);  // soft halo casts past bounds (see addKnob)
 
     if (auto* p = dynamic_cast<juce::AudioParameterChoice*>(apvts_.getParameter(paramId)))
     {
@@ -595,6 +597,7 @@ FaceplatePanel::addSampleSlot(Section& s, const juce::String& displayName,
     auto c = std::make_unique<Control>();
     c->kind = CtlKind::SampleSlot;
     c->sampleSlot = std::make_unique<SampleSlotWidget>();
+    c->sampleSlot->setPaintingIsUnclipped(true);  // soft halo casts past bounds (see addKnob)
 
     // Forward callbacks straight from the slot widget to whatever the
     // editor wired in. Owner is responsible for keeping the processor side
@@ -637,6 +640,7 @@ FaceplatePanel::makeBoundKnob(const juce::String& paramId,
     c->slider->setColour(juce::Slider::rotarySliderOutlineColourId, capColour);
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
+    c->slider->setPaintingIsUnclipped(true);  // soft mounting-recess halo casts past the knob's square bounds (else hard-clip reads as the label "chopping" the shadow)
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
@@ -664,6 +668,7 @@ FaceplatePanel::makePlaceholderKnob(const juce::String& displayName,
     c->slider->setNumDecimalPlacesToDisplay(2);
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
+    c->slider->setPaintingIsUnclipped(true);  // soft mounting-recess halo casts past the knob's square bounds (else hard-clip reads as the label "chopping" the shadow)
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
@@ -790,6 +795,26 @@ void FaceplatePanel::paintScopeFrame(juce::Graphics& g)
     g.fillRect(sx, sy + 1, sw, 1);
 }
 
+// FALLOUT rack art: map a section's STABLE identity index to its baked strip.
+// sections_ order is VOICE A, VOICE B, DRIVE, DELAY, REVERB, FILTER, DUCK; the
+// genai art order is VOICE A, VOICE B, DRIVE, FILTER, DELAY, REVERB, DUCK, hence
+// the DELAY/REVERB/FILTER permutation below. Mapping by identity (not column
+// position) means a strip follows its section through FX reordering.
+static juce::Image loadRackStrip(int sectionIdx)
+{
+    switch (sectionIdx)
+    {
+        case 0: return juce::ImageCache::getFromMemory(BinaryData::fallout_rack_1_png, BinaryData::fallout_rack_1_pngSize);
+        case 1: return juce::ImageCache::getFromMemory(BinaryData::fallout_rack_2_png, BinaryData::fallout_rack_2_pngSize);
+        case 2: return juce::ImageCache::getFromMemory(BinaryData::fallout_rack_3_png, BinaryData::fallout_rack_3_pngSize);
+        case 3: return juce::ImageCache::getFromMemory(BinaryData::fallout_rack_5_png, BinaryData::fallout_rack_5_pngSize);
+        case 4: return juce::ImageCache::getFromMemory(BinaryData::fallout_rack_6_png, BinaryData::fallout_rack_6_pngSize);
+        case 5: return juce::ImageCache::getFromMemory(BinaryData::fallout_rack_4_png, BinaryData::fallout_rack_4_pngSize);
+        case 6: return juce::ImageCache::getFromMemory(BinaryData::fallout_rack_7_png, BinaryData::fallout_rack_7_pngSize);
+        default: return {};
+    }
+}
+
 void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
                                   bool roundLeft, bool roundRight)
 {
@@ -833,6 +858,24 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
 
     g.setColour(bodyColour);
     g.fillPath(bodyPath);
+
+    // FALLOUT: overlay the photoreal rack strip on the flat accent fill, clipped
+    // to the column shape. The strips are text-free, so the live title + knob
+    // labels still draw on top. Mapped by stable section identity so the strip
+    // follows its section when the FX columns are reordered.
+    if (col::chassisArt().isNotEmpty())
+    {
+        const auto strip = loadRackStrip(static_cast<int>(&s - sections_.data()));
+        if (strip.isValid())
+        {
+            g.drawImage(strip, rb, juce::RectanglePlacement::stretchToFit);
+            if (muted)
+            {
+                g.setColour(juce::Colours::black.withAlpha(0.38f));
+                g.fillPath(bodyPath);  // keep the bypass dimming cue
+            }
+        }
+    }
 
     // Subtle top gloss for raised-panel feel - kept from the original
     // styling, looks good against both the body olive and the accent

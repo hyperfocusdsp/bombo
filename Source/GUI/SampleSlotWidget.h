@@ -83,13 +83,19 @@ public:
         const auto capTop  = cap.brighter(0.10f);
         const auto capBot  = cap.darker (0.18f);
 
-        // Mounting recess
-        g.setColour(juce::Colour(0xFF000000).withAlpha(0.35f));
-        g.fillEllipse(cx - radius - 1.0f, cy - radius + 1.5f,
-                      (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
-        g.setColour(juce::Colour(0xFF050507));
-        g.fillEllipse(cx - radius - 2.0f, cy - radius - 2.0f,
-                      (radius + 2.0f) * 2.0f, (radius + 2.0f) * 2.0f);
+        // Mounting recess — SOFT drop shadow, matching BomboLookAndFeel's knob
+        // halo (was a hard black ring that read as too crisp next to the knobs).
+        {
+            const float shOuter = radius + 7.0f;
+            const float shCy    = cy + 3.0f;   // cast downward
+            juce::ColourGradient halo(
+                juce::Colour(0xFF000000).withAlpha(0.72f), cx, shCy,
+                juce::Colours::transparentBlack,           cx, shCy - shOuter, true);
+            halo.addColour(juce::jlimit(0.05, 0.90, static_cast<double>(radius / shOuter)),
+                           juce::Colour(0xFF000000).withAlpha(0.72f));
+            g.setGradientFill(halo);
+            g.fillEllipse(cx - shOuter, shCy - shOuter, shOuter * 2.0f, shOuter * 2.0f);
+        }
 
         // Rubber grip
         g.setColour(col::knobRubber());
