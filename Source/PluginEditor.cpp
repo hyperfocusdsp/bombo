@@ -15,8 +15,9 @@
 #if JUCE_LINUX
  // X11 headers define `KeyPress`, `Status`, etc. as macros that clash with
  // juce::KeyPress and other JUCE types — so the implementation lives in
- // its own translation unit. Declare the entry point here.
+ // its own translation unit. Declare the entry points here.
  namespace bombo { bool claimCompositorSelectionOnce(); }
+ namespace bombo { void installNonFatalXErrorHandler(); }
 #endif
 
 static bombo::FaceplatePanel::SampleSlotCallbacks makeSampleSlotCallbacks(BomboProcessor& p)
@@ -94,6 +95,20 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     const bool forceOpaque = false;
    #endif
     setOpaque(forceOpaque || std::getenv("BOMBO_SOLID_BG") != nullptr);
+
+   #if JUCE_LINUX
+    if (! juce::JUCEApplicationBase::isStandaloneApp())
+    {
+        // Make X11 protocol errors non-fatal for hosted plugins. Xlib's default
+        // handler calls exit() on any unhandled protocol error; in an out-of-
+        // process host (Bitwig) that can hard-kill the host during window
+        // teardown. Installing ours here (before the first peer) means JUCE
+        // saves a non-fatal handler as its restore target.
+        // See X11CompositorClaim.cpp.
+        bombo::installNonFatalXErrorHandler();
+    }
+   #endif
+
     setLookAndFeel(&lnf);
     // Wire the factory preset bank BEFORE addAndMakeVisible so the panel's
     // first resized() lays the preset bar out alongside the macros/rack.
@@ -262,6 +277,25 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // JUCE's StandalonePluginHolder persists window-X/Y on close;
     // window-W/H currently isn't persisted by JUCE, so this also runs
     // on every launch — harmless since it always lands at the same fit.
+    //
+    // STANDALONE ONLY. This is monitor-fit logic for our own top-level
+    // window. In a hosted plugin the HOST owns the editor size, and this
+    // deferred self-setSize is actively dangerous: it makes an out-of-process
+    // host (Bitwig) swap the editor's native window, which makes the attached
+    // OpenGLContext stop() on a now-destroyed X11 drawable → BadDrawable →
+    // Xlib's default error handler calls exit() → hard crash on reopen. The
+    // ctor's synchronous setSize() above already gives the plugin a valid
+    // default size, so the hosted path needs nothing here.
+    //
+    // RUNTIME guard — NOT `#if JucePlugin_Build_Standalone`. That macro is
+    // compiled as 1 in the SHARED Bombo code target whenever the build includes
+    // a Standalone format, so it does NOT exclude this lambda from the VST3/CLAP
+    // plugins. It was running in-host and calling setOpaque(false), which made
+    // JUCE re-add the editor as a non-opaque TOPLEVEL — detaching it from the
+    // DAW's plugin slot (black square) and previously feeding the GL-teardown
+    // crash. isStandaloneApp() is the correct runtime discriminator (false in a
+    // host) and is what the rest of this file already uses.
+    if (juce::JUCEApplicationBase::isStandaloneApp())
     juce::MessageManager::callAsync(
         [=, safe = juce::Component::SafePointer<BomboEditor>(this)]() mutable
         {
@@ -339,6 +373,7 @@ BomboEditor::BomboEditor(BomboProcessor& p)
             }
            #endif
         });
+    // (deferred lambda guarded at runtime by isStandaloneApp() above)
 
 }
 

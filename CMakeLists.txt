@@ -183,6 +183,9 @@ target_compile_definitions(Bombo
         # Linux X11: enable XRender so JUCE selects an ARGB visual when
         # setOpaque(false) is set on the top-level window. Required for
         # the bomb-tail corner wedges to be truly transparent.
+        # (Tested removing this to fix DAW embedding — it did NOT change the
+        # editor's parentage, only broke the transparent-corner rendering, so
+        # it is kept. The embed failure is unrelated to the X11 visual depth.)
         JUCE_USE_XRENDER=1
         # Disable JACK on Linux. PipeWire's JACK emulation silently
         # "succeeds" (device object created, no error returned) but

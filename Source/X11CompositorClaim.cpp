@@ -16,8 +16,42 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#include <cstdio>
 
 namespace bombo {
+
+namespace {
+    // Xlib's *default* error handler calls exit() on any unhandled X11
+    // protocol error. In Bitwig's out-of-process host this is fatal: closing
+    // and reopening the editor swaps the native window, and the OpenGLContext's
+    // GLX teardown then touches a now-destroyed drawable → BadDrawable → the
+    // default handler exit()s the whole plugin host. JUCE installs its own
+    // non-fatal handler while a window is alive but the default one is active
+    // during the close→reopen teardown gap. Install a benign handler that logs
+    // and continues so an X error can never kill the host.
+    int nonFatalXErrorHandler(Display* d, XErrorEvent* e)
+    {
+        char buf[256] = {};
+        if (d != nullptr && e != nullptr)
+            XGetErrorText(d, e->error_code, buf, sizeof(buf) - 1);
+        std::fprintf(stderr,
+                     "[Bombo] non-fatal X11 error swallowed: code=%d (%s) "
+                     "request=%d minor=%d\n",
+                     e ? e->error_code   : -1, buf,
+                     e ? e->request_code : -1,
+                     e ? e->minor_code   : -1);
+        return 0; // never chain to the default (exit()) handler
+    }
+}
+
+// Install our non-fatal handler as the process-global X error handler.
+// Called from the editor ctor before any JUCE window/peer is created, so JUCE's
+// XWindowSystem saves OURS as the "previous" handler and restores a non-fatal
+// one on teardown. Idempotent — safe to call on every editor open.
+void installNonFatalXErrorHandler()
+{
+    XSetErrorHandler(nonFatalXErrorHandler);
+}
 
 bool claimCompositorSelectionOnce()
 {
@@ -45,6 +79,7 @@ bool claimCompositorSelectionOnce()
 
 namespace bombo {
 bool claimCompositorSelectionOnce() { return false; }
+void installNonFatalXErrorHandler() {}
 } // namespace bombo
 
 #endif
