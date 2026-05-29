@@ -64,17 +64,15 @@ private:
     static constexpr int kOverlayDurationMs = 1200;
 
     // ── VGA / CRT filter ────────────────────────────────────────────────
-    // Effective state = manual override if set, else theme default (FALLOUT
-    // only). Cheap: nothing extra is painted when inactive, so the flat/neon
-    // themes pay zero cost. The scanline + vignette layer is baked once into
-    // crtScreen_ and blitted; only the chromatic-aberration wave passes are
-    // per-frame (a couple of extra strokePath on an already-built path).
+    // On/off lives in the shared bombo::CrtState (so a click here also flips
+    // the preset readout — both subscribe to it). Cheap: nothing extra is
+    // painted when inactive, so the flat/neon themes pay zero cost. The
+    // scanline + vignette layer is baked once into crtScreen_ (caller-owned
+    // cache for bombo::crt::blitOverlay) and blitted; only the chromatic-
+    // aberration wave passes are per-frame.
     bool crtActive() const;
-    void buildCrtScreen(int w, int h);
 
-    bool         crtManual_    = false;   // has the user clicked to override?
-    bool         crtUserState_ = false;   // the override value
-    juce::Image  crtScreen_;              // baked scanlines + vignette
+    juce::Image  crtScreen_;              // baked scanline + vignette cache
     int          crtScreenW_   = 0;
     int          crtScreenH_   = 0;
 

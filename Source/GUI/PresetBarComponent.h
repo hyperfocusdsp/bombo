@@ -74,6 +74,13 @@ private:
 
     EditMode edit_ = EditMode::None;
 
+    // CRT/VGA overlay cache (scanline + vignette), rebuilt on resize. Mirrors
+    // the scope so the readout reads as the same green phosphor screen when the
+    // shared VGA filter is on.
+    juce::Image crtScreen_;
+    int         crtScreenW_ = 0;
+    int         crtScreenH_ = 0;
+
     // Retry pump: PopupMenu dismissal + BomboEditor::visibilityChanged +
     // host-side focus shuffles can each steal focus back from nameEditor_
     // at unpredictable delays (worse on Hyprland/Wayland). Instead of

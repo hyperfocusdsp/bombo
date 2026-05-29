@@ -97,6 +97,8 @@ juce_add_binary_data(BomboResources
         Resources/Textures/fallout_rack_5.png
         Resources/Textures/fallout_rack_6.png
         Resources/Textures/fallout_rack_7.png
+        Resources/Textures/fallout_knob.png
+        Resources/Textures/fallout_knob_out.png
         Resources/Audio/game_propulsion.wav)
 
 target_sources(Bombo
@@ -108,6 +110,7 @@ target_sources(Bombo
         Source/X11CompositorClaim.cpp
         Source/Parameters.h
         Source/GUI/Colours.h
+        Source/GUI/CrtScreen.h
         Source/GUI/Theme/Palette.h
         Source/GUI/Theme/ThemeProvider.h
         Source/GUI/Theme/ThemeProvider.cpp

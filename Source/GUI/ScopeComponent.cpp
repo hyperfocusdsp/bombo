@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "Colours.h"
+#include "CrtScreen.h"
 #include "Fonts.h"
 
 namespace bombo
@@ -16,18 +17,23 @@ ScopeComponent::ScopeComponent()
     setInterceptsMouseClicks(true, false);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
     startTimerHz(30);
+
+    // Repaint whenever the shared VGA filter flips (e.g. the user clicks the
+    // preset readout's screen, or this scope).
+    CrtState::get().addChangeListener(this);
 }
 
 ScopeComponent::~ScopeComponent()
 {
+    CrtState::get().removeChangeListener(this);
     stopTimer();
 }
 
 void ScopeComponent::mouseDown(const juce::MouseEvent&)
 {
-    crtUserState_ = ! crtActive();
-    crtManual_    = true;
-    repaint();
+    // Toggle the shared filter; the broadcast repaints the scope AND the
+    // preset readout (both subscribe to CrtState).
+    CrtState::get().toggle();
 }
 
 juce::String ScopeComponent::getTooltip()
@@ -38,28 +44,7 @@ juce::String ScopeComponent::getTooltip()
 
 bool ScopeComponent::crtActive() const
 {
-    if (crtManual_) return crtUserState_;
-    return col::chassisArt() == "fallout";   // theme default: FALLOUT only
-}
-
-void ScopeComponent::buildCrtScreen(int w, int h)
-{
-    crtScreen_ = juce::Image(juce::Image::ARGB, juce::jmax(1, w), juce::jmax(1, h), true);
-    juce::Graphics ig(crtScreen_);
-    // Scanlines — a 1px dark line every 3px.
-    ig.setColour(juce::Colours::black.withAlpha(0.16f));
-    for (int y = 0; y < h; y += 3)
-        ig.fillRect(0, y, w, 1);
-    // Vignette — radial, transparent centre darkening to the corners.
-    juce::ColourGradient vig(juce::Colours::transparentBlack,
-                             static_cast<float>(w) * 0.5f, static_cast<float>(h) * 0.5f,
-                             juce::Colours::black.withAlpha(0.55f),
-                             0.0f, 0.0f, true);
-    vig.addColour(0.65, juce::Colours::transparentBlack);
-    ig.setGradientFill(vig);
-    ig.fillRect(0, 0, w, h);
-    crtScreenW_ = w;
-    crtScreenH_ = h;
+    return CrtState::get().active();
 }
 
 void ScopeComponent::showTapWarning(int tapNumber)
@@ -136,7 +121,7 @@ void ScopeComponent::paint(juce::Graphics& g)
     // the trace goes green-phosphor and a scanline/vignette/aberration pass
     // is layered on top. When off, NONE of it is painted — zero extra cost.
     const bool crt = crtActive();
-    const juce::Colour phosphor(0xFF7DFF7A);
+    const juce::Colour phosphor(bombo::crt::kPhosphor);
     const juce::Colour waveCol = crt ? phosphor : col::bone();
 
     // Recessed dark panel. On classic themes `ink` is the dark drawing
@@ -146,14 +131,7 @@ void ScopeComponent::paint(juce::Graphics& g)
     // the whole theme set. CRT mode uses a dark green-black phosphor screen.
     if (crt)
     {
-        g.setColour(juce::Colour(0xFF09140C));
-        g.fillRoundedRectangle(bounds, 3.0f);
-        juce::ColourGradient glow(juce::Colour(0x2233FF55),
-                                  bounds.getCentreX(), bounds.getCentreY(),
-                                  juce::Colours::transparentBlack,
-                                  bounds.getX(), bounds.getY(), true);
-        g.setGradientFill(glow);
-        g.fillRoundedRectangle(bounds, 3.0f);
+        bombo::crt::paintScreen(g, bounds, 3.0f);
     }
     else
     {
@@ -275,16 +253,7 @@ void ScopeComponent::paint(juce::Graphics& g)
     // clipped blit + a tiny text draw.
     if (crt)
     {
-        const int wI = getWidth();
-        const int hI = getHeight();
-        if (! crtScreen_.isValid() || crtScreenW_ != wI || crtScreenH_ != hI)
-            buildCrtScreen(wI, hI);
-
-        juce::Graphics::ScopedSaveState ss(g);
-        juce::Path clip;
-        clip.addRoundedRectangle(bounds, 3.0f);
-        g.reduceClipRegion(clip);
-        g.drawImageAt(crtScreen_, 0, 0);
+        bombo::crt::blitOverlay(g, crtScreen_, crtScreenW_, crtScreenH_, bounds, 3.0f);
 
         g.setColour(phosphor.withAlpha(0.55f));
         g.setFont(fonts::label(8.0f));

@@ -2,6 +2,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <BinaryData.h>
+
 #include "Colours.h"
 #include "Fonts.h"
 #include "Theme/ThemeProvider.h"
@@ -161,13 +163,16 @@ public:
         //    old hard black ring. The knob body (rubber, or the logo rings) is
         //    drawn on top, covering the dark centre.
         {
-            const float shOuter = radius + 7.0f;
-            const float shCy    = cy + 3.0f;   // cast downward
+            const float shOuter = radius + 6.0f;
+            const float shCy    = cy + 2.0f;   // cast downward
+            // Lighter overall (~0.40 peak vs old 0.72) and held dark only out to
+            // the knob rim, then a quick fade over the last few px — reads as a
+            // soft contact shadow, not a heavy black ring.
             juce::ColourGradient halo(
-                juce::Colour(0xFF000000).withAlpha(0.72f), cx, shCy,
+                juce::Colour(0xFF000000).withAlpha(0.40f), cx, shCy,
                 juce::Colours::transparentBlack,           cx, shCy - shOuter, true);
-            halo.addColour(juce::jlimit(0.05, 0.90, static_cast<double>(radius / shOuter)),
-                           juce::Colour(0xFF000000).withAlpha(0.72f));
+            halo.addColour(juce::jlimit(0.05, 0.92, static_cast<double>(radius / shOuter)),
+                           juce::Colour(0xFF000000).withAlpha(0.40f));
             g.setGradientFill(halo);
             g.fillEllipse(cx - shOuter, shCy - shOuter, shOuter * 2.0f, shOuter * 2.0f);
         }
@@ -183,7 +188,28 @@ public:
         const bool  logoKnob       = logoKnobProp && ! falloutTheme;
         const auto  logoRingColour = col::accentAmber();
 
-        if (logoKnob)
+        // FALLOUT renders photoreal IMAGE knobs: a static photo body (baked
+        // lighting that never rotates) + a vector indicator at the value angle
+        // (drawn below). The OUT macro (logoKnobProp) uses the brass out_2 face;
+        // every other knob uses the dark cap. Other themes keep the vector cap.
+        juce::Image knobImg;
+        if (falloutTheme)
+            knobImg = logoKnobProp
+                ? juce::ImageCache::getFromMemory(BinaryData::fallout_knob_out_png,
+                                                  BinaryData::fallout_knob_out_pngSize)
+                : juce::ImageCache::getFromMemory(BinaryData::fallout_knob_png,
+                                                  BinaryData::fallout_knob_pngSize);
+        const bool imageKnob = knobImg.isValid();
+
+        if (imageKnob)
+        {
+            // Body fills the knob circle; the asset is square with alpha outside.
+            const float bodyD = radius * 2.0f;
+            const float isc   = bodyD / static_cast<float>(juce::jmax(1, knobImg.getWidth()));
+            g.drawImageTransformed(knobImg,
+                juce::AffineTransform::scale(isc).translated(cx - radius, cy - radius));
+        }
+        else if (logoKnob)
         {
             // The Hyperfocus "focus ring" mark as the cap face: concentric
             // aperture rings in the active THEME ACCENT, so the hero knob
@@ -266,7 +292,36 @@ public:
         stem.lineTo(cx + ic * stemInR  - perpC * stemW * 0.5f,
                     cy + is * stemInR  - perpS * stemW * 0.5f);
         stem.closeSubPath();
-        if (logoKnob)
+        if (imageKnob)
+        {
+            // Static photo body above — only this pointer turns, so the baked
+            // lighting stays put. capBar = a rounded radial bar from r0..r1
+            // (fractions of the knob radius), built off the same angle as the
+            // vector stem.
+            auto capBar = [&](float r0, float r1, float wgt, juce::Colour cc)
+            {
+                juce::Path p;
+                p.startNewSubPath(cx + ic * r0 + perpC * wgt * 0.5f, cy + is * r0 + perpS * wgt * 0.5f);
+                p.lineTo        (cx + ic * r1 + perpC * wgt * 0.5f, cy + is * r1 + perpS * wgt * 0.5f);
+                p.lineTo        (cx + ic * r1 - perpC * wgt * 0.5f, cy + is * r1 - perpS * wgt * 0.5f);
+                p.lineTo        (cx + ic * r0 - perpC * wgt * 0.5f, cy + is * r0 - perpS * wgt * 0.5f);
+                p.closeSubPath();
+                g.setColour(cc);
+                g.fillPath(p);
+            };
+            if (logoKnobProp)   // OUT: dark engraved notch in the outer brass band
+            {
+                // faint bone keyline so the dark mark never vanishes on a dark ring
+                capBar(radius * 0.64f, radius * 0.93f, radius * 0.18f + 1.4f, col::bone().withAlpha(0.30f));
+                capBar(radius * 0.66f, radius * 0.91f, radius * 0.16f,        juce::Colour(0xFF120B07u));
+            }
+            else                // dark cap: bone pointer + dark keyline for contrast
+            {
+                capBar(radius * 0.55f, radius * 0.86f, radius * 0.105f + 1.8f, juce::Colour(0xE6090806u));
+                capBar(radius * 0.55f, radius * 0.86f, radius * 0.105f,        col::bone());
+            }
+        }
+        else if (logoKnob)
         {
             // Contrast-aware pointer. The cap face is the theme accent (magenta,
             // amber, neon hue…), so a fixed bone pointer vanishes on bright
@@ -316,7 +371,7 @@ public:
                            i == activeIdx ? 2.0f : 1.4f);
             }
         }
-        else
+        else if (! imageKnob)
         {
             const float dotR = juce::jmax(0.9f, radius * 0.045f);
             const float dotRingR = radius + 2.5f;
@@ -339,7 +394,9 @@ public:
         //    formatter returns "<number> <unit>" — choice names ignore it.
         // The logo-mark hero knob shows no numeric readout — the focus-ring mark
         // is its identity and the indicator shows the level. Keeps it clean.
-        if (logoKnob)
+        const bool noReadout = static_cast<bool>(
+            slider.getProperties().getWithDefault("noReadout", false));
+        if (logoKnob || noReadout || (imageKnob && logoKnobProp))
             return;
 
         juce::String text;

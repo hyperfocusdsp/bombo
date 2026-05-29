@@ -1,6 +1,7 @@
 #include "PresetBarComponent.h"
 
 #include "Colours.h"
+#include "CrtScreen.h"
 #include "Fonts.h"
 
 namespace bombo
@@ -11,6 +12,10 @@ PresetBarComponent::PresetBarComponent(PresetBank& bank,
     : bank_(bank), apvts_(apvts)
 {
     setFocusContainerType(juce::Component::FocusContainerType::focusContainer);
+
+    // Repaint + re-skin children when the shared VGA filter flips (e.g. the
+    // user clicks the scope). The readout follows the scope's phosphor look.
+    CrtState::get().addChangeListener(this);
 
     addAndMakeVisible(prev_);
     addAndMakeVisible(next_);
@@ -30,7 +35,10 @@ PresetBarComponent::PresetBarComponent(PresetBank& bank,
     refresh();
 }
 
-PresetBarComponent::~PresetBarComponent() = default;
+PresetBarComponent::~PresetBarComponent()
+{
+    CrtState::get().removeChangeListener(this);
+}
 
 void PresetBarComponent::refresh()
 {
@@ -67,24 +75,32 @@ void PresetBarComponent::changeListenerCallback(juce::ChangeBroadcaster*)
 
 void PresetBarComponent::applyPaletteToChildren()
 {
-    auto styleButton = [](juce::TextButton& b)
+    // When the shared VGA filter is on the readout is a green phosphor screen,
+    // so the chevrons + rename editor switch from amber to phosphor too (else
+    // amber glyphs on a green screen look off-palette).
+    const bool crt   = CrtState::get().active();
+    const auto fg    = crt ? juce::Colour(bombo::crt::kPhosphor) : col::accentAmber();
+    const auto btnBg = crt ? juce::Colour(bombo::crt::kScreenBg).brighter(0.22f).withAlpha(0.85f)
+                           : col::graphiteHi().withAlpha(0.85f);
+    const auto edBg  = crt ? juce::Colour(bombo::crt::kScreenBg).withAlpha(0.95f)
+                           : col::graphite().withAlpha(0.95f);
+
+    auto styleButton = [&](juce::TextButton& b)
     {
-        b.setColour(juce::TextButton::buttonColourId,
-                    col::graphiteHi().withAlpha(0.85f));
-        b.setColour(juce::TextButton::textColourOffId, col::accentAmber());
-        b.setColour(juce::TextButton::textColourOnId,  col::accentAmber());
+        b.setColour(juce::TextButton::buttonColourId,  btnBg);
+        b.setColour(juce::TextButton::textColourOffId, fg);
+        b.setColour(juce::TextButton::textColourOnId,  fg);
         b.setColour(juce::ComboBox::outlineColourId,   juce::Colours::transparentBlack);
     };
     styleButton(prev_);
     styleButton(next_);
     styleButton(menu_);
 
-    nameEditor_.setColour(juce::TextEditor::backgroundColourId,
-                          col::graphite().withAlpha(0.95f));
-    nameEditor_.setColour(juce::TextEditor::textColourId,           col::accentAmber());
-    nameEditor_.setColour(juce::TextEditor::outlineColourId,        col::accentAmber().withAlpha(0.60f));
-    nameEditor_.setColour(juce::TextEditor::focusedOutlineColourId, col::accentAmber());
-    nameEditor_.setColour(juce::TextEditor::highlightColourId,      col::accentAmber().withAlpha(0.35f));
+    nameEditor_.setColour(juce::TextEditor::backgroundColourId,    edBg);
+    nameEditor_.setColour(juce::TextEditor::textColourId,           fg);
+    nameEditor_.setColour(juce::TextEditor::outlineColourId,        fg.withAlpha(0.60f));
+    nameEditor_.setColour(juce::TextEditor::focusedOutlineColourId, fg);
+    nameEditor_.setColour(juce::TextEditor::highlightColourId,      fg.withAlpha(0.35f));
     nameEditor_.applyFontToAllText(bombo::fonts::value(16.0f));
 }
 
@@ -94,8 +110,18 @@ void PresetBarComponent::paint(juce::Graphics& g)
     // on neon themes the accent IS the bright neon and an amber-tinted
     // fill becomes a coloured-on-coloured wash with no contrast against
     // the text. Dark fill + bright accent text is the consistent rule.
-    const auto r = getLocalBounds().toFloat().reduced(1.5f);
-    if (col::chassisArt().isNotEmpty())
+    const auto r   = getLocalBounds().toFloat().reduced(1.5f);
+    const bool crt = CrtState::get().active();
+    if (crt)
+    {
+        // VGA filter on: render the SAME green phosphor screen as the scope so
+        // the two read as one display. The scanline+vignette overlay is blitted
+        // last (below), over the text — same as ScopeComponent.
+        bombo::crt::paintScreen(g, r, 4.0f);
+        g.setColour(juce::Colour(bombo::crt::kPhosphor).withAlpha(0.35f));
+        g.drawRoundedRectangle(r.reduced(0.5f), 4.0f, 1.0f);
+    }
+    else if (col::chassisArt().isNotEmpty())
     {
         // FALLOUT: recessed readout in the bezel's centre gap — dark fill with
         // a toned-down amber keyline (the bright rust ring read as "on top").
@@ -138,13 +164,18 @@ void PresetBarComponent::paint(juce::Graphics& g)
     const auto botRow  = textArea;  // remainder
 
     g.setFont(bombo::fonts::value(16.0f));
-    g.setColour(col::accentAmber());
+    g.setColour(crt ? juce::Colour(bombo::crt::kPhosphor) : col::accentAmber());
 
     if (! nameEditor_.isVisible())
         g.drawText(nameText_, topRow, juce::Justification::centred, false);
 
     if (countText_.isNotEmpty())
         g.drawText(countText_, botRow, juce::Justification::centred, false);
+
+    // Scanline + vignette overlay last, over the text — so the readout reads as
+    // the same green phosphor screen as the scope.
+    if (crt)
+        bombo::crt::blitOverlay(g, crtScreen_, crtScreenW_, crtScreenH_, r, 4.0f);
 }
 
 void PresetBarComponent::mouseDown(const juce::MouseEvent& e)

@@ -644,7 +644,7 @@ FaceplatePanel::makeBoundKnob(const juce::String& paramId,
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
-    c->label->setFont(fonts::label(9.5f));
+    c->label->setFont(fonts::label(11.0f).boldened());
     c->label->setColour(juce::Label::textColourId, labelColour);
     c->sAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts_, paramId, *c->slider);
@@ -666,13 +666,16 @@ FaceplatePanel::makePlaceholderKnob(const juce::String& displayName,
     c->slider->setRange(0.0, 1.0, 0.0);
     c->slider->setValue(0.5, juce::dontSendNotification);
     c->slider->setNumDecimalPlacesToDisplay(2);
+    // Macros are display-only placeholders (not APVTS-bound yet) — suppress the
+    // meaningless value readout so they don't render an elided "0..." in the cap.
+    c->slider->getProperties().set("noReadout", true);
     c->slider->setWantsKeyboardFocus(false);
     c->slider->setMouseClickGrabsKeyboardFocus(false);
     c->slider->setPaintingIsUnclipped(true);  // soft mounting-recess halo casts past the knob's square bounds (else hard-clip reads as the label "chopping" the shadow)
     c->label = std::make_unique<juce::Label>();
     c->label->setText(displayName, juce::dontSendNotification);
     c->label->setJustificationType(juce::Justification::centred);
-    c->label->setFont(fonts::label(9.5f));
+    c->label->setFont(fonts::label(11.0f).boldened());
     c->label->setColour(juce::Label::textColourId, labelColour);
     return c;
 }
