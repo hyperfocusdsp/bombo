@@ -135,7 +135,7 @@ void PersistentState::setLastBounceDir(const juce::File& dir)
 
 bool PersistentState::getGameMusicEnabled() const
 {
-    return props_->getBoolValue("game.musicEnabled", false);   // default OFF
+    return props_->getBoolValue("game.musicEnabled", true);   // default ON (gated to active gameplay)
 }
 
 void PersistentState::setGameMusicEnabled(bool on)

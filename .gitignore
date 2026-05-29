@@ -19,3 +19,6 @@ Resources/untitled.drawdio.json
 .superpowers/
 HANDOFF.md
 Resources/Layout.json.thinkpad-bak
+
+# Chiptune generator audition output (disposable; the baked loop lives in Resources/Audio/)
+tools/chiptune_preview/

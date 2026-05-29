@@ -48,6 +48,9 @@ namespace bombo::game
         void loadMusic(std::shared_ptr<juce::AudioBuffer<float>> loop) noexcept { music_ = std::move(loop); }
         void setMusicEnabled(bool on) noexcept { musicEnabled_.store(on, std::memory_order_relaxed); }
         bool musicEnabled() const noexcept { return musicEnabled_.load(std::memory_order_relaxed); }
+        // Gate the music mix to active gameplay (Playing/Boss). Set from the
+        // message thread on state changes; keeps music silent during pause/menus.
+        void setGameplayActive(bool on) noexcept { gameplayActive_.store(on, std::memory_order_relaxed); }
 
         // ── Audio thread: mix all active tone voices additively into buffer.
         // Mono-summed onto every channel. RT-safe.
@@ -120,6 +123,7 @@ namespace bombo::game
         // audio-thread-only. Mixed at kMusicGain under the SFX so it sits behind.
         std::shared_ptr<juce::AudioBuffer<float>> music_;
         std::atomic<bool> musicEnabled_{ false };
+        std::atomic<bool> gameplayActive_{ false };  // music mixes only while true
         int   musicPos_ = 0;
         static constexpr float kMusicGain = 0.16f;
 

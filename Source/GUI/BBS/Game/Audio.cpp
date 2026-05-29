@@ -268,7 +268,8 @@ namespace bombo::game
         // Background-music loop (optional). Mixed under the SFX, mono onto every
         // channel, read cyclically. No alloc / no locks — music_ is a stable
         // shared_ptr set before the game went active (set-before-active contract).
-        if (musicEnabled_.load(std::memory_order_relaxed) && music_ != nullptr)
+        if (musicEnabled_.load(std::memory_order_relaxed)
+            && gameplayActive_.load(std::memory_order_relaxed) && music_ != nullptr)
         {
             const auto* buf = music_.get();
             const int   len = buf->getNumSamples();

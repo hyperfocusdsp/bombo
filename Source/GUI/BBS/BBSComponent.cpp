@@ -5,24 +5,17 @@
 #include "../../PluginProcessor.h"
 #include <juce_core/juce_core.h>
 #include <juce_audio_formats/juce_audio_formats.h>
+#include <BinaryData.h>
 #include <algorithm>
 
 namespace
 {
-    // Decode an optional user-supplied 8-bit music loop into a mono buffer at the
-    // host sample rate. The file is NOT bundled (it's GPL-incompatible to embed
-    // most generated audio) — the user drops a WAV at <appdata>/Bombo/music/
-    // track.wav and it loops while the game is open. Returns null if absent.
-    std::shared_ptr<juce::AudioBuffer<float>> loadGameMusicLoop(double targetSr)
+    // Decode an AudioFormatReader into a mono buffer at the host sample rate.
+    std::shared_ptr<juce::AudioBuffer<float>>
+    decodeMusicReader(std::unique_ptr<juce::AudioFormatReader> r, double targetSr)
     {
-        const auto f = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                           .getChildFile("Bombo").getChildFile("music").getChildFile("track.wav");
-        if (! f.existsAsFile() || targetSr <= 0.0) return {};
-
-        juce::AudioFormatManager fm;
-        fm.registerBasicFormats();
-        std::unique_ptr<juce::AudioFormatReader> r(fm.createReaderFor(f));
-        if (r == nullptr || r->lengthInSamples <= 0 || r->numChannels == 0) return {};
+        if (r == nullptr || r->lengthInSamples <= 0 || r->numChannels == 0 || targetSr <= 0.0)
+            return {};
 
         // Cap at 2 minutes to bound memory; longer files just loop the first 2 min.
         const int srcLen = (int) std::min<juce::int64>(
@@ -45,6 +38,37 @@ namespace
         juce::LagrangeInterpolator interp;
         interp.process(ratio, mono.getReadPointer(0), out->getWritePointer(0), outLen);
         return out;
+    }
+
+    // The in-game chiptune loop, decoded to a mono buffer at the host sample
+    // rate. Default = the baked "propulsion" loop (BinaryData); a user WAV
+    // dropped at <appdata>/Bombo/music/track.wav overrides it. Null only if
+    // neither is available.
+    std::shared_ptr<juce::AudioBuffer<float>> loadGameMusicLoop(double targetSr)
+    {
+        if (targetSr <= 0.0) return {};
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+
+        // User override first.
+        const auto f = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                           .getChildFile("Bombo").getChildFile("music").getChildFile("track.wav");
+        if (f.existsAsFile())
+            if (auto buf = decodeMusicReader(
+                    std::unique_ptr<juce::AudioFormatReader>(fm.createReaderFor(f)), targetSr))
+                return buf;
+
+        // Baked default loop (game_propulsion.wav).
+        if (BinaryData::game_propulsion_wavSize > 0)
+        {
+            auto stream = std::make_unique<juce::MemoryInputStream>(
+                BinaryData::game_propulsion_wav,
+                (size_t) BinaryData::game_propulsion_wavSize, false);
+            return decodeMusicReader(
+                std::unique_ptr<juce::AudioFormatReader>(fm.createReaderFor(std::move(stream))),
+                targetSr);
+        }
+        return {};
     }
 }
 
@@ -97,6 +121,16 @@ BBSComponent::BBSComponent()
 
 BBSComponent::~BBSComponent()
 {
+    // If the editor is torn down mid-game (host closes the window without a
+    // dismiss), make sure the game audio doesn't keep bleeding into the host:
+    // stop the music + its gameplay gate and un-suppress the kick loop.
+    if (apvts_ != nullptr)
+    {
+        auto& proc = static_cast<BomboProcessor&>(apvts_->processor);
+        proc.gameAudioBus().setGameplayActive(false);
+        proc.gameAudioBus().setMusicEnabled(false);
+        proc.setGameActive(false);
+    }
     setLookAndFeel(nullptr);
 }
 
@@ -211,6 +245,12 @@ void BBSComponent::timerCallback()
         // Requires keyboard focus, which BBSComponent holds while shown
         // (grabKeyboardFocus() in show()/launchGame path + EDITOR_WANTS_KEYBOARD_FOCUS).
         const auto gs = gameV2_.state();
+        // Gate the game-music loop to active gameplay only — silent during
+        // pause/menus/shop so it never bleeds into the BBS or sound design.
+        if (apvts_ != nullptr)
+            static_cast<BomboProcessor&>(apvts_->processor).gameAudioBus()
+                .setGameplayActive(gs == bombo::game::GameState::Playing
+                                   || gs == bombo::game::GameState::Boss);
         if (gs == bombo::game::GameState::Playing || gs == bombo::game::GameState::Boss)
         {
             bombo::game::Game::InputState in;
@@ -1015,7 +1055,7 @@ void BBSComponent::launchGame()
         gameV2_.onBossTelegraph = [bus]                          { bus->triggerBossTelegraph(); };
 
         // Background music: load the (optional) user loop, seed the on/off state
-        // from the persisted setting (default OFF), and wire the menu toggle to
+        // from the persisted setting (default ON), and wire the menu toggle to
         // both the bus and persistence. music_ is set before the game goes active.
         auto* ps = &proc.persistentState();
         const bool musicOn = ps->getGameMusicEnabled();
@@ -1067,7 +1107,11 @@ void BBSComponent::exitGame()
     // Re-enable the loop scheduler (launchGame paused it). Safe even if apvts_
     // is the same path used for the preset restore below.
     if (apvts_ != nullptr)
-        static_cast<BomboProcessor&>(apvts_->processor).setGameActive(false);
+    {
+        auto& proc = static_cast<BomboProcessor&>(apvts_->processor);
+        proc.setGameActive(false);
+        proc.gameAudioBus().setGameplayActive(false);  // stop game music on exit
+    }
 
     // Restore the preset the user had before the game launched. No-op if
     // nothing was stashed (the BBS was opened with no preset selected).
