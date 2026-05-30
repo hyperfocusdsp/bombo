@@ -301,6 +301,23 @@ BomboEditor::BomboEditor(BomboProcessor& p)
         {
             if (safe == nullptr) return;
 
+            // Standalone preset-bar default. This runs AFTER
+            // StandalonePluginHolder's setStateInformation() restore (which
+            // markCustom()s the bank → the bar reads "N presets"); the ctor body
+            // runs too early and gets clobbered by that restore. If no preset is
+            // current here, select preset 0 so the bar shows its name + "1 / N"
+            // from launch instead of "N presets" until the user steps L/R. This
+            // whole lambda is already gated on isStandaloneApp(), so DAW projects
+            // keep their restored custom state untouched.
+            {
+                auto& pb = safe->processorRef.presetBank();
+                if (pb.currentIndex() < 0 && pb.size() > 0)
+                {
+                    pb.applyByIndex(0, safe->processorRef.apvts);
+                    safe->faceplate.refreshPresetBar();
+                }
+            }
+
             int w = -1;
            #if JucePlugin_Build_Standalone
             // First preference: a width remembered from a previous launch.
