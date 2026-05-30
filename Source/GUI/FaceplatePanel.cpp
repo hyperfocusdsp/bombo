@@ -866,7 +866,18 @@ void FaceplatePanel::paintSection(juce::Graphics& g, const Section& s,
 {
     if (s.rectBounds.isEmpty()) return;
 
-    const auto rb = s.rectBounds.toFloat();
+    // FALLOUT columns abut (kColGap == 0) and the whole faceplate is painted
+    // through a FRACTIONAL scale transform, so two adjacent column edges land on
+    // a sub-pixel device boundary and anti-alias into a thin seam — the lighter
+    // body olive then shows through it as an intermittent vertical stripe (the
+    // bug that varies with window size). Fix: extend each column a hair to the
+    // RIGHT so it underlaps its neighbour. Columns paint left-to-right, so the
+    // next column draws over the overlap and leaves a clean edge with no gap;
+    // the last column's overrun is clipped by the chassis silhouette mask. The
+    // ~1.5px image stretch over a 54px column is imperceptible on the rust art.
+    auto rb = s.rectBounds.toFloat();
+    if (col::chassisArt().isNotEmpty())
+        rb.setWidth(rb.getWidth() + 1.5f);
     const bool muted = isMuted(s);
 
     // VAULT direction round 3 (2026-05-17): the FX columns get FULL

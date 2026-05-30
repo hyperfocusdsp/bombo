@@ -46,10 +46,11 @@ PersistentState::~PersistentState()
 
 juce::String PersistentState::getActiveTheme() const
 {
-    // VAULT is the designed-for-R4B-CLASSIC default (Phase 2e, 2026-05-17).
-    // Existing installs that previously persisted "bandw" stay on bandw —
-    // this default only fires when no theme.active key exists yet.
-    return props_->getValue("theme.active", "vault");
+    // FALLOUT is the v1.0 hero theme — first-run installs open on it. This
+    // default only fires when no theme.active key exists yet; once the user
+    // picks any theme from the tile strip it's persisted and restored verbatim
+    // on every later launch (setActiveTheme below), so their choice always wins.
+    return props_->getValue("theme.active", "fallout");
 }
 
 void PersistentState::setActiveTheme(const juce::String& name)
