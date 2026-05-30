@@ -1,5 +1,7 @@
 #include "LayoutManager.h"
 
+#include <BinaryData.h>
+
 namespace bombo
 {
 
@@ -37,16 +39,32 @@ void LayoutManager::reload()
     root = juce::var();
 
     auto file = resolveFile();
-    if (! file.existsAsFile())
-        return;
+    if (file.existsAsFile())
+    {
+        auto parsed = juce::JSON::parse (file);
+        if (parsed.isObject())
+        {
+            root = parsed;
+            sourcePath = file.getFullPathName();
+            loaded = true;
+            return;
+        }
+    }
 
-    auto parsed = juce::JSON::parse (file);
-    if (! parsed.isObject())
-        return;
-
-    root = parsed;
-    sourcePath = file.getFullPathName();
-    loaded = true;
+    // Shipped/signed plugins have no source-tree Resources/Layout.json on disk,
+    // so the on-disk path above finds nothing and the hand-tuned pill/section
+    // positions would be lost. Fall back to the copy baked into BinaryData at
+    // build time — that is what carries the final layout into the installed
+    // build. The disk file still wins above, so F2 layout-editing keeps working
+    // in a dev tree.
+    if (auto parsed = juce::JSON::parse (juce::String::fromUTF8 (
+            BinaryData::Layout_json, BinaryData::Layout_jsonSize));
+        parsed.isObject())
+    {
+        root = parsed;
+        sourcePath = {};
+        loaded = true;
+    }
 }
 
 static juce::StringArray splitId (const juce::String& id)

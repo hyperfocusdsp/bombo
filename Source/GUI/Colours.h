@@ -107,20 +107,34 @@ inline void paintBackground(juce::Graphics& g, juce::Rectangle<float> r,
                             bool on, bool hover)
 {
     // FALLOUT: the pills sit in the display bezel's dark cutout SLOTS, so they
-    // read as recessed — a dark translucent fill, NO bright/red border. ON adds
-    // a subtle amber keyline instead of the rust ring that looked "on top".
+    // read as recessed. The fill is OPAQUE — these pills must never be
+    // translucent: the editor background outside the bomb body is non-opaque, so
+    // a see-through pill lets the host/desktop show through under the plugin
+    // (the KBTRK/LIM/TAIL/LOOP bleed). Fill with GRAPHITE, the near-black recess
+    // colour: NOTE `ink` is repurposed as a LIGHT foreground (#E8D4B4) in this
+    // palette, so it must not be used as a fill — the light bone/amber pill text
+    // would vanish on it. ON lifts the slot slightly + adds an amber keyline;
+    // OFF sits darker. A faint bevel sells the recess, lit from the UPPER-LEFT.
     if (col::chassisArt() == "fallout")
     {
-        g.setColour(col::ink().withAlpha(on ? 0.30f : 0.55f));
+        g.setColour((on ? col::graphite().brighter(0.12f) : col::graphite()).withAlpha(1.0f));
         g.fillRoundedRectangle(r, corner);
+
+        // Directional bevel (light upper-left): a soft black shadow nudged
+        // down/right, a faint bone highlight nudged up/left.
+        g.setColour(juce::Colours::black.withAlpha(0.25f));
+        g.drawRoundedRectangle(r.reduced(0.5f).translated(0.6f, 0.6f), corner, 1.0f);
+        g.setColour(col::bone().withAlpha(0.16f));
+        g.drawRoundedRectangle(r.reduced(0.5f).translated(-0.6f, -0.6f), corner, 1.0f);
+
         if (hover)
         {
-            g.setColour(col::bone().withAlpha(0.08f));
+            g.setColour(col::bone().withAlpha(0.10f));
             g.fillRoundedRectangle(r, corner);
         }
         if (on)
         {
-            g.setColour(col::accentAmber().withAlpha(0.45f));
+            g.setColour(col::accentAmber().withAlpha(0.55f));
             g.drawRoundedRectangle(r.reduced(0.5f), corner, 1.0f);
         }
         return;

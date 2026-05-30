@@ -751,6 +751,17 @@ void FaceplatePanel::paint(juce::Graphics& g)
     // wedges at the top-left / bottom-right where the egg curve cut through the
     // notch; square corners + the clip remove the notch entirely.
     const bool squareRackCorners = col::chassisArt().isNotEmpty();
+    // FALLOUT: the columns abut edge-to-edge. At fractional (scaled) pixel
+    // positions the anti-aliased seams between adjacent column fills can briefly
+    // reveal the LIGHTER body olive behind them as thin vertical stripes — the
+    // intermittent glitch that depends on the window's exact scale. Paint a dark
+    // backing across the rack footprint first, so any sub-pixel seam shows
+    // near-black (reads as a panel gap) instead of light olive.
+    if (squareRackCorners)
+    {
+        g.setColour(juce::Colour(0xFF0E0A06u));
+        g.fillRect(getRackBounds());
+    }
     for (int col = 0; col < static_cast<int>(visualOrder_.size()); ++col)
     {
         const bool roundLeft  = (col == 0)       && ! squareRackCorners;
@@ -758,6 +769,38 @@ void FaceplatePanel::paint(juce::Graphics& g)
         const int  sIdx       = visualOrder_[(std::size_t) col];
         if (sIdx < 0 || sIdx >= static_cast<int>(sections_.size())) continue;
         paintSection(g, sections_[(std::size_t) sIdx], roundLeft, roundRight);
+    }
+
+    // ── FALLOUT brand wordmark in the olive band below the rack ──────────
+    // Still inside the chassis-mask clip (save), so it can't spill outside the
+    // bomb silhouette.
+    if (col::chassisArt() == "fallout")
+    {
+        const auto logo = juce::ImageCache::getFromMemory(BinaryData::bombo_logo_png,
+                                                          BinaryData::bombo_logo_pngSize);
+        if (logo.isValid())
+        {
+            // Default: centred in the olive gap between the rack columns' bottom
+            // and the red nose, ~46% of the chassis width, preserving the art's
+            // 2.40:1 aspect. Overridable via Layout.json / F2 overlay ("brandLogo").
+            const float bandT = static_cast<float>(getRackBounds().getBottom());
+            const float bandB = redRegionTopY_;
+            const float cxF   = static_cast<float>(chassisRectArea_.getCentreX());
+            float wF = static_cast<float>(chassisRectArea_.getWidth()) * 0.46f;
+            float hF = wF / 2.401f;
+            const float bandH = juce::jmax(0.0f, bandB - bandT);
+            if (bandH > 4.0f && hF > bandH * 0.9f) { hF = bandH * 0.9f; wF = hF * 2.401f; }
+            const float cyF = (bandT + bandB) * 0.5f;
+            const juce::Rectangle<int> logoDefault(
+                static_cast<int>(cxF - wF * 0.5f), static_cast<int>(cyF - hF * 0.5f),
+                static_cast<int>(wF), static_cast<int>(hF));
+            // The logo art is much larger than its slot (big downscale), so the
+            // default low-quality resampling aliases the gold edges badly. Force
+            // high-quality resampling for this draw only.
+            g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+            g.drawImage(logo, layout_.boundsOr("brandLogo", logoDefault).toFloat(),
+                        juce::RectanglePlacement::centred);
+        }
     }
 }
 

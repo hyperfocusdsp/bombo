@@ -76,6 +76,16 @@ public:
     // currently-selected preset has gone away).
     void refreshUserPresets();
 
+    // Import a downloaded preset bank file — a single preset object OR a JSON
+    // array of them — into userPresetsDir() as individual user presets, then
+    // rebuild. Returns the number imported. On-disk name collisions are
+    // suffixed (_2, _3, ...) rather than overwritten.
+    int  importBankFile(const juce::File& file);
+
+    // Export the current bank to one JSON array file. includeFactory=false
+    // writes only user presets (the shareable set); true also includes factory.
+    bool exportBankToFile(const juce::File& file, bool includeFactory);
+
     // Apply preset[idx] to apvts. Sets current_. No-op if idx out of range.
     void applyByIndex(int idx, juce::AudioProcessorValueTreeState& apvts);
     void next(juce::AudioProcessorValueTreeState& apvts);

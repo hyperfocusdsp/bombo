@@ -25,13 +25,12 @@ const std::set<std::string>& excludedIds()
     return ids;
 }
 
-bool parseBlob(const char* data, int size, PresetBank::Preset& out)
+// Extract a Preset from an already-parsed JSON object. Shared by the
+// BinaryData/file loaders (via parseBlob) and the bank importer (per array
+// element), so every entry point yields the identical Preset shape.
+bool parseVar(const juce::var& parsed, PresetBank::Preset& out)
 {
-    if (data == nullptr || size <= 0) return false;
-    juce::var parsed;
-    auto pr = juce::JSON::parse(juce::String(juce::CharPointer_UTF8(data),
-                                             (size_t) size), parsed);
-    if (pr.failed() || ! parsed.isObject()) return false;
+    if (! parsed.isObject()) return false;
 
     out.name        = parsed.getProperty("name", "").toString().toStdString();
     out.displayName = parsed.getProperty("displayName", "").toString().toStdString();
@@ -73,6 +72,16 @@ bool parseBlob(const char* data, int size, PresetBank::Preset& out)
     return true;
 }
 
+bool parseBlob(const char* data, int size, PresetBank::Preset& out)
+{
+    if (data == nullptr || size <= 0) return false;
+    juce::var parsed;
+    if (juce::JSON::parse(juce::String(juce::CharPointer_UTF8(data),
+                                       (size_t) size), parsed).failed())
+        return false;
+    return parseVar(parsed, out);
+}
+
 // Reset every non-excluded APVTS param to its default. Shared by
 // applyByIndex (so a sparse preset can't inherit the previous preset's
 // values) and applyDefaults (the Init path). Excluded ids — master out,
@@ -111,11 +120,12 @@ snapshotApvts(juce::AudioProcessorValueTreeState& apvts)
     return out;
 }
 
-bool writePresetJson(const juce::File& file,
-                     const juce::String& name,
-                     const juce::String& displayName,
-                     const std::vector<std::pair<std::string, float>>& params,
-                     const std::optional<FxOrder>& fxOrder)
+// Serialize one preset to a JSON object. Shared by the single-file writer and
+// the bank exporter so both emit the identical shape.
+juce::var presetToVar(const juce::String& name,
+                      const juce::String& displayName,
+                      const std::vector<std::pair<std::string, float>>& params,
+                      const std::optional<FxOrder>& fxOrder)
 {
     juce::DynamicObject::Ptr root = new juce::DynamicObject();
     root->setProperty("name", name);
@@ -133,9 +143,18 @@ bool writePresetJson(const juce::File& file,
             arr.add(juce::var(juce::String(fxIdToString(f))));
         root->setProperty("fxOrder", juce::var(arr));
     }
+    return juce::var(root.get());
+}
 
+bool writePresetJson(const juce::File& file,
+                     const juce::String& name,
+                     const juce::String& displayName,
+                     const std::vector<std::pair<std::string, float>>& params,
+                     const std::optional<FxOrder>& fxOrder)
+{
     file.getParentDirectory().createDirectory();
-    return file.replaceWithText(juce::JSON::toString(juce::var(root.get()), true));
+    return file.replaceWithText(
+        juce::JSON::toString(presetToVar(name, displayName, params, fxOrder), true));
 }
 
 } // anonymous namespace
@@ -496,6 +515,65 @@ int PresetBank::findByDisplayName(const juce::String& name) const
         if (juce::String(presets_[(size_t) i].displayName).equalsIgnoreCase(name))
             return i;
     return -1;
+}
+
+int PresetBank::importBankFile(const juce::File& file)
+{
+    if (! file.existsAsFile()) return 0;
+
+    juce::var parsed;
+    if (juce::JSON::parse(file.loadFileAsString(), parsed).failed())
+        return 0;
+
+    const auto dir = userPresetsDir();
+    if (! dir.isDirectory() && dir.createDirectory().failed()) return 0;
+
+    auto importOne = [&](const juce::var& v) -> bool
+    {
+        Preset p;
+        p.source = Source::User;
+        if (! parseVar(v, p)) return false;
+
+        auto stem = sanitizeFilename(juce::String(p.displayName));
+        if (stem.isEmpty()) return false;
+
+        // Never clobber an existing preset — suffix _2, _3, ... on collision.
+        juce::File out = dir.getChildFile(stem + ".json");
+        for (int n = 2; out.existsAsFile(); ++n)
+            out = dir.getChildFile(stem + "_" + juce::String(n) + ".json");
+
+        return writePresetJson(out, juce::String(p.name),
+                               juce::String(p.displayName), p.params, p.fxOrder);
+    };
+
+    int imported = 0;
+    if (auto* arr = parsed.getArray())
+    {
+        for (const auto& v : *arr)
+            if (importOne(v)) ++imported;
+    }
+    else if (importOne(parsed))
+    {
+        ++imported;
+    }
+
+    if (imported > 0) rebuildAll();
+    return imported;
+}
+
+bool PresetBank::exportBankToFile(const juce::File& file, bool includeFactory)
+{
+    juce::Array<juce::var> arr;
+    for (const auto& p : presets_)
+    {
+        if (! includeFactory && p.source != Source::User) continue;
+        arr.add(presetToVar(juce::String(p.name), juce::String(p.displayName),
+                            p.params, p.fxOrder));
+    }
+    if (arr.isEmpty()) return false;
+
+    file.getParentDirectory().createDirectory();
+    return file.replaceWithText(juce::JSON::toString(juce::var(arr), true));
 }
 
 juce::File PresetBank::userPresetsDir()

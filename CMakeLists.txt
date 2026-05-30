@@ -63,6 +63,7 @@ clap_juce_extensions_plugin(TARGET Bombo
 
 juce_add_binary_data(BomboResources
     SOURCES
+        Resources/Layout.json
         Resources/Fonts/AllertaStencil-Regular.ttf
         Resources/Themes/bandw.json
         Resources/Themes/nightrun.json
@@ -99,6 +100,7 @@ juce_add_binary_data(BomboResources
         Resources/Textures/fallout_rack_7.png
         Resources/Textures/fallout_knob.png
         Resources/Textures/fallout_knob_out.png
+        Resources/Textures/bombo_logo.png
         Resources/Audio/game_propulsion.wav)
 
 target_sources(Bombo

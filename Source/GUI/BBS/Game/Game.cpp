@@ -1121,8 +1121,9 @@ namespace bombo::game
     //
     // ESC NOTE: BBSComponent no longer intercepts escapeKey under BOMBO_GAME_V2;
     // it forwards ESC to handleKey so the game owns ESC semantics. In Playing/
-    // Boss/Shop ESC opens QuitConfirm; in QuitConfirm ESC/Y/Enter confirmQuit()
-    // sets wantsExit_, which BBSComponent::timerCallback polls -> exitGame().
+    // Boss/Shop ESC opens QuitConfirm; in QuitConfirm only Y/Enter confirmQuit()
+    // sets wantsExit_ (polled by BBSComponent::timerCallback -> exitGame());
+    // ESC/N cancelQuit() backs out to the prior (paused) state.
     // (DONE.)
     // ────────────────────────────────────────────────────────────────────────
     bool Game::handleKey(int key, juce::ModifierKeys /*mods*/)
@@ -1208,8 +1209,10 @@ namespace bombo::game
 
             case GameState::QuitConfirm:
             {
-                if (ch == 'Y' || isEnter || isEsc) { confirmQuit(); return true; }
-                if (ch == 'N')                     { cancelQuit();  return true; }
+                // Y / Enter confirms the quit; N / ESC only backs out of this
+                // menu (ESC must never exit the game outright from here).
+                if (ch == 'Y' || isEnter) { confirmQuit(); return true; }
+                if (ch == 'N' || isEsc)   { cancelQuit();  return true; }
                 return false;
             }
 

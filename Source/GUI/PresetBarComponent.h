@@ -55,6 +55,8 @@ private:
     enum class EditMode { None, SaveAs, Rename };
 
     void showMenu();
+    void importBank();
+    void exportBank();
     void beginEdit(EditMode mode);
     void commitEdit();
     void cancelEdit();
@@ -71,6 +73,10 @@ private:
     juce::String     nameText_;   // top row text (preset display name or "-- N presets")
     juce::String     countText_;  // bottom row text ("3 / 30") — empty when no preset is current
     juce::TextEditor nameEditor_;
+
+    // Held across the async bank Import/Export dialog (the FileChooser must
+    // outlive launchAsync until its callback fires).
+    std::unique_ptr<juce::FileChooser> fileChooser_;
 
     EditMode edit_ = EditMode::None;
 

@@ -158,23 +158,47 @@ public:
         const auto valueColour     = capIsDark ? col::bone() : col::ink();
 
         // 1. Mounting recess — SOFT drop shadow. A radial gradient that is dark
-        //    at the knob rim and fades to transparent a few px beyond, offset
-        //    slightly downward so it reads as a soft cast shadow instead of the
-        //    old hard black ring. The knob body (rubber, or the logo rings) is
-        //    drawn on top, covering the dark centre.
+        //    at the knob rim and fades to transparent a few px beyond. The knob
+        //    body (rubber, or the logo rings) is drawn on top, covering the dark
+        //    centre.
         {
-            const float shOuter = radius + 6.0f;
-            const float shCy    = cy + 2.0f;   // cast downward
-            // Lighter overall (~0.40 peak vs old 0.72) and held dark only out to
-            // the knob rim, then a quick fade over the last few px — reads as a
-            // soft contact shadow, not a heavy black ring.
+            // FALLOUT: halve the halo and cast it toward the LOWER-RIGHT (light
+            // comes from the upper-left). Offsetting the halo centre down/right
+            // makes the visible crescent thin on the upper-left and heavier on
+            // the lower-right, so the shadow reads as directional instead of a
+            // flat uniform ring. The flat OUT knob (logoKnobProp) gets an even
+            // smaller, shallower halo. All other themes keep the original
+            // symmetric soft halo (shExtra 6 / centre cy+2 / peak 0.40).
+            float shExtra = 6.0f;   // halo reach beyond the rim
+            float shdx    = 0.0f;   // horizontal cast
+            float shdy    = 2.0f;   // vertical cast (downward)
+            float peak    = 0.40f;  // shadow opacity held out to the rim
+            float holdFr  = -1.0f;  // <0 → default plateau (radius/shOuter)
+            if (falloutTheme)
+            {
+                // Softer than the first pass: lower opacity + a longer, gentler
+                // falloff. The dark is no longer held hard at the rim (holdFr
+                // starts the fade ~55% out), so it reads as a soft contact
+                // shadow rather than a hard dark keyline. Still small and cast
+                // toward the lower-right (light = upper-left). OUT is flattest.
+                shExtra = logoKnobProp ? 2.5f : 4.5f;
+                shdx    = 1.5f;                            // cast right
+                shdy    = 2.0f;                            // cast down
+                peak    = logoKnobProp ? 0.15f : 0.24f;   // much lower than 0.40
+                holdFr  = 0.55f;                           // wide soft falloff
+            }
+            const float shOuter = radius + shExtra;
+            const float shCx    = cx + shdx;
+            const float shCy    = cy + shdy;
+            const double plateau = (holdFr > 0.0f)
+                ? static_cast<double>(holdFr)
+                : juce::jlimit(0.05, 0.92, static_cast<double>(radius / shOuter));
             juce::ColourGradient halo(
-                juce::Colour(0xFF000000).withAlpha(0.40f), cx, shCy,
-                juce::Colours::transparentBlack,           cx, shCy - shOuter, true);
-            halo.addColour(juce::jlimit(0.05, 0.92, static_cast<double>(radius / shOuter)),
-                           juce::Colour(0xFF000000).withAlpha(0.40f));
+                juce::Colour(0xFF000000).withAlpha(peak), shCx, shCy,
+                juce::Colours::transparentBlack,          shCx, shCy - shOuter, true);
+            halo.addColour(plateau, juce::Colour(0xFF000000).withAlpha(peak));
             g.setGradientFill(halo);
-            g.fillEllipse(cx - shOuter, shCy - shOuter, shOuter * 2.0f, shOuter * 2.0f);
+            g.fillEllipse(shCx - shOuter, shCy - shOuter, shOuter * 2.0f, shOuter * 2.0f);
         }
 
         // Cap geometry — needed by the indicator + readout regardless of face style.
@@ -208,6 +232,18 @@ public:
             const float isc   = bodyD / static_cast<float>(juce::jmax(1, knobImg.getWidth()));
             g.drawImageTransformed(knobImg,
                 juce::AffineTransform::scale(isc).translated(cx - radius, cy - radius));
+
+            // OUT knob is flatter, so the photo body lacks depth — engrave the 2
+            // dark concentric rings the bullseye face should have. Drawn on top
+            // of the photo, below the pointer notch (capBar, added later).
+            if (falloutTheme && logoKnobProp)
+            {
+                g.setColour(juce::Colour(0xFF120B07u).withAlpha(0.85f));
+                g.drawEllipse(cx - radius * 0.78f, cy - radius * 0.78f,
+                              radius * 0.78f * 2.0f, radius * 0.78f * 2.0f, 1.6f);
+                g.drawEllipse(cx - radius * 0.60f, cy - radius * 0.60f,
+                              radius * 0.60f * 2.0f, radius * 0.60f * 2.0f, 1.6f);
+            }
         }
         else if (logoKnob)
         {

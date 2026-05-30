@@ -238,6 +238,10 @@ void PresetBarComponent::showMenu()
     m.addSeparator();
     m.addItem(5, "Init (reset to defaults)");
     m.addSeparator();
+    // Bank distribution: import a downloaded .json bank / export the user set.
+    m.addItem(6, "Import Bank...");
+    m.addItem(7, "Export Bank...", bank_.size() > 0);
+    m.addSeparator();
 
     // Flat preset list — factory first, then user, with a separator at
     // the boundary. Item IDs 100+ map to preset indices.
@@ -293,6 +297,12 @@ void PresetBarComponent::showMenu()
                     bank_.applyDefaults(apvts_);  // instance method now (clears current_ + fires onPresetApplied)
                     refresh();
                     break;
+                case 6:
+                    importBank();
+                    break;
+                case 7:
+                    exportBank();
+                    break;
                 default:
                     if (result >= 100)
                     {
@@ -301,6 +311,41 @@ void PresetBarComponent::showMenu()
                     }
                     break;
             }
+        });
+}
+
+void PresetBarComponent::importBank()
+{
+    fileChooser_ = std::make_unique<juce::FileChooser>(
+        "Import preset bank", juce::File(), "*.json");
+    fileChooser_->launchAsync(
+        juce::FileBrowserComponent::openMode
+            | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc)
+        {
+            const auto f = fc.getResult();
+            if (f == juce::File()) return;
+            bank_.importBankFile(f);
+            refresh();
+        });
+}
+
+void PresetBarComponent::exportBank()
+{
+    auto initial = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                       .getChildFile("bombo_bank.json");
+    fileChooser_ = std::make_unique<juce::FileChooser>(
+        "Export preset bank", initial, "*.json");
+    fileChooser_->launchAsync(
+        juce::FileBrowserComponent::saveMode
+            | juce::FileBrowserComponent::canSelectFiles
+            | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this](const juce::FileChooser& fc)
+        {
+            auto f = fc.getResult();
+            if (f == juce::File()) return;
+            if (f.getFileExtension().isEmpty()) f = f.withFileExtension("json");
+            bank_.exportBankToFile(f, /*includeFactory=*/false);
         });
 }
 
