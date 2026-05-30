@@ -6,6 +6,33 @@ and the project broadly follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-30
+
+### Added
+- **Preset-bank import/export** — "Import Bank..." / "Export Bank..." in the
+  preset menu. Import accepts a single preset object or a JSON array of presets
+  (written into the user-presets dir); export writes the user set as one JSON
+  array. Lets downloadable banks be distributed after release.
+- **Brand wordmark** rendered in the FALLOUT olive body (position/size tunable
+  via the `brandLogo` key in `Resources/Layout.json` / the F2 layout overlay).
+- `Resources/Layout.json` now ships in `BinaryData`, so hand-tuned pill/section
+  positions survive in a signed/installed build (the on-disk dev file still
+  wins when present).
+
+### Changed
+- **First-run theme is now FALLOUT** (was VAULT). The user's tile-strip choice
+  still persists and is restored on every later launch.
+- FALLOUT pills are opaque (no host/desktop bleed-through; far more legible),
+  knob mounting-shadows are smaller, softer, and directional (light from upper
+  left), and the OUT knob gains two engraved concentric rings.
+- Standalone preset bar shows the preset name + index from launch instead of
+  "N presets" until the user steps prev/next.
+- In the arcade quit-confirm menu, ESC now backs out; only Y/Enter exits.
+
+### Fixed
+- Intermittent light vertical seam stripes between FALLOUT rack columns at
+  certain window scales (sub-pixel anti-aliased seams between abutting columns).
+
 ### Added
 - **Duck routing** — Reverse-bass duck triangle now cycles `Off → A → B → AB`
   instead of being a binary toggle (`pid::duckRouting` replaces the legacy
