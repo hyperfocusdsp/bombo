@@ -107,14 +107,17 @@ public:
 
     void runTest() override
     {
-        beginTest("getActiveTheme returns \"vault\" when no state file exists");
+        beginTest("getActiveTheme returns \"fallout\" when no state file exists");
         auto tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
                        .getChildFile("bombo_test_state_missing_" + juce::String(juce::Time::currentTimeMillis()));
         tmp.createDirectory();
 
         bombo::PersistentState state(tmp);
-        expectEquals(state.getActiveTheme(), juce::String("vault"),
-                     "default theme is vault when file is absent");
+        // v1.0.1: first-run default is the FALLOUT hero theme (was "vault").
+        // Only fires when no theme.active key exists yet; a persisted choice
+        // always wins on later launches.
+        expectEquals(state.getActiveTheme(), juce::String("fallout"),
+                     "default theme is fallout when file is absent");
 
         tmp.deleteRecursively();
     }

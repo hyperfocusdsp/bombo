@@ -182,13 +182,15 @@ public:
             expect(! g.wantsExit());
         }
 
-        beginTest("ESC also quits");
+        beginTest("ESC cancels QuitConfirm (does not quit)");
         {
+            // v1.0.1: in QuitConfirm only Y/Enter confirm; ESC/N back out to
+            // the prior state. ESC must NOT quit the game from here.
             Game g; g.startNewRun(false);
             g.requestQuit();
             expect(send(g, KP::escapeKey));
-            expect(g.state() == GameState::Title);
-            expect(g.wantsExit());
+            expect(g.state() == GameState::Playing);
+            expect(! g.wantsExit());
         }
     }
 };
