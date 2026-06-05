@@ -94,7 +94,8 @@ BomboEditor::BomboEditor(BomboProcessor& p)
    #else
     const bool forceOpaque = false;
    #endif
-    setOpaque(forceOpaque || std::getenv("BOMBO_SOLID_BG") != nullptr);
+    setOpaque(forceOpaque || std::getenv("BOMBO_SOLID_BG") != nullptr
+                          || std::getenv("BOMBO_SCREENSHOT") != nullptr);
 
    #if JUCE_LINUX
     if (! juce::JUCEApplicationBase::isStandaloneApp())
@@ -118,6 +119,9 @@ BomboEditor::BomboEditor(BomboProcessor& p)
     // transparent gutter beneath the chassis tip rather than fighting any
     // on-chassis component for real estate.
     addAndMakeVisible(*themeStrip_);
+    // Screenshot mode: hide the tile strip for a clean header (no picker UI).
+    if (std::getenv("BOMBO_SCREENSHOT") != nullptr)
+        themeStrip_->setVisible(false);
 
     // BBS overlay — added LAST so it paints above everything (faceplate,
     // selector). Stays invisible until activation. The callbacks persist
@@ -311,11 +315,54 @@ BomboEditor::BomboEditor(BomboProcessor& p)
             // keep their restored custom state untouched.
             {
                 auto& pb = safe->processorRef.presetBank();
-                if (pb.currentIndex() < 0 && pb.size() > 0)
+                if (std::getenv("BOMBO_SCREENSHOT") != nullptr)
+                {
+                    // Marketing shots: load a preset whose kick fills the scope
+                    // with a tall, recognisable waveform. Default Crusher;
+                    // BOMBO_FORCE_PRESET=<DisplayName> overrides for iteration.
+                    const char* want = std::getenv("BOMBO_FORCE_PRESET");
+                    const juce::String name = (want != nullptr) ? juce::String(want)
+                                                                : juce::String("Crusher");
+                    int idx = -1;
+                    for (int i = 0; i < pb.size(); ++i)
+                        if (juce::String(pb.at(i).displayName).equalsIgnoreCase(name)
+                            || juce::String(pb.at(i).name).equalsIgnoreCase(name))
+                        { idx = i; break; }
+                    if (idx >= 0)
+                    {
+                        pb.applyByIndex(idx, safe->processorRef.apvts);
+                        safe->faceplate.refreshPresetBar();
+                    }
+                }
+                else if (pb.currentIndex() < 0 && pb.size() > 0)
                 {
                     pb.applyByIndex(0, safe->processorRef.apvts);
                     safe->faceplate.refreshPresetBar();
                 }
+            }
+
+            // Screenshot mode: hide the JUCE standalone title bar (it renders
+            // over the top of the plugin content with the same teal background
+            // as the scope strip, making it impossible to crop by colour).
+            // setTitleBarHeight(0) collapses it before the window settles to its
+            // display-fit size, so the full plugin surface is captured cleanly.
+            if (std::getenv("BOMBO_SCREENSHOT") != nullptr)
+                if (auto* top = safe->getTopLevelComponent())
+                    if (auto* dw = dynamic_cast<juce::DocumentWindow*>(top))
+                        dw->setTitleBarHeight(0);
+
+            // Screenshot mode: fire a one-shot kick on a slow repeating timer
+            // so the scope HOLDS a complete kick (tall attack + full decay)
+            // between fires. The fast BPM loop retriggers before the tail
+            // finishes, truncating the displayed kick. Repeating also covers the
+            // audio-device warmup race — early fires into a cold device are lost,
+            // later ones land.
+            if (std::getenv("BOMBO_SCREENSHOT") != nullptr)
+            {
+                safe->screenshotKickTimer_.fn = [p = &safe->processorRef]
+                                                { p->triggerOneShot(); };
+                safe->screenshotKickTimer_.startTimer(1800);
+                safe->processorRef.triggerOneShot();
             }
 
             int w = -1;
@@ -369,6 +416,13 @@ BomboEditor::BomboEditor(BomboProcessor& p)
             // editor is parented and the initial size has settled. JUCE
             // recreates the native peer with an ARGB visual so Hyprland
             // can composite through the transparent corner wedges.
+            //
+            // SKIP in screenshot mode: a transparent toplevel lets the
+            // compositor show whatever is behind the window (e.g. a terminal)
+            // through the bomb's corner wedges, bleeding text into the capture.
+            // Keeping it opaque means the editor's solid BOMBO_SOLID_BG fill
+            // covers the whole window — the corners read clean for cut-out.
+            if (std::getenv("BOMBO_SCREENSHOT") == nullptr)
             if (auto* top = safe->getTopLevelComponent(); top != nullptr && top != safe.getComponent())
             {
                 top->setOpaque(false);
@@ -406,7 +460,7 @@ void BomboEditor::paint(juce::Graphics& g)
     // (where the bomb silhouette tapers) capture cleanly instead of bleeding
     // through to whatever's behind the standalone window. No-op for normal
     // hosted use — plugins keep their transparent corners so DAW skins read.
-    if (std::getenv("BOMBO_SOLID_BG") != nullptr)
+    if (std::getenv("BOMBO_SOLID_BG") != nullptr || std::getenv("BOMBO_SCREENSHOT") != nullptr)
     {
         g.fillAll(juce::Colour(0xFF14161B));
     }

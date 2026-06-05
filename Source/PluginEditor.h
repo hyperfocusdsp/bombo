@@ -39,6 +39,10 @@ private:
         void timerCallback() override { if (fn) fn(); }
     };
     LambdaTimer midiBadgeTimer_;
+    // Screenshot mode only: fires a one-shot kick on a slow period so the scope
+    // holds a complete kick between fires (the BPM loop retriggers too fast and
+    // truncates the displayed waveform). Idle unless BOMBO_SCREENSHOT is set.
+    LambdaTimer screenshotKickTimer_;
 
     BomboProcessor& processorRef;
     bombo::BomboLookAndFeel lnf;
