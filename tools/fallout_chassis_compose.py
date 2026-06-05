@@ -19,12 +19,13 @@ The green-screen rect (as fractions of the header image) is printed below and
 hardcoded in FaceplatePanel as kBezScreen{X0,Y0,X1,Y1}; re-run + update if the
 bezel art changes.
 """
+import os
 import sys
 from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-PARTS = Path("/home/user/Pictures/bombo_gui_gen/parts")
+PARTS = Path(os.environ.get("BOMBO_PARTS", str(Path.home() / "Pictures/bombo_gui_gen/parts")))
 TEX = ROOT / "Resources" / "Textures"
 OUT = TEX / "fallout_chassis.png"
 OUT_HDR = TEX / "fallout_header.png"
