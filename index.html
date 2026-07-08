@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bombo - Field Test</title>
+<meta name="description" content="Bombo by Hyperfocus DSP - Field Test audio demo. Kick-drum synthesizer + rumble-FX plugin.">
+<meta property="og:title" content="Bombo - Field Test">
+<meta property="og:description" content="Hear Bombo: a 25s clip made entirely in the plugin.">
+<meta property="og:image" content="bombo.webp">
+<style>
+  :root { --bg:#0d0b0a; --card:#17130f; --line:#2b211a; --rust:#d2691e; --rust-2:#e8843a; --ink:#e9e2d8; --muted:#9a8d7d; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body {
+    background:radial-gradient(1200px 800px at 50% -10%, #1c1512 0%, var(--bg) 60%);
+    color:var(--ink); min-height:100vh;
+    font:16px/1.55 ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:32px 20px;
+  }
+  .card {
+    width:100%; max-width:520px; background:var(--card);
+    border:1px solid var(--line); border-radius:16px; overflow:hidden;
+    box-shadow:0 24px 60px -20px #000, 0 0 0 1px #000 inset;
+  }
+  .art { display:block; width:100%; height:auto; background:#000; }
+  .body { padding:22px 24px 26px; }
+  h1 { margin:0 0 2px; font-size:1.5rem; letter-spacing:.5px; }
+  .sub { margin:0 0 18px; color:var(--muted); font-size:.92rem; }
+  .sub b { color:var(--rust-2); font-weight:600; }
+  audio { width:100%; margin:6px 0 18px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .btn {
+    flex:1 1 auto; text-align:center; text-decoration:none;
+    padding:11px 14px; border-radius:10px; font-weight:600; font-size:.9rem;
+    border:1px solid var(--line); color:var(--ink); background:#120e0b; transition:.15s;
+  }
+  .btn:hover { border-color:var(--rust); color:var(--rust-2); }
+  .btn.primary { background:var(--rust); color:#160d06; border-color:var(--rust); }
+  .btn.primary:hover { background:var(--rust-2); color:#160d06; }
+  .foot { margin-top:16px; color:var(--muted); font-size:.78rem; text-align:center; }
+  .foot a { color:var(--muted); }
+</style>
+</head>
+<body>
+  <main class="card">
+    <img class="art" src="bombo.webp" alt="Bombo - kick-drum synthesizer, scope lit">
+    <div class="body">
+      <h1>Bombo - Field Test</h1>
+      <p class="sub">A 25-second clip made entirely in <b>Bombo</b>, the kick-drum synthesizer + rumble-FX plugin.</p>
+      <audio controls preload="metadata" src="field-test.mp3">
+        Your browser can't play this clip -
+        <a href="field-test.mp3">download it</a> instead.
+      </audio>
+      <div class="row">
+        <a class="btn primary" href="https://github.com/hyperfocusdsp/bombo">Get Bombo on GitHub</a>
+        <a class="btn" href="field-test.mp3" download>Download clip</a>
+      </div>
+      <p class="foot">Hyperfocus DSP &middot; <a href="https://hyperfocusdsp.com">hyperfocusdsp.com</a></p>
+    </div>
+  </main>
+</body>
+</html>
