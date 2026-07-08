@@ -11,7 +11,7 @@ preset bank — all wrapped in a bomb-shaped chassis that hides a working
 
 ![Bombo](docs/bombo.webp?v=1.0.0)
 
-🔊 **Hear it** - [*Field Test*](https://soundcloud.com/rexistaudio/field-test-bombo) (25 s, made entirely in Bombo)
+🔊 **Hear it in your browser** - [*Field Test*](https://hyperfocusdsp.github.io/bombo/) (25 s, made entirely in Bombo)
 
 <p align="center">
   <a href="https://hyperfocusdsp.com"><img src="https://img.shields.io/badge/Hyperfocus_DSP-hyperfocusdsp.com-f59e0b?style=for-the-badge" alt="Hyperfocus DSP" /></a>
