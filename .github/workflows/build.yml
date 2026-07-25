@@ -55,11 +55,22 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          JOBS="-j"
+          # A bare -j (no number) is unbounded parallelism: make/cmake spawn
+          # one compiler/linker per ready translation unit. With JUCE's large
+          # TUs this exhausts the runner's RAM and the job is killed with
+          # SIGTERM (exit 143, "Terminated", no compiler error above it) -
+          # intermittent, same commit can pass one run and fail the next.
+          # Default below is a safe fallback for any OS not explicitly listed.
+          JOBS="-j 2"
           if [ "$RUNNER_OS" = "Linux" ]; then JOBS="-j 2"; fi
           # macos-14 has 3 cores; a bare -j lets make spawn an unbounded number of
           # heavy (universal = 2x) compiles at once and thrash into swap. Pin it.
           if [ "$RUNNER_OS" = "macOS" ]; then JOBS="-j 3"; fi
+          # windows-2022: LTO stays ON here (see Configure step above), which
+          # makes each link heavier than the LTO-OFF Linux/macOS builds; this
+          # leg previously fell through to the unbounded default above and
+          # was the one actually at risk of the OOM/SIGTERM described above.
+          if [ "$RUNNER_OS" = "Windows" ]; then JOBS="-j 2"; fi
           cmake --build build --config Release $JOBS
 
       - name: Test
